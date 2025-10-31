@@ -1,0 +1,1053 @@
+{
+    "explore": [
+      {
+        "reportType": "Place Level Visits",
+        "reportName": "Test Place Level Visits",
+        "place": "health.clinic.alternative",
+        "location": "Mumbai, Maharashtra, India",
+        "StartDateRange": "2025-08-13",
+        "EndDateRange": "2025-08-14",
+        "SubCategory": "",
+        "attributes": "",
+        "Rating": "",
+        "ReviewCount": "",
+        "Brands": "",
+        "AverageDailyVisits": "",
+        "AverageMonthlyVisits": "",
+        "AverageDailyDevices": "",
+        "AverageMonthlyDevices": "",
+        "Persona": "YES"
+      },
+      {
+        "reportType": "Device Level Visits",
+        "reportName": "Test Device Level Visits Report",
+        "place": "health.clinic.alternative",
+        "location": "Mumbai, Maharashtra, India",
+        "StartDateRange": "2025-08-13",
+        "EndDateRange": "2025-08-14",
+        "VisitDuration": "10-50",
+        "behaviors": "",
+        "age": "",
+        "SubCategory": "",
+        "QualityLifeScore": "30-100",
+        "Rating": "",
+        "ReviewCount": "",
+        "Brands": "",
+        "AverageDailyVisits": "",
+        "AverageMonthlyVisits": "",
+        "AverageDailyDevices": "",
+        "AverageMonthlyDevices": "",
+        "Persona": "YES"
+      },
+      {
+        "reportType": "Places",
+        "reportName": "Test Places Report",
+        "place": "health.clinic.alternative",
+        "location": "Mumbai, Maharashtra, India",
+        "PLACES_TO_Visit_Report": "YES",
+        "VisitReportDetails": {
+          "reportName": "Test Places Level Visit Report From Places Report",
+          "StartDateRange": "2025-08-13",
+          "EndDateRange": "2025-08-14",
+          "Persona": "YES"
+        }
+      },
+      {
+        "reportType": "Quality of Life Index",
+        "reportName": "Test Quality of Life Index Report",
+        "location": "Mumbai, Maharashtra, India",
+        "QualityLifeScore": "10-90"
+      },
+      {
+        "reportType": "Device Level Visits",
+        "reportName": "Test Device Level Visits Report",
+        "place": "health.clinic.alternative",
+        "location": "Mumbai, Maharashtra, India",
+        "StartDateRange": "2025-08-13",
+        "EndDateRange": "2025-08-14",
+        "UploadAudience": [
+          "META",
+          "GOOGLE"
+        ]
+      },
+      {
+        "reportType": "Place Level Visits",
+        "reportName": "Test Place Level Visits",
+        "place": "health.clinic.alternative",
+        "location": "Mumbai, Maharashtra, India",
+        "StartDateRange": "2025-08-13",
+        "EndDateRange": "2025-08-14",
+        "UploadAudience": [
+          "GOOGLE",
+          "META"
+        ]
+      },
+      {
+        "reportType": "Population",
+        "reportName": "Test Population Report",
+        "location": "Mumbai, Maharashtra, India"
+      },
+      {
+        "reportType": "H9 Master",
+        "reportName": "Test H9 Master Report",
+        "location": "Mumbai, Maharashtra, India"
+      },
+      {
+        "reportType": "Quality of Life Index Raw",
+        "reportName": "Test Quality of Life Index Raw Report",
+        "location": "Mumbai, Maharashtra, India"
+      },
+      {
+        "reportType": "Places Internal",
+        "reportName": "Test Places Internal Report",
+        "place": "health.clinic.alternative",
+        "location": "Mumbai, Maharashtra, India"
+      }
+    ],
+    "PersonaExploreReports": [
+    {
+      "reportType": "Device Level Visits",
+      "reportName": "Test Device Level Visits Report",
+      "StartDateRange": "2025-08-13",
+      "EndDateRange": "2025-08-14",
+      "VisitDuration": "10-50",
+      "behaviors": "",
+      "age": "",
+      "SubCategory": "",
+      "QualityLifeScore": "30-100",
+      "Rating": "",
+      "ReviewCount": "",
+      "Brands": "",
+      "AverageDailyVisits": "",
+      "AverageMonthlyVisits": "",
+      "AverageDailyDevices": "",
+      "AverageMonthlyDevices": "",
+      "Persona": "No"
+    }
+    ],
+    "Persona": [
+      {
+        "reportType": "Occasion and Behavior Based Audiences",
+        "reportName": "Persona USING EXPLORE REPORT",
+        "ExploreReportName": "Test Device Level Visits Report: Rjfj2"
+      },
+      {
+        "reportType": "Occasion and Behavior Based Audiences",
+        "reportName":"occ behav age brand subcat VD RC rat QLI" ,
+        "ExploreReportName": "",
+        "location": "Mumbai City, Maharashtra, India; Mumbai Suburban, Maharashtra, India",
+        "occasion": "Energise / Retain",
+        "place": "",
+        "attributes": "",
+        "behaviors": "Daily Gaming; Daily Shopping",
+        "age": "18-25; 65+; 26-35; 36-45",
+        "Brands": "Franz; Hess; Marcus",
+        "SubCategory": "Homeopath; Herbalist",
+        "VisitDuration": "10-50",
+        "ReviewCount": "5-500",
+        "Rating": "2.5-5",
+        "AverageDailyVisits": "1-1000",
+        "AverageMonthlyVisits": "2-3000",
+        "AverageDailyDevices": "2-2000",
+        "AverageMonthlyDevices": "5-4000",
+        "QualityLifeScore": "30-100"
+      },
+      {
+        "reportType": "Occasion and Behavior Based Audiences",
+        "reportName": "Persona using Places and attributes only",
+        "place": "health.clinic.alternative; Auto; Food",
+        "location": "Mumbai City, Maharashtra, India",
+        "attributes": "Kid-Friendly; Wheelchair Restroom; Wheelchair Entrance"
+      },
+      {
+        "reportType": "Occasion and Behavior Based Audiences",
+        "reportName": "Persona USING EXPLORE REPORT",
+        "ExploreReportName": "Test Device Level Visits Report: Rjfj2"
+      },
+      {
+        "reportType": "Custom Audience to IFAs",
+        "reportName": "Test_Custom_Audience_to_IFAs",
+        "country": "India",
+        "UploadFilePath": "data/Email_To_IFA_SampleIDFC_Emails_File.csv"
+      },
+      {
+        "reportType": "Custom Places",
+          "reportName": "Test_Custom_Places_Using_Address",
+          "country": "India",
+          "UploadFilePath": "data/Upload_School_Address_Test.csv",
+        "postUploadReports": [
+          {
+            "reportType": "Place Level Visits",
+            "reportName": "Test Place Level Visits",
+            "StartDateRange": "2025-08-13",
+            "EndDateRange": "2025-08-14",
+            "SubCategory": "",
+            "attributes": "",
+            "Rating": "",
+            "ReviewCount": "",
+            "Brands": "",
+            "AverageDailyVisits": "",
+            "AverageMonthlyVisits": "",
+            "AverageDailyDevices": "",
+            "AverageMonthlyDevices": "",
+            "Persona": "No"
+          },
+          {
+            "reportType": "Device Level Visits",
+            "reportName": "Test Device Level Visits Report",
+            "StartDateRange": "2025-08-13",
+            "EndDateRange": "2025-08-14",
+            "VisitDuration": "10-50",
+            "behaviors": "",
+            "age": "",
+            "SubCategory": "",
+            "QualityLifeScore": "30-100",
+            "Rating": "",
+            "ReviewCount": "",
+            "Brands": "",
+            "AverageDailyVisits": "",
+            "AverageMonthlyVisits": "",
+            "AverageDailyDevices": "",
+            "AverageMonthlyDevices": "",
+            "Persona": "No"
+          },
+          {
+            "reportType": "Places",
+            "reportName": "Test Places Report",
+            "PLACES_TO_Visit_Report": "YES",
+            "VisitReportDetails": {
+              "reportName": "Test Places Level Visit Report From Places Report",
+              "StartDateRange": "2025-08-13",
+              "EndDateRange": "2025-08-14",
+              "Persona": "NO"
+            }
+          }
+        ]
+      },
+      {
+        "reportType": "Custom Places",
+          "reportName": "Test_Custom_Places_Using_LatLong",
+          "country": "India",
+          "UploadFilePath": "data/Upload_School_Lat_Long_Test.csv",
+        "postUploadReports": [
+          {
+            "reportType": "Place Level Visits",
+            "reportName": "Test Place Level Visits",
+            "StartDateRange": "2025-08-13",
+            "EndDateRange": "2025-08-14",
+            "SubCategory": "",
+            "attributes": "",
+            "Rating": "",
+            "ReviewCount": "",
+            "Brands": "",
+            "AverageDailyVisits": "",
+            "AverageMonthlyVisits": "",
+            "AverageDailyDevices": "",
+            "AverageMonthlyDevices": "",
+            "Persona": "No"
+          },
+          {
+            "reportType": "Device Level Visits",
+            "reportName": "Test Device Level Visits Report",
+            "StartDateRange": "2025-08-13",
+            "EndDateRange": "2025-08-14",
+            "VisitDuration": "10-50",
+            "behaviors": "",
+            "age": "",
+            "SubCategory": "",
+            "QualityLifeScore": "30-100",
+            "Rating": "",
+            "ReviewCount": "",
+            "Brands": "",
+            "AverageDailyVisits": "",
+            "AverageMonthlyVisits": "",
+            "AverageDailyDevices": "",
+            "AverageMonthlyDevices": "",
+            "Persona": "No"
+          },
+          {
+            "reportType": "Places",
+            "reportName": "Test Places Report",
+            "PLACES_TO_Visit_Report": "YES",
+            "VisitReportDetails": {
+              "reportName": "Test Places Level Visit Report From Places Report",
+              "StartDateRange": "2025-08-13",
+              "EndDateRange": "2025-08-14",
+              "Persona": "NO"
+            }
+          }
+        ]
+      },
+      {
+        "reportType": "Custom POI Codes",
+          "reportName": "Test_Custom_POI_Codes",
+          "country": "India",
+          "UploadFilePath": "data/Upload_College_Poicode_Test.csv",
+        "postUploadReports": [
+          {
+            "reportType": "Place Level Visits",
+            "reportName": "Test Place Level Visits",
+            "StartDateRange": "2025-08-13",
+            "EndDateRange": "2025-08-14",
+            "SubCategory": "",
+            "attributes": "",
+            "Rating": "",
+            "ReviewCount": "",
+            "Brands": "",
+            "AverageDailyVisits": "",
+            "AverageMonthlyVisits": "",
+            "AverageDailyDevices": "",
+            "AverageMonthlyDevices": "",
+            "Persona": "No"
+          },
+          {
+            "reportType": "Device Level Visits",
+            "reportName": "Test Device Level Visits Report",
+            "StartDateRange": "2025-08-13",
+            "EndDateRange": "2025-08-14",
+            "VisitDuration": "10-50",
+            "behaviors": "",
+            "age": "",
+            "SubCategory": "",
+            "QualityLifeScore": "30-100",
+            "Rating": "",
+            "ReviewCount": "",
+            "Brands": "",
+            "AverageDailyVisits": "",
+            "AverageMonthlyVisits": "",
+            "AverageDailyDevices": "",
+            "AverageMonthlyDevices": "",
+            "Persona": "No"
+          },
+          {
+            "reportType": "Places",
+            "reportName": "Test Places Report",
+            "PLACES_TO_Visit_Report": "YES",
+            "VisitReportDetails": {
+              "reportName": "Test Places Level Visit Report From Places Report",
+              "StartDateRange": "2025-08-13",
+              "EndDateRange": "2025-08-14",
+              "Persona": "NO"
+            }
+          }
+        ]
+      }
+    ],
+    "ReportForMultilayer": [
+      {
+        "reportType": "Place Level Visits",
+        "reportName": "Test Place Level Visits",
+        "ReportNumber": 1,
+        "place": "health.clinic.alternative",
+        "location": "Mumbai, Maharashtra, India",
+        "StartDateRange": "2025-08-13",
+        "EndDateRange": "2025-08-14",
+        "SubCategory": "",
+        "attributes": "",
+        "Rating": "",
+        "ReviewCount": "",
+        "Brands": "",
+        "AverageDailyVisits": "",
+        "AverageMonthlyVisits": "",
+        "AverageDailyDevices": "",
+        "AverageMonthlyDevices": "",
+        "Persona": "No"
+      },
+      {
+        "reportType": "Device Level Visits",
+        "reportName": "Test Device Level Visits Report",
+        "ReportNumber": 2,
+        "place": "health.clinic.alternative",
+        "location": "Mumbai, Maharashtra, India",
+        "StartDateRange": "2025-08-13",
+        "EndDateRange": "2025-08-14",
+        "VisitDuration": "10-50",
+        "SubCategory": "",
+        "QualityLifeScore": "10-100",
+        "Rating": "",
+        "ReviewCount": "",
+        "Brands": "",
+        "AverageDailyVisits": "",
+        "AverageMonthlyVisits": "",
+        "AverageDailyDevices": "",
+        "AverageMonthlyDevices": "",
+        "Persona": "No"
+      },
+      {
+       "reportType": "Places",
+       "reportName": "Test Places Report",
+       "ReportNumber": 3,
+       "place": "health.clinic.alternative",
+       "location": "Mumbai, Maharashtra, India"
+     },
+     {
+       "reportType": "Quality of Life Index",
+       "reportName": "Test Quality of Life Index Report",
+       "ReportNumber": 4,
+       "location": "Mumbai, Maharashtra, India",
+       "QualityLifeScore": "10-90"
+     },
+     {
+       "reportType": "Population",
+       "reportName": "Test Population Report",
+       "ReportNumber": 5,
+       "location": "Mumbai, Maharashtra, India"
+     },
+     {
+       "reportType": "H9 Master",
+       "reportName": "Test H9 Master Report",
+       "ReportNumber": 6,
+       "location": "Mumbai, Maharashtra, India"
+     },
+     {
+       "reportType": "Quality of Life Index Raw",
+       "reportName": "Test Quality of Life Index Raw Report",
+       "ReportNumber": 7,
+       "location": "Mumbai, Maharashtra, India"
+     },
+     {
+       "reportType": "Places Internal",
+       "reportName": "Test Places Internal Report",
+       "ReportNumber": 8,
+       "place": "health.clinic.alternative",
+       "location": "Mumbai, Maharashtra, India"
+     }
+ 
+    ],
+    "Multilayer": [
+      {
+        "MergeType": "Layered",
+        "reportName": "Place Level Visits-Device Level Visits",
+        "Report_TO_Merge": [
+          1,
+          2
+        ]
+      },
+      {
+        "MergeType": "Unified",
+        "reportName": "Place Level Visits-Device Level Visits",
+        "Report_TO_Merge": [
+          1,
+          2
+        ]
+      },
+      {
+        "MergeType": "Layered",
+        "reportName": "Place Level Visits-Places",
+        "Report_TO_Merge": [
+          1,
+          3
+        ]
+      },
+      {
+        "MergeType": "Unified",
+        "reportName": "Place Level Visits-Places",
+        "Report_TO_Merge": [
+          1,
+          3
+        ]
+      },
+      {
+        "MergeType": "Layered",
+        "reportName": "Place Level Visits-Quality of Life Index",
+        "Report_TO_Merge": [
+          1,
+          4
+        ]
+      },
+      {
+        "MergeType": "Layered",
+        "reportName": "Place Level Visits-Population",
+        "Report_TO_Merge": [
+          1,
+          5
+        ]
+      },
+      {
+        "MergeType": "Layered",
+        "reportName": "Place Level Visits-H9 Master",
+        "Report_TO_Merge": [
+          1,
+          6
+        ]
+      },
+      {
+        "MergeType": "Layered",
+        "reportName": "Place Level Visits-Quality of Life Index Raw",
+        "Report_TO_Merge": [
+          1,
+          7
+        ]
+      },
+      {
+        "MergeType": "Layered",
+        "reportName": "Place Level Visits-Places Internal",
+        "Report_TO_Merge": [
+          1,
+          8
+        ]
+      },
+      {
+        "MergeType": "Layered",
+        "reportName": "Device Level Visits-Places",
+        "Report_TO_Merge": [
+          2,
+          3
+        ]
+      },
+      {
+        "MergeType": "Layered",
+        "reportName": "Device Level Visits-Quality of Life Index",
+        "Report_TO_Merge": [
+          2,
+          4
+        ]
+      },
+      {
+        "MergeType": "Layered",
+        "reportName": "Device Level Visits-Population",
+        "Report_TO_Merge": [
+          2,
+          5
+        ]
+      },
+      {
+        "MergeType": "Layered",
+        "reportName": "Device Level Visits-H9 Master",
+        "Report_TO_Merge": [
+          2,
+          6
+        ]
+      },
+      {
+        "MergeType": "Layered",
+        "reportName": "Device Level Visits-Quality of Life Index Raw",
+        "Report_TO_Merge": [
+          2,
+          7
+        ]
+      },
+      {
+        "MergeType": "Layered",
+        "reportName": "Device Level Visits-Places Internal",
+        "Report_TO_Merge": [
+          2,
+          8
+        ]
+      },
+      {
+        "MergeType": "Layered",
+        "reportName": "Places-Quality of Life Index",
+        "Report_TO_Merge": [
+          3,
+          4
+        ]
+      },
+      {
+        "MergeType": "Layered",
+        "reportName": "Places-Population",
+        "Report_TO_Merge": [
+          3,
+          5
+        ]
+      },
+      {
+        "MergeType": "Layered",
+        "reportName": "Places-H9 Master",
+        "Report_TO_Merge": [
+          3,
+          6
+        ]
+      },
+      {
+        "MergeType": "Layered",
+        "reportName": "Places-Quality of Life Index Raw",
+        "Report_TO_Merge": [
+          3,
+          7
+        ]
+      },
+      {
+        "MergeType": "Layered",
+        "reportName": "Places-Places Internal",
+        "Report_TO_Merge": [
+          3,
+          8
+        ]
+      },
+      {
+        "MergeType": "Layered",
+        "reportName": "Quality of Life Index-Population",
+        "Report_TO_Merge": [
+          4,
+          5
+        ]
+      },
+      {
+        "MergeType": "Layered",
+        "reportName": "Quality of Life Index-H9 Master",
+        "Report_TO_Merge": [
+          4,
+          6
+        ]
+      },
+      {
+        "MergeType": "Layered",
+        "reportName": "Quality of Life Index-Quality of Life Index Raw",
+        "Report_TO_Merge": [
+          4,
+          7
+        ]
+      },
+      {
+        "MergeType": "Layered",
+        "reportName": "Quality of Life Index-Places Internal",
+        "Report_TO_Merge": [
+          4,
+          8
+        ]
+      },
+      {
+        "MergeType": "Layered",
+        "reportName": "Population-H9 Master",
+        "Report_TO_Merge": [
+          5,
+          6
+        ]
+      },
+      {
+        "MergeType": "Layered",
+        "reportName": "Population-Quality of Life Index Raw",
+        "Report_TO_Merge": [
+          5,
+          7
+        ]
+      },
+      {
+        "MergeType": "Layered",
+        "reportName": "Population-Places Internal",
+        "Report_TO_Merge": [
+          5,
+          8
+        ]
+      },
+      {
+        "MergeType": "Layered",
+        "reportName": "H9 Master-Quality of Life Index Raw",
+        "Report_TO_Merge": [
+          6,
+          7
+        ]
+      },
+      {
+        "MergeType": "Layered",
+        "reportName": "H9 Master-Places Internal",
+        "Report_TO_Merge": [
+          6,
+          8
+        ]
+      },
+      {
+        "MergeType": "Layered",
+        "reportName": "Quality of Life Index Raw-Places Internal",
+        "Report_TO_Merge": [
+          7,
+          8
+        ]
+      },
+      {
+        "MergeType": "Unified",
+        "reportName": "Place Level Visits-Device Level Visits",
+        "Report_TO_Merge": [
+          1,
+          2
+        ]
+      },
+      {
+        "MergeType": "Unified",
+        "reportName": "Place Level Visits-Places",
+        "Report_TO_Merge": [
+          1,
+          3
+        ]
+      },
+      {
+        "MergeType": "Unified",
+        "reportName": "Place Level Visits-Quality of Life Index",
+        "Report_TO_Merge": [
+          1,
+          4
+        ]
+      },
+      {
+        "MergeType": "Unified",
+        "reportName": "Place Level Visits-Population",
+        "Report_TO_Merge": [
+          1,
+          5
+        ]
+      },
+      {
+        "MergeType": "Unified",
+        "reportName": "Place Level Visits-H9 Master",
+        "Report_TO_Merge": [
+          1,
+          6
+        ]
+      },
+      {
+        "MergeType": "Unified",
+        "reportName": "Place Level Visits-Quality of Life Index Raw",
+        "Report_TO_Merge": [
+          1,
+          7
+        ]
+      },
+      {
+        "MergeType": "Unified",
+        "reportName": "Place Level Visits-Places Internal",
+        "Report_TO_Merge": [
+          1,
+          8
+        ]
+      },
+      {
+        "MergeType": "Unified",
+        "reportName": "Device Level Visits-Places",
+        "Report_TO_Merge": [
+          2,
+          3
+        ]
+      },
+      {
+        "MergeType": "Unified",
+        "reportName": "Device Level Visits-Quality of Life Index",
+        "Report_TO_Merge": [
+          2,
+          4
+        ]
+      },
+      {
+        "MergeType": "Unified",
+        "reportName": "Device Level Visits-Population",
+        "Report_TO_Merge": [
+          2,
+          5
+        ]
+      },
+      {
+        "MergeType": "Unified",
+        "reportName": "Device Level Visits-H9 Master",
+        "Report_TO_Merge": [
+          2,
+          6
+        ]
+      },
+      {
+        "MergeType": "Unified",
+        "reportName": "Device Level Visits-Quality of Life Index Raw",
+        "Report_TO_Merge": [
+          2,
+          7
+        ]
+      },
+      {
+        "MergeType": "Unified",
+        "reportName": "Device Level Visits-Places Internal",
+        "Report_TO_Merge": [
+          2,
+          8
+        ]
+      },
+      {
+        "MergeType": "Unified",
+        "reportName": "Places-Quality of Life Index",
+        "Report_TO_Merge": [
+          3,
+          4
+        ]
+      },
+      {
+        "MergeType": "Unified",
+        "reportName": "Places-Population",
+        "Report_TO_Merge": [
+          3,
+          5
+        ]
+      },
+      {
+        "MergeType": "Unified",
+        "reportName": "Places-H9 Master",
+        "Report_TO_Merge": [
+          3,
+          6
+        ]
+      },
+      {
+        "MergeType": "Unified",
+        "reportName": "Places-Quality of Life Index Raw",
+        "Report_TO_Merge": [
+          3,
+          7
+        ]
+      },
+      {
+        "MergeType": "Unified",
+        "reportName": "Places-Places Internal",
+        "Report_TO_Merge": [
+          3,
+          8
+        ]
+      },
+      {
+        "MergeType": "Unified",
+        "reportName": "Quality of Life Index-Population",
+        "Report_TO_Merge": [
+          4,
+          5
+        ]
+      },
+      {
+        "MergeType": "Unified",
+        "reportName": "Quality of Life Index-H9 Master",
+        "Report_TO_Merge": [
+          4,
+          6
+        ]
+      },
+      {
+        "MergeType": "Unified",
+        "reportName": "Quality of Life Index-Quality of Life Index Raw",
+        "Report_TO_Merge": [
+          4,
+          7
+        ]
+      },
+      {
+        "MergeType": "Unified",
+        "reportName": "Quality of Life Index-Places Internal",
+        "Report_TO_Merge": [
+          4,
+          8
+        ]
+      },
+      {
+        "MergeType": "Unified",
+        "reportName": "Population-H9 Master",
+        "Report_TO_Merge": [
+          5,
+          6
+        ]
+      },
+      {
+        "MergeType": "Unified",
+        "reportName": "Population-Quality of Life Index Raw",
+        "Report_TO_Merge": [
+          5,
+          7
+        ]
+      },
+      {
+        "MergeType": "Unified",
+        "reportName": "Population-Places Internal",
+        "Report_TO_Merge": [
+          5,
+          8
+        ]
+      },
+      {
+        "MergeType": "Unified",
+        "reportName": "H9 Master-Quality of Life Index Raw",
+        "Report_TO_Merge": [
+          6,
+          7
+        ]
+      },
+      {
+        "MergeType": "Unified",
+        "reportName": "H9 Master-Places Internal",
+        "Report_TO_Merge": [
+          6,
+          8
+        ]
+      },
+      {
+        "MergeType": "Unified",
+        "reportName": "Quality of Life Index Raw-Places Internal",
+        "Report_TO_Merge": [
+          7,
+          8
+        ]
+      }
+    ],
+    "Repository": [
+    {
+        "reportType": "Custom Places",
+        "uploadDetails": {
+          "reportName": "Test_Custom_Places_Using_Address",
+          "country": "India",
+          "UploadFilePath": "data/Upload_School_Address_Test.csv"
+        },
+        "postUploadReports": [
+          {
+            "reportType": "Place Level Visits",
+            "reportName": "Test Place Level Visits",
+            "StartDateRange": "2025-08-13",
+            "EndDateRange": "2025-08-14",
+            "SubCategory": "",
+            "attributes": "",
+            "Rating": "",
+            "ReviewCount": "",
+            "Brands": "",
+            "AverageDailyVisits": "",
+            "AverageMonthlyVisits": "",
+            "AverageDailyDevices": "",
+            "AverageMonthlyDevices": "",
+            "Persona": "No"
+          },
+          {
+            "reportType": "Device Level Visits",
+            "reportName": "Test Device Level Visits Report",
+            "StartDateRange": "2025-08-13",
+            "EndDateRange": "2025-08-14",
+            "VisitDuration": "10-50",
+            "behaviors": "",
+            "age": "",
+            "SubCategory": "",
+            "QualityLifeScore": "30-100",
+            "Rating": "",
+            "ReviewCount": "",
+            "Brands": "",
+            "AverageDailyVisits": "",
+            "AverageMonthlyVisits": "",
+            "AverageDailyDevices": "",
+            "AverageMonthlyDevices": "",
+            "Persona": "No"
+          },
+          {
+            "reportType": "Places",
+            "reportName": "Test Places Report",
+            "PLACES_TO_Visit_Report": "YES",
+            "VisitReportDetails": {
+              "reportName": "Test Places Level Visit Report From Places Report",
+              "StartDateRange": "2025-08-13",
+              "EndDateRange": "2025-08-14",
+              "Persona": "NO"
+            }
+          }
+        ]
+      },
+      {
+        "reportType": "Custom Places",
+        "uploadDetails": {
+          "reportName": "Test_Custom_Places_Using_LatLong",
+          "country": "India",
+          "UploadFilePath": "data/Upload_School_Lat_Long_Test.csv"
+        },
+        "postUploadReports": [
+          {
+            "reportType": "Place Level Visits",
+            "reportName": "Test Place Level Visits",
+            "StartDateRange": "2025-08-13",
+            "EndDateRange": "2025-08-14",
+            "SubCategory": "",
+            "attributes": "",
+            "Rating": "",
+            "ReviewCount": "",
+            "Brands": "",
+            "AverageDailyVisits": "",
+            "AverageMonthlyVisits": "",
+            "AverageDailyDevices": "",
+            "AverageMonthlyDevices": "",
+            "Persona": "No"
+          },
+          {
+            "reportType": "Device Level Visits",
+            "reportName": "Test Device Level Visits Report",
+            "StartDateRange": "2025-08-13",
+            "EndDateRange": "2025-08-14",
+            "VisitDuration": "10-50",
+            "behaviors": "",
+            "age": "",
+            "SubCategory": "",
+            "QualityLifeScore": "30-100",
+            "Rating": "",
+            "ReviewCount": "",
+            "Brands": "",
+            "AverageDailyVisits": "",
+            "AverageMonthlyVisits": "",
+            "AverageDailyDevices": "",
+            "AverageMonthlyDevices": "",
+            "Persona": "No"
+          },
+          {
+            "reportType": "Places",
+            "reportName": "Test Places Report",
+            "PLACES_TO_Visit_Report": "YES",
+            "VisitReportDetails": {
+              "reportName": "Test Places Level Visit Report From Places Report",
+              "StartDateRange": "2025-08-13",
+              "EndDateRange": "2025-08-14",
+              "Persona": "NO"
+            }
+          }
+        ]
+      },
+      {
+        "reportType": "Custom POI Codes",
+        "uploadDetails": {
+          "reportName": "Test_Custom_POI_Codes",
+          "country": "India",
+          "UploadFilePath": "data/Upload_College_Poicode_Test.csv"
+        },
+        "postUploadReports": [
+          {
+            "reportType": "Place Level Visits",
+            "reportName": "Test Place Level Visits",
+            "StartDateRange": "2025-08-13",
+            "EndDateRange": "2025-08-14",
+            "SubCategory": "",
+            "attributes": "",
+            "Rating": "",
+            "ReviewCount": "",
+            "Brands": "",
+            "AverageDailyVisits": "",
+            "AverageMonthlyVisits": "",
+            "AverageDailyDevices": "",
+            "AverageMonthlyDevices": "",
+            "Persona": "No"
+          },
+          {
+            "reportType": "Device Level Visits",
+            "reportName": "Test Device Level Visits Report",
+            "StartDateRange": "2025-08-13",
+            "EndDateRange": "2025-08-14",
+            "VisitDuration": "10-50",
+            "behaviors": "",
+            "age": "",
+            "SubCategory": "",
+            "QualityLifeScore": "30-100",
+            "Rating": "",
+            "ReviewCount": "",
+            "Brands": "",
+            "AverageDailyVisits": "",
+            "AverageMonthlyVisits": "",
+            "AverageDailyDevices": "",
+            "AverageMonthlyDevices": "",
+            "Persona": "No"
+          },
+          {
+            "reportType": "Places",
+            "reportName": "Test Places Report",
+            "PLACES_TO_Visit_Report": "YES",
+            "VisitReportDetails": {
+              "reportName": "Test Places Level Visit Report From Places Report",
+              "StartDateRange": "2025-08-13",
+              "EndDateRange": "2025-08-14",
+              "Persona": "NO"
+            }
+          }
+        ]
+      }
+    ]
+  }
