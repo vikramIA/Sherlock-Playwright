@@ -29,7 +29,9 @@ async function layeredMerge(page, reportName, Report_TO_Merge, multilayerReports
 
     const createButtonXPath = "//div[normalize-space()='Create Multilayer']";
     const createBtn = page.locator(`xpath=${createButtonXPath}`);
-    await createBtn.click({ timeout: 10000 });
+    await createBtn.click({ timeout: 10000 }).catch(() => logSession("⚠️ Create Multilayer button not clickable"));
+    console.log("✅ Clicked 'Create Multilayer' button");
+    logSession("✅ Clicked 'Create Multilayer' button");
 
     await safeWait(page, 60000);
     await keplerDatasetsFetch(page, reportName);
@@ -72,40 +74,46 @@ async function unifiedMerge(page, reportName, Report_TO_Merge, multilayerReports
             logSession(`⚠️ Report number ${reportNum} not found in multilayerReportsMap`);
         }
     }
+    
 
-    // ---- Click Next Step (first time) ----
+    // ✅ Click "Next Step" to load metadata
     const nextStepButtonXPath = "//*[normalize-space(text())='Next Step']";
-    const nextStepBtn = page.locator(`xpath=${nextStepButtonXPath}`);
-    await nextStepBtn.click({ timeout: 10000 }).catch(() => logSession("⚠️ 'Next Step' button not clickable (skipping)"));
-    await safeWait(page, 2000);
+    const nextStepBtn1 = page.locator(`xpath=${nextStepButtonXPath}`);
+    await nextStepBtn1.click({ timeout: 10000 });
+    console.log("✅ Clicked 'Next Step' (first time)");
+    logSession("✅ Clicked 'Next Step' (first time)");
+    await safeWait(page, 5000);
 
-    // ---- Wait for "Available reports" label ----
-    const availableReportsLabel = page.locator("//div[normalize-space(text())='Available reports']");
-    if (await availableReportsLabel.isVisible({ timeout: 8000 }).catch(() => false)) {
-        logSession("✅ 'Available reports' found — clicking Next Step again");
-        await nextStepBtn.click({ timeout: 10000 }).catch(() => logSession("⚠️ Second 'Next Step' click failed"));
-        await safeWait(page, 2000);
-    } else {
-        logSession("⚠️ 'Available reports' not found — continuing");
-    }
+    // ✅ Wait for Multilayer section to load
+    const multilayerHeaderXPath = "//div[normalize-space(text())='Multilayer']";
+    await page.locator(`xpath=${multilayerHeaderXPath}`).waitFor({ state: 'visible', timeout: 120000 });
+    console.log("✅ Multilayer section loaded");
+    logSession("✅ Multilayer section loaded");
 
+    // ✅ Wait for "Join Group(s)" section
+    const joinGroupsXPath = "//div[normalize-space(text())='Join Group(s)']";
+    await page.locator(`xpath=${joinGroupsXPath}`).waitFor({ state: 'visible', timeout: 10000 });
+    console.log("✅ Join Group(s) section loaded");
+    logSession("✅ Join Group(s) section loaded");
 
-    // ---- Click Next Step (first time) ----
-    const nextStepButtonXPath2 = "//*[normalize-space(text())='Next Step']";
-    const nextStepBtn2 = page.locator(`xpath=${nextStepButtonXPath2}`);
-    await nextStepBtn2.click({ timeout: 10000 }).catch(() => logSession("⚠️ 'Next Step' button not clickable (skipping)"));
-    await safeWait(page, 2000);
+    // ✅ Click "Next Step" again after metadata is loaded
+    const nextStepBtn2 = page.locator(`xpath=${nextStepButtonXPath}`);
+    await nextStepBtn2.click({ timeout: 10000 });
+    console.log("✅ Clicked 'Next Step' (second time)");
+    logSession("✅ Clicked 'Next Step' (second time)");
+    await safeWait(page, 3000); 
 
-    // ---- Wait for "Filter Expression" label ----
-    const filterExpressionLabel = page.locator("//div[normalize-space(text())='Filter Expression']");
-    await filterExpressionLabel.waitFor({ state: 'visible', timeout: 30000 }).catch(() => logSession("⚠️ 'Filter Expression' label not found — proceeding anyway"));
-    await safeWait(page, 2000);
+    // ✅ Wait for Multilayer section to load
+    await page.locator(`xpath=${multilayerHeaderXPath}`).waitFor({ state: 'visible', timeout: 120000 });
+    console.log("✅ Multilayer section loaded");
+    logSession("✅ Multilayer section loaded");
 
     // ---- Click Create Multilayer ----
     const createButtonXPath = "//div[normalize-space()='Create Multilayer']";
     const createBtn = page.locator(`xpath=${createButtonXPath}`);
     await createBtn.click({ timeout: 10000 }).catch(() => logSession("⚠️ Create Multilayer button not clickable"));
-    await safeWait(page, 60000);
+    console.log("✅ Clicked 'Create Multilayer' button");
+    logSession("✅ Clicked 'Create Multilayer' button");
 
     await safeWait(page, 60000);
     await keplerDatasetsFetch(page, reportName);
@@ -157,7 +165,7 @@ async function MultilayerFlow(page, reportName, Report_TO_Merge, MergeType, mult
             const exploreBtn = page.locator(`xpath=${exploreXPath}`);
             await exploreBtn.click({ timeout: 10000 });
             await page.waitForURL('**/explore', { timeout: 10000 });
-            await safeWait(page, 2000);
+            await safeWait(page, 3000);
             console.log(`✅ Navigated to Explore for report: ${reportName}`);
             logSession(`✅ Navigated to Explore for report: ${reportName}`);
 

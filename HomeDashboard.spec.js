@@ -106,7 +106,7 @@ async function main() {
     }
 
     // Run All Flows
-    // for (const report of input.explore || []) await exploreFlow(page, report);
+    for (const report of input.explore || []) await exploreFlow(page, report);
     for (const report of input.Persona || []) await PersonaFlow(page, report);
 
     if (input.Multilayer?.length > 0) {
@@ -128,7 +128,7 @@ async function main() {
       }
     }
 
-    for (const report of input.Repository || []) await RepositoryFlow(page, report);
+   // for (const report of input.Repository || []) await RepositoryFlow(page, report);
 
   } catch (err) {
     console.error(`❌ Script failed: ${err.message}`);
