@@ -1272,11 +1272,8 @@ async function selectBehaviors(page, behaviorsString, reportName) {
         await behaviorLabel.scrollIntoViewIfNeeded();
     }
 
-    // Try locating 'behavior_filters' first, then fallback to 'behaviours'
-    let inputField = page.locator("//input[@name='behavior_filters']");
-    if ((await inputField.count()) === 0) {
-        inputField = page.locator("//input[@name='behaviours']");
-    }
+    // Try locating Behavior(s) input field
+    let inputField = page.locator("//label[normalize-space(text())='Behavior(s)']//following::input[1]");
 
     await inputField.waitFor({ state: 'visible' });
     await inputField.click();
