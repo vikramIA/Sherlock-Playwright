@@ -1587,46 +1587,63 @@ async function uploadCSVFile(page, filePathFromInputData, reportName) {
 
 // Function to search and click on a report by name on 3 dots menu
 async function searchAndClickReport(page, reportName) {
-    try {
-        if (!reportName || reportName.trim() === "") {
-            const msg = "⚠️ Report name is required for search.";
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY = 2000; // ms delay between retries
+
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        try {
+            if (!reportName || reportName.trim() === "") {
+                const msg = "⚠️ Report name is required for search.";
+                console.warn(msg);
+                logSession(msg);
+                return;
+            }
+
+            // 1️⃣ Go to Explore
+            const exploreBtn = page.locator("//a[@href='/explore' and @data-sidebar='menu-button']");
+            await exploreBtn.waitFor({ state: 'visible', timeout: 10000 });
+            await exploreBtn.click();
+            await page.waitForURL('**/explore', { waitUntil: 'networkidle', timeout: 15000 });
+
+            // 2️⃣ Search for the report
+            const searchInput = page.locator("//input[@placeholder='Search for a file']");
+            await searchInput.waitFor({ state: 'visible', timeout: 10000 });
+            await searchInput.fill(reportName);
+            await searchInput.press('Enter');
+
+            // Wait for report result
+            const reportLink = page.locator(`//a[normalize-space(text())='${reportName}']`);
+            await reportLink.waitFor({ state: 'visible', timeout: 10000 });
+
+            // 3️⃣ Click the 3-dot menu for the report
+            const threeDotButton = page.locator(`//a[normalize-space(text())='${reportName}']
+                /ancestor::div[contains(@class,'mt-2 w-full')]
+                //button[@aria-haspopup='menu']`);
+            await threeDotButton.waitFor({ state: 'visible', timeout: 10000 });
+            await threeDotButton.click();
+
+            const msg = `✅ Report "${reportName}" found and 3-dot menu clicked (Attempt ${attempt}/${MAX_RETRIES}).`;
+            console.log(msg);
+            logSession(msg);
+            return; // ✅ Exit after success
+
+        } catch (err) {
+            const msg = `⚠️ Attempt ${attempt}/${MAX_RETRIES} failed for report "${reportName}": ${err.message}`;
             console.warn(msg);
             logSession(msg);
-            return;
+
+            if (attempt < MAX_RETRIES) {
+                const waitMsg = `🔁 Retrying in ${RETRY_DELAY / 1000}s...`;
+                console.log(waitMsg);
+                logSession(waitMsg);
+                await page.waitForTimeout(RETRY_DELAY);
+            } else {
+                const errMsg = `❌ Report "${reportName}" not found after ${MAX_RETRIES} attempts — continuing script.`;
+                console.warn(errMsg);
+                logSession(errMsg);
+                return; // ❗ Continue without throwing
+            }
         }
-
-        // 1️⃣ Go to Explore
-        const exploreBtn = page.locator("//a[@href='/explore' and @data-sidebar='menu-button']");
-        await exploreBtn.waitFor({ state: 'visible', timeout: 10000 });
-        await exploreBtn.click();
-        await page.waitForURL('**/explore', { waitUntil: 'networkidle', timeout: 15000 });
-
-        // 2️⃣ Search for the report
-        const searchInput = page.locator("//input[@placeholder='Search for a file']");
-        await searchInput.waitFor({ state: 'visible', timeout: 10000 });
-        await searchInput.fill(reportName);
-        await searchInput.press('Enter');
-
-        // Wait for results — rely on locator rather than fixed timeout
-        const reportLink = page.locator(`//a[normalize-space(text())='${reportName}']`);
-        await reportLink.waitFor({ state: 'visible', timeout: 10000 });
-
-        // 3️⃣ Find the 3-dot menu relative to that report
-        const threeDotButton = page.locator(`//a[normalize-space(text())='${reportName}']
-            /ancestor::div[contains(@class,'mt-2 w-full')]
-            //button[@aria-haspopup='menu']`);
-        await threeDotButton.waitFor({ state: 'visible', timeout: 10000 });
-        await threeDotButton.click();
-
-        const msg = `✅ Report "${reportName}" found and 3-dot menu clicked.`;
-        console.log(msg);
-        logSession(msg);
-
-    } catch (err) {
-        const msg = `❌ Could not search/click report "${reportName}": ${err.message}`;
-        console.error(msg);
-        logSession(msg);
-        throw err;
     }
 }
 

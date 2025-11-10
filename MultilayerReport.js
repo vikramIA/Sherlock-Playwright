@@ -134,33 +134,35 @@ async function unifiedMerge(page, reportName, Report_TO_Merge, multilayerReports
 
 // =============== Main Flow ===============
 async function MultilayerFlow(page, reportName, Report_TO_Merge, MergeType, multilayerReportsMap) {
+    const MAX_GLOBAL_RETRIES = 5;
 
-    for (const num of Report_TO_Merge) {
-        if (!multilayerReportsMap.has(Number(num))) {
-            console.warn(`⚠️ Report number ${num} not found. Skipping [${Report_TO_Merge.join(', ')}]`);
-            logSession(`⚠️ Report number ${num} not found. Skipping [${Report_TO_Merge.join(', ')}]`);
-            return;
-        }
-    }
+    for (let globalAttempt = 0; globalAttempt < MAX_GLOBAL_RETRIES; globalAttempt++) {
+        console.log(`🌍 Starting Multilayer flow - Attempt ${globalAttempt + 1}/${MAX_GLOBAL_RETRIES}`);
+        logSession(`🌍 Starting Multilayer flow - Attempt ${globalAttempt + 1}/${MAX_GLOBAL_RETRIES}`);
 
-    const startTime = performance.now();
-    const randomSuffix = () => Math.random().toString(36).substring(2, 7);
-    reportName = `${reportName}_${randomSuffix()}`;
-
-    for (const num of Report_TO_Merge) {
-        console.log(`✅ Found report ${num}: ${multilayerReportsMap.get(Number(num))}`);
-        logSession(`✅ Found report ${num}: ${multilayerReportsMap.get(Number(num))}`);
-    }
-
-    console.log("🔄 Starting Multilayer Flow | MergeType:", MergeType);
-    logSession(`🔄 Starting Multilayer Flow | MergeType: ${MergeType}`);
-
-    const MAX_RETRIES = 5;
-    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
         try {
-            console.log(`Attempt ${attempt + 1} of ${MAX_RETRIES}...`);
-            logSession(`Attempt ${attempt + 1} of ${MAX_RETRIES}...`);
+            // ===== Validate input reports =====
+            for (const num of Report_TO_Merge) {
+                if (!multilayerReportsMap.has(Number(num))) {
+                    console.warn(`⚠️ Report number ${num} not found. Skipping [${Report_TO_Merge.join(', ')}]`);
+                    logSession(`⚠️ Report number ${num} not found. Skipping [${Report_TO_Merge.join(', ')}]`);
+                    return;
+                }
+            }
 
+            const startTime = performance.now();
+            const randomSuffix = () => Math.random().toString(36).substring(2, 7);
+            reportName = `${reportName}_${randomSuffix()}`;
+
+            for (const num of Report_TO_Merge) {
+                console.log(`✅ Found report ${num}: ${multilayerReportsMap.get(Number(num))}`);
+                logSession(`✅ Found report ${num}: ${multilayerReportsMap.get(Number(num))}`);
+            }
+
+            console.log(`🔄 Starting Multilayer Flow | MergeType: ${MergeType}`);
+            logSession(`🔄 Starting Multilayer Flow | MergeType: ${MergeType}`);
+
+            // ===== Navigation to Explore =====
             const exploreXPath = "//a[@href='/explore' and @data-sidebar='menu-button']";
             const exploreBtn = page.locator(`xpath=${exploreXPath}`);
             await exploreBtn.click({ timeout: 10000 });
@@ -169,7 +171,7 @@ async function MultilayerFlow(page, reportName, Report_TO_Merge, MergeType, mult
             console.log(`✅ Navigated to Explore for report: ${reportName}`);
             logSession(`✅ Navigated to Explore for report: ${reportName}`);
 
-            // ✅ FIXED STRICT MODE VIOLATION HERE
+            // ===== Multilayer button =====
             const multilayerBtn = page
                 .locator("//button//span[normalize-space()='Add Multiple Layers']")
                 .locator('xpath=ancestor::button')
@@ -178,14 +180,16 @@ async function MultilayerFlow(page, reportName, Report_TO_Merge, MergeType, mult
 
             await multilayerBtn.waitFor({ state: 'visible', timeout: 10000 });
             await multilayerBtn.click();
-            console.log("✅ Clicked 'Add Multiple Layers' button (filtered, visible only)");
-            logSession("✅ Clicked 'Add Multiple Layers' button (filtered, visible only)");
+            console.log("✅ Clicked 'Add Multiple Layers' button");
+            logSession("✅ Clicked 'Add Multiple Layers' button");
 
+            // ===== Wait for multilayer section =====
             const multilayerHeaderXPath = "//div[normalize-space(text())='Multilayer']";
             await page.locator(`xpath=${multilayerHeaderXPath}`).waitFor({ state: 'visible', timeout: 120000 });
             console.log("✅ Multilayer section loaded");
             logSession("✅ Multilayer section loaded");
 
+            // ===== Execute Merge Type =====
             const type = MergeType.toLowerCase();
             if (type === "layered") {
                 console.log("📌 Executing Layered Datasets Merge");
@@ -200,22 +204,29 @@ async function MultilayerFlow(page, reportName, Report_TO_Merge, MergeType, mult
                 await safeWait(page, 2000);
                 await unifiedMerge(page, reportName, Report_TO_Merge, multilayerReportsMap, startTime);
             } else {
-                throw new Error(`❌ Invalid MergeType: ${MergeType}`);
+                console.warn(`❌ Invalid MergeType: ${MergeType}`);
+                logSession(`❌ Invalid MergeType: ${MergeType}`);
+                return;
             }
 
-            console.log(`✅ Completed Multilayer flow successfully on attempt ${attempt + 1}`);
-            logSession(`✅ Completed Multilayer flow successfully on attempt ${attempt + 1}`);
-            break;
+            console.log(`✅ Completed Multilayer flow successfully on attempt ${globalAttempt + 1}`);
+            logSession(`✅ Completed Multilayer flow successfully on attempt ${globalAttempt + 1}`);
+            return; // success — exit loop
 
         } catch (err) {
-            console.warn(`⚠️ Attempt ${attempt + 1} failed: ${err.message}`);
-            logSession(`⚠️ Attempt ${attempt + 1} failed: ${err.message}`);
-            if (attempt === MAX_RETRIES - 1) {
-                console.error(`❌ All ${MAX_RETRIES} attempts failed. Aborting multilayer flow.`);
-                logSession(`❌ All ${MAX_RETRIES} attempts failed. Aborting multilayer flow.`);
-                throw err;
+            console.warn(`⚠️ Flow attempt ${globalAttempt + 1} failed: ${err.message}`);
+            logSession(`⚠️ Flow attempt ${globalAttempt + 1} failed: ${err.message}`);
+
+            if (globalAttempt < MAX_GLOBAL_RETRIES - 1) {
+                console.log(`🔁 Retrying full flow (Attempt ${globalAttempt + 2}/${MAX_GLOBAL_RETRIES}) after wait...`);
+                logSession(`🔁 Retrying full flow (Attempt ${globalAttempt + 2}/${MAX_GLOBAL_RETRIES}) after wait...`);
+                await safeWait(page, 5000);
+                continue; // retry full flow
+            } else {
+                console.error(`❌ All ${MAX_GLOBAL_RETRIES} attempts failed. Continuing script without abort.`);
+                logSession(`❌ All ${MAX_GLOBAL_RETRIES} attempts failed. Continuing script without abort.`);
+                return; // never throw — continue rest of script
             }
-            await safeWait(page, 2000);
         }
     }
 }
