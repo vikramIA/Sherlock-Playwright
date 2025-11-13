@@ -7,29 +7,36 @@ class RecordingManager {
     this.context = context;
     this.page = page;
     this.sessionDir = sessionDir;
-    this.videoPath = null;
   }
 
   async start() {
     console.log("🎥 Starting video recording...");
-    // nothing to do here — Playwright starts recording automatically when context is created with recordVideo
+    // Nothing extra — Playwright automatically starts recording
   }
 
-  async stop(customName = "session_recording.webm") {
+  async stop() {
     try {
       if (!this.page) {
         console.warn("⚠️ No page found for video capture.");
         return;
       }
 
-      const rawVideoPath = await this.page.video().path();
-      const finalVideoPath = path.join(this.sessionDir, customName);
-      fs.renameSync(rawVideoPath, finalVideoPath);
+      const video = this.page.video();
+      if (!video) {
+        console.warn("⚠️ No video object found for this page.");
+        return;
+      }
 
-      console.log(`✅ Video saved: ${finalVideoPath}`);
-      return finalVideoPath;
+      // ✅ Close the page first to finalize the recording
+      await this.page.close();
+
+      const rawVideoPath = await video.path();
+
+      console.log(`✅ Video recording completed: ${rawVideoPath}`);
+      return rawVideoPath;
     } catch (err) {
       console.error("❌ Failed to save video recording:", err);
+      return null;
     }
   }
 }

@@ -1229,8 +1229,8 @@ async function selectPersonaReportType(page, reportTypeRaw) {
         case 'custom places':
             reportXPath = "//div[div[text()='Custom Places']]//div[@role='button' and text()='Select']";
             break;
-        case 'custom poi codes':
-            reportXPath = "//div[div[text()='Custom POI Codes']]//div[@role='button' and text()='Select']";
+        case 'custom place codes':
+            reportXPath = "//div[div[text()='Custom Place Codes']]//div[@role='button' and text()='Select']";
             break;
         default:
             const errMsg = `❌ Unsupported Report Type: '${reportTypeRaw}'`;
@@ -1486,7 +1486,7 @@ async function VerifyItemExist(page, section, itemName) {
                     break;
                 case "repository":
                     sectionXPath = "//a[@href='/repository' and @data-sidebar='menu-button']";
-                    itemXPath = "//button//a[contains(@href, '/repository/')]";
+                    itemXPath = "//a[contains(@href, '/repository/') or contains(@href, '/repository/matchRate?id') or @href='#']";
                     urlPart = "repository";
                     break;
                 default:
@@ -1557,6 +1557,7 @@ async function VerifyItemExist(page, section, itemName) {
         }
     }
 }
+
 
 // Function to upload a CSV file
 async function uploadCSVFile(page, filePathFromInputData, reportName) {
@@ -1802,7 +1803,7 @@ async function MatchRateFetch(page, reportName, maxRetries = 3, retryDelayMs = 2
             console.log("✅ Clicked 'Match Rate' button");
             logSession("✅ Clicked 'Match Rate' button");
 
-            const matchRateElement = page.locator("//div[div[text()='POI(s) Match Rate']]/div[2]");
+            const matchRateElement = page.locator("//div[div[contains(text(),'Match Rate')]]/div[2]");
             await matchRateElement.waitFor({ state: 'visible', timeout: 60_000 });
 
             const matchRatePercentage = (await matchRateElement.textContent())?.trim() || null;

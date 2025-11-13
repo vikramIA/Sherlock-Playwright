@@ -144,22 +144,19 @@ async function PersonaFlow(page, inputData) {
 
             await setupAndInitiateReport(page, inputData);
 
-            await page.waitForURL('**/explore', { timeout: 10 * 60 * 1000 }); 
-            console.log("✅ Redirected to Explore section after initiating workflow.");
-            logSession("✅ Redirected to Explore section after initiating workflow.");
+            await page.waitForURL('**/repository', { timeout: 10 * 60 * 1000 }); 
+            console.log("✅ Redirected to Repository section after initiating workflow.");
+            logSession("✅ Redirected to Repository section after initiating workflow.");
 
             try {
-                await page.locator("//div[text()='Workflow created successfully!']")
+                await page.locator("//div[text()='Data uploaded successfully!']")
                     .waitFor({ state: 'visible', timeout: 10000 });
-                console.log("✅ 'Workflow created successfully!' message verified.");
-                logSession("✅ 'Workflow created successfully!' message verified.");
+                console.log("✅ 'Data uploaded successfully!' message verified.");
+                logSession("✅ 'Data uploaded successfully!' message verified.");
             } catch (error) {
-                console.error(`❌ Could not verify workflow success: ${error.message}`);
-                logSession(`❌ Could not verify workflow success: ${error.message}`);
+                console.error(`❌ Could not verify Data uploaded successfully! message: ${error.message}`);
+                logSession(`❌ Could not verify Data uploaded successfully! message: ${error.message}`);
             }
-
-            const reportExists = await VerifyItemExist(page, 'persona', inputData.reportName);
-            if (!reportExists) return console.log(`❌ Report not found in Explore — Aborting repository check.`);
 
             const repositoryExists = await VerifyItemExist(page, 'repository', inputData.reportName);
             if (repositoryExists) {
@@ -202,11 +199,11 @@ async function PersonaFlow(page, inputData) {
             }
         }
 
-        // === Custom POI Codes ===
-        else if (type === 'custom poi codes') {
+        // === Custom Place Codes ===
+        else if (type === 'custom place codes') {
             try {
-            console.log('✅ Selected Custom POI Codes report type');
-            logSession('✅ Selected Custom POI Codes report type');
+            console.log('✅ Selected Custom place Codes report type');
+            logSession('✅ Selected Custom place Codes report type');
 
             await setupAndInitiateReport(page, inputData);
 
@@ -222,8 +219,8 @@ async function PersonaFlow(page, inputData) {
             repositoryExists? console.log(`✅ File Uploaded successfully for ${inputData.reportName}`): console.log(`❌ File not found for ${inputData.reportName}`);
             repositoryExists? logSession(`✅ File Uploaded successfully for ${inputData.reportName}`): console.log(`❌ File not found for ${inputData.reportName}`);
             } catch (error) {
-                console.error(`❌ Error in Custom POI Codes flow: ${error.message}`);
-                logSession(`❌ Error in Custom POI Codes flow: ${error.message}`);
+                console.error(`❌ Error in Custom Place Codes flow: ${error.message}`);
+                logSession(`❌ Error in Custom Place Codes flow: ${error.message}`);
                   return;
             }
         }

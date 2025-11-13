@@ -1,6 +1,18 @@
 {
     "explore": [
       {
+        "reportType": "Device Level Visits",
+        "reportName": "Test Device Level Visits Report",
+        "place": "health.clinic.alternative",
+        "location": "Mumbai, Maharashtra, India",
+        "StartDateRange": "2025-08-01",
+        "EndDateRange": "2025-08-14",
+        "UploadAudience": [
+          "META",
+          "GOOGLE"
+        ]
+      },
+      {
         "reportType": "Place Level Visits",
         "reportName": "Test Place Level Visits",
         "place": "health.clinic.alternative",
@@ -59,18 +71,6 @@
         "QualityLifeScore": "10-90"
       },
       {
-        "reportType": "Device Level Visits",
-        "reportName": "Test Device Level Visits Report",
-        "place": "health.clinic.alternative",
-        "location": "Mumbai, Maharashtra, India",
-        "StartDateRange": "2025-08-13",
-        "EndDateRange": "2025-08-14",
-        "UploadAudience": [
-          "META",
-          "GOOGLE"
-        ]
-      },
-      {
         "reportType": "Place Level Visits",
         "reportName": "Test Place Level Visits",
         "place": "health.clinic.alternative",
@@ -127,6 +127,24 @@
     ],
     "Persona": [
       {
+        "reportType": "Custom Audience to IFAs",
+        "reportName": "Test_Custom_Audience_to_IFAs_Using_Emails",
+        "country": "India",
+        "UploadFilePath": "data/Custom_Email_To_IFA_SampleIDFC_Emails_File.csv"
+      },
+      {
+        "reportType": "Custom Audience to IFAs",
+        "reportName": "Test_Custom_Audience_to_IFAs_Using_IFAS",
+        "country": "India",
+        "UploadFilePath": "data/Custom_IFAS_India_Autohangar.csv"
+      },
+      {
+        "reportType": "Custom Audience to IFAs",
+        "reportName": "Test_Custom_Audience_to_IFAs_Using_Phone_Numbers",
+        "country": "India",
+        "UploadFilePath": "data/Custom_Phones_To_IFAS.csv"
+      },
+      {
         "reportType": "Occasion and Behavior Based Audiences",
         "reportName":"occ behav age brand subcat VD RC rat QLI" ,
         "ExploreReportName": "",
@@ -136,8 +154,8 @@
         "attributes": "",
         "behaviors": "Daily Gaming; Daily Shopping",
         "age": "18-25; 65+; 26-35; 36-45",
-        "Brands": "Franz; Hess; Marcus",
-        "SubCategory": "Homeopath; Herbalist",
+        "Brands": "",
+        "SubCategory": "",
         "VisitDuration": "10-50",
         "ReviewCount": "5-500",
         "Rating": "2.5-5",
@@ -153,12 +171,6 @@
         "place": "health.clinic.alternative; Auto; Food",
         "location": "Mumbai City, Maharashtra, India",
         "attributes": "Kid-Friendly; Wheelchair Restroom; Wheelchair Entrance"
-      },
-      {
-        "reportType": "Custom Audience to IFAs",
-        "reportName": "Test_Custom_Audience_to_IFAs",
-        "country": "India",
-        "UploadFilePath": "data/Email_To_IFA_SampleIDFC_Emails_File.csv"
       },
       {
         "reportType": "Custom Places",
@@ -269,8 +281,8 @@
         ]
       },
       {
-        "reportType": "Custom POI Codes",
-          "reportName": "Test_Custom_POI_Codes",
+        "reportType": "Custom Place Codes",
+          "reportName": "Test_Custom_Place_Codes",
           "country": "India",
           "UploadFilePath": "data/Upload_College_Poicode_Test.csv",
         "postUploadReports": [
