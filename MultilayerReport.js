@@ -1,5 +1,5 @@
 const { performance } = require('perf_hooks');
-const { keplerDatasetsFetch , safeWait } = require('./functions');
+const { keplerDatasetsFetch, safeWait } = require('./functions');
 const { logSession, logReport } = require('./Logger');
 
 // =============== Layered Merge Flow ===============
@@ -10,22 +10,65 @@ async function layeredMerge(page, reportName, Report_TO_Merge, multilayerReports
     const nameField = page.locator(`xpath=${reportNameXPath}`);
     await nameField.fill(reportName, { timeout: 10000 });
 
+    let isFirstSelection = true;
+
     for (const reportNum of Report_TO_Merge) {
         const reportNameToSelect = multilayerReportsMap.get(Number(reportNum));
-        if (reportNameToSelect) {
-            const reportSelectField = page.locator(`xpath=${reportSelectXPath}`);
-            await reportSelectField.fill(reportNameToSelect);
-            await safeWait(page, 500);
-            await reportSelectField.press('ArrowDown');
-            await reportSelectField.press('Enter');
-            console.log(`✅ Selected report: ${reportNameToSelect}`);
-            logSession(`✅ Selected report: ${reportNameToSelect}`);
-            await safeWait(page, 1000);
-        } else {
+
+        if (!reportNameToSelect) {
             console.log(`⚠️ Report number ${reportNum} not found in multilayerReportsMap`);
             logSession(`⚠️ Report number ${reportNum} not found in multilayerReportsMap`);
+            return; // stop process
         }
+
+        const reportSelectField = page.locator(`xpath=${reportSelectXPath}`);
+
+        // 🔥 Clear only for first selection
+        if (isFirstSelection) {
+            await reportSelectField.fill("");
+            isFirstSelection = false;
+        }
+
+        // Type the report name
+        await reportSelectField.fill(reportNameToSelect);
+
+        // Wait for dropdown options to load
+        await safeWait(page, 1000);
+
+        // XPath to first recommended item
+        const firstItemXPath = "//div[@cmdk-item][1]";
+        const firstItem = page.locator(`xpath=${firstItemXPath}`);
+
+        // CHECK if the first recommended option exists
+        const count = await firstItem.count();
+        if (count === 0) {
+            console.log(`❌ No recommended options found for: ${reportNameToSelect}`);
+            logSession(`❌ No recommended options found for: ${reportNameToSelect}`);
+            return; // stop without error
+        }
+
+        // Get the text inside first item
+        const firstItemText = (await firstItem.textContent())?.trim() || "";
+
+        console.log(`🔍 First recommended: ${firstItemText}`);
+        console.log(`🔍 Expected: ${reportNameToSelect}`);
+
+        // Compare EXACT match
+        if (firstItemText.toLowerCase() !== reportNameToSelect.toLowerCase()) {
+            console.log(`❌ Mismatch! Expected "${reportNameToSelect}" but found "${firstItemText}". Stopping process.`);
+            logSession(`❌ Mismatch! Expected "${reportNameToSelect}" but found "${firstItemText}". Stopping process.`);
+            return; // stop quietly
+        }
+
+        // Select first item
+        await firstItem.click();
+
+        console.log(`✅ Successfully selected: ${reportNameToSelect}`);
+        logSession(`✅ Successfully selected: ${reportNameToSelect}`);
+
+        await safeWait(page, 800);
     }
+
 
     const createButtonXPath = "//div[normalize-space()='Create Multilayer']";
     const createBtn = page.locator(`xpath=${createButtonXPath}`);
@@ -58,23 +101,65 @@ async function unifiedMerge(page, reportName, Report_TO_Merge, multilayerReports
     const nameField = page.locator(`xpath=${reportNameXPath}`);
     await nameField.fill(reportName, { timeout: 10000 });
 
+    let isFirstSelection = true;
+
     for (const reportNum of Report_TO_Merge) {
         const reportNameToSelect = multilayerReportsMap.get(Number(reportNum));
-        if (reportNameToSelect) {
-            const reportSelectField = page.locator(`xpath=${reportSelectXPath}`);
-            await reportSelectField.fill(reportNameToSelect);
-            await safeWait(page, 500);
-            await reportSelectField.press('ArrowDown');
-            await reportSelectField.press('Enter');
-            console.log(`✅ Selected report: ${reportNameToSelect}`);
-            logSession(`✅ Selected report: ${reportNameToSelect}`);
-            await safeWait(page, 1000);
-        } else {
+
+        if (!reportNameToSelect) {
             console.log(`⚠️ Report number ${reportNum} not found in multilayerReportsMap`);
             logSession(`⚠️ Report number ${reportNum} not found in multilayerReportsMap`);
+            return; // stop process
         }
+
+        const reportSelectField = page.locator(`xpath=${reportSelectXPath}`);
+
+        // 🔥 Clear only for first selection
+        if (isFirstSelection) {
+            await reportSelectField.fill("");
+            isFirstSelection = false;
+        }
+
+        // Type the report name
+        await reportSelectField.fill(reportNameToSelect);
+
+        // Wait for dropdown options to load
+        await safeWait(page, 1000);
+
+        // XPath to first recommended item
+        const firstItemXPath = "//div[@cmdk-item][1]";
+        const firstItem = page.locator(`xpath=${firstItemXPath}`);
+
+        // CHECK if the first recommended option exists
+        const count = await firstItem.count();
+        if (count === 0) {
+            console.log(`❌ No recommended options found for: ${reportNameToSelect}`);
+            logSession(`❌ No recommended options found for: ${reportNameToSelect}`);
+            return; // stop without error
+        }
+
+        // Get the text inside first item
+        const firstItemText = (await firstItem.textContent())?.trim() || "";
+
+        console.log(`🔍 First recommended: ${firstItemText}`);
+        console.log(`🔍 Expected: ${reportNameToSelect}`);
+
+        // Compare EXACT match
+        if (firstItemText.toLowerCase() !== reportNameToSelect.toLowerCase()) {
+            console.log(`❌ Mismatch! Expected "${reportNameToSelect}" but found "${firstItemText}". Stopping process.`);
+            logSession(`❌ Mismatch! Expected "${reportNameToSelect}" but found "${firstItemText}". Stopping process.`);
+            return; // stop quietly
+        }
+
+        // Select first item
+        await firstItem.click();
+
+        console.log(`✅ Successfully selected: ${reportNameToSelect}`);
+        logSession(`✅ Successfully selected: ${reportNameToSelect}`);
+
+        await safeWait(page, 800);
     }
-    
+
 
     // ✅ Click "Next Step" to load metadata
     const nextStepButtonXPath = "//*[normalize-space(text())='Next Step']";
@@ -101,7 +186,7 @@ async function unifiedMerge(page, reportName, Report_TO_Merge, multilayerReports
     await nextStepBtn2.click({ timeout: 10000 });
     console.log("✅ Clicked 'Next Step' (second time)");
     logSession("✅ Clicked 'Next Step' (second time)");
-    await safeWait(page, 3000); 
+    await safeWait(page, 3000);
 
     // ✅ Wait for Multilayer section to load
     await page.locator(`xpath=${multilayerHeaderXPath}`).waitFor({ state: 'visible', timeout: 120000 });

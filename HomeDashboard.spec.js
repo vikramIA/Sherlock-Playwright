@@ -2,7 +2,6 @@ const { chromium } = require("@playwright/test");
 const exploreFlow = require("./ExploreReport.js");
 const PersonaFlow = require("./PersonaReport.js");
 const Multilayerflow = require("./MultilayerReport.js");
-const RepositoryFlow = require("./RepositoryReport.js");
 const input = require("./input.json");
 const { loginAndNavigate } = require("./functions");
 const fs = require("fs");
@@ -96,9 +95,7 @@ async function main() {
       logSession("❌ Failed to update login credentials:", err);
     }
 
-    //Explore Flow
-    for (const report of input.explore || []) await exploreFlow(page, report);
-
+    
    
     //Multilayer Flow
     if (input.Multilayer?.length > 0) {
@@ -119,11 +116,13 @@ async function main() {
       }
     }
 
+    //Explore Flow
+    for (const report of input.explore || []) await exploreFlow(page, report);
+
+
      //Persona Flow
      for (const report of input.Persona || []) await PersonaFlow(page, report);
 
-    //Repository Flow
-    // for (const report of input.Repository || []) await RepositoryFlow(page, report);
 
   } catch (err) {
     console.error(`❌ Script failed: ${err.message}`);
