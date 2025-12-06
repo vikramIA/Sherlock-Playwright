@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require("path");
-const { logSession, logReport } = require('./Logger'); 
+const { logSession, logReport } = require('./Logger');
 const { authenticator } = require('otplib');
 
 // Function to set LocalStorage from input data
@@ -265,36 +265,36 @@ async function selectLocations(page, locationString, reportName) {
         logSession(errMsg);
         throw err; // propagate error for upstream handling
     }
-} 
-   
+}
+
 // Add multiple Places
 async function selectPlaces(page, placeString, reportName) {
     try {
-      // Scroll to the "Places" label
-      const placesLabel = page.locator("//label[contains(text(), 'Places')]");
-      await placesLabel.scrollIntoViewIfNeeded();
-      await placesLabel.click(); // Playwright auto-waits for clickability
-  
-      // Locate the input under “Places”
-      const searchInput = placesLabel
-        .locator("xpath=following-sibling::div//input[@type='search' and not(@readonly)]")
-        .first();
-  
-      const places = placeString.split(';').map(p => p.trim()).filter(Boolean);
-  
-      for (const place of places) {
-        await searchInput.fill(place);   // Playwright auto-waits
-        await searchInput.press('Enter'); // Hit Enter to select
-        console.log(`✅ Place '${place}' selected for report '${reportName}'.`);
-        logSession(`✅ Place '${place}' selected for report '${reportName}'.`);
-      }
-  
-      // Close the dropdown
-      await searchInput.press('Escape');
-  
+        // Scroll to the "Places" label
+        const placesLabel = page.locator("//label[contains(text(), 'Places')]");
+        await placesLabel.scrollIntoViewIfNeeded();
+        await placesLabel.click(); // Playwright auto-waits for clickability
+
+        // Locate the input under “Places”
+        const searchInput = placesLabel
+            .locator("xpath=following-sibling::div//input[@type='search' and not(@readonly)]")
+            .first();
+
+        const places = placeString.split(';').map(p => p.trim()).filter(Boolean);
+
+        for (const place of places) {
+            await searchInput.fill(place);   // Playwright auto-waits
+            await searchInput.press('Enter'); // Hit Enter to select
+            console.log(`✅ Place '${place}' selected for report '${reportName}'.`);
+            logSession(`✅ Place '${place}' selected for report '${reportName}'.`);
+        }
+
+        // Close the dropdown
+        await searchInput.press('Escape');
+
     } catch (err) {
-      console.error(`❌ Error selecting Places for report '${reportName}': ${err.message}`);
-      logSession(`❌ Error selecting Places for report '${reportName}': ${err.message}`);
+        console.error(`❌ Error selecting Places for report '${reportName}': ${err.message}`);
+        logSession(`❌ Error selecting Places for report '${reportName}': ${err.message}`);
     }
 }
 
@@ -353,40 +353,40 @@ async function selectDateRange(page, startDate, endDate) {
 // Function to select Available Attributes
 async function selectAvailableAttributes(page, attributeString, reportName) {
     try {
-      if (!attributeString?.trim()) {
-        console.log(`[${reportName}] No Available Attributes provided. Skipping filter.`);
-        logSession(`[${reportName}] No Available Attributes provided. Skipping filter.`);
-        return;
-      }
-  
-      // Scroll to label
-      const label = page.locator("//label[normalize-space(text())='Available Attributes']");
-      await label.scrollIntoViewIfNeeded();
-  
-      // Open the dropdown
-      const dropdown = page.locator(
-        "//label[normalize-space(text())='Available Attributes']/following-sibling::div//div[contains(@class,'ant-select-selector')]"
-      );
-      await dropdown.click();
-  
-      // Input inside dropdown
-      const searchInput = dropdown.locator("input[role='combobox']");
-  
-      // Type each attribute and hit Enter
-      const attributes = attributeString.split(';').map(a => a.trim()).filter(Boolean);
-      for (const attr of attributes) {
-        await searchInput.fill(attr);       // type the attribute
-        await searchInput.press('Enter');   // hit Enter to select
-        console.log(`✅ Attribute '${attr}' selected for report '${reportName}'.`);
-        logSession(`✅ Attribute '${attr}' selected for report '${reportName}'.`);
-      }
-  
+        if (!attributeString?.trim()) {
+            console.log(`[${reportName}] No Available Attributes provided. Skipping filter.`);
+            logSession(`[${reportName}] No Available Attributes provided. Skipping filter.`);
+            return;
+        }
+
+        // Scroll to label
+        const label = page.locator("//label[normalize-space(text())='Available Attributes']");
+        await label.scrollIntoViewIfNeeded();
+
+        // Open the dropdown
+        const dropdown = page.locator(
+            "//label[normalize-space(text())='Available Attributes']/following-sibling::div//div[contains(@class,'ant-select-selector')]"
+        );
+        await dropdown.click();
+
+        // Input inside dropdown
+        const searchInput = dropdown.locator("input[role='combobox']");
+
+        // Type each attribute and hit Enter
+        const attributes = attributeString.split(';').map(a => a.trim()).filter(Boolean);
+        for (const attr of attributes) {
+            await searchInput.fill(attr);       // type the attribute
+            await searchInput.press('Enter');   // hit Enter to select
+            console.log(`✅ Attribute '${attr}' selected for report '${reportName}'.`);
+            logSession(`✅ Attribute '${attr}' selected for report '${reportName}'.`);
+        }
+
     } catch (err) {
-      console.error(`❌ Error selecting Available Attributes for '${reportName}': ${err.message}`);
-      logSession(`❌ Error selecting Available Attributes for '${reportName}': ${err.message}`);
+        console.error(`❌ Error selecting Available Attributes for '${reportName}': ${err.message}`);
+        logSession(`❌ Error selecting Available Attributes for '${reportName}': ${err.message}`);
     }
-  }
-  
+}
+
 // Adds multiple subcategories
 async function selectSubCategory(page, SubcategoryString, reportName) {
     try {
@@ -428,40 +428,40 @@ async function selectSubCategory(page, SubcategoryString, reportName) {
 // Adds multiple brands
 async function selectBrands(page, BrandsString, reportName) {
     try {
-      // Skip if no brands provided
-      if (!BrandsString?.trim()) {
-        console.log(`[${reportName}] No Brands input provided. Skipping selection.`);
-        logSession(`[${reportName}] No Brands input provided. Skipping selection.`);
-        return;
-      }
-  
-      // Scroll to the "Brands" label
-      const brandsLabel = page.locator("//label[contains(text(), 'Brands')]");
-      await brandsLabel.scrollIntoViewIfNeeded();
-  
-      // Locate input field
-      const inputField = page.locator("//input[@name='brands']");
-      await inputField.click(); // Playwright auto-waits for visibility
-  
-      // Split brands and select each
-      const brands = BrandsString.split(';').map(b => b.trim()).filter(Boolean);
-      for (const brand of brands) {
-        await inputField.fill(brand);          // type brand
-        await inputField.press('ArrowDown');   // select dropdown suggestion
-        await inputField.press('Enter');       // confirm selection
-        console.log(`[${reportName}] Brand '${brand}' selected via dropdown.`);
-        logSession(`[${reportName}] Brand '${brand}' selected via dropdown.`);
-      }
-  
-      // Exit the dropdown gracefully
-      await inputField.press('Tab');
-  
+        // Skip if no brands provided
+        if (!BrandsString?.trim()) {
+            console.log(`[${reportName}] No Brands input provided. Skipping selection.`);
+            logSession(`[${reportName}] No Brands input provided. Skipping selection.`);
+            return;
+        }
+
+        // Scroll to the "Brands" label
+        const brandsLabel = page.locator("//label[contains(text(), 'Brands')]");
+        await brandsLabel.scrollIntoViewIfNeeded();
+
+        // Locate input field
+        const inputField = page.locator("//input[@name='brands']");
+        await inputField.click(); // Playwright auto-waits for visibility
+
+        // Split brands and select each
+        const brands = BrandsString.split(';').map(b => b.trim()).filter(Boolean);
+        for (const brand of brands) {
+            await inputField.fill(brand);          // type brand
+            await inputField.press('ArrowDown');   // select dropdown suggestion
+            await inputField.press('Enter');       // confirm selection
+            console.log(`[${reportName}] Brand '${brand}' selected via dropdown.`);
+            logSession(`[${reportName}] Brand '${brand}' selected via dropdown.`);
+        }
+
+        // Exit the dropdown gracefully
+        await inputField.press('Tab');
+
     } catch (err) {
-      const errMsg = `❌ Error selecting Brands for report '${reportName}': ${err.message}`;
-      console.error(errMsg);
-      logSession(errMsg);
+        const errMsg = `❌ Error selecting Brands for report '${reportName}': ${err.message}`;
+        console.error(errMsg);
+        logSession(errMsg);
     }
-  }  
+}
 
 // Function to Apply Rating Filter
 async function SelectRating(page, Ratings, reportName) {
@@ -476,7 +476,7 @@ async function SelectRating(page, Ratings, reportName) {
     const end = parseFloat(endRaw);
 
     if (isNaN(start) || isNaN(end)) {
-        console.warn(`[${reportName}] Invalid rating values. Skipping rating filter.`);
+        console.log(`[${reportName}] Invalid rating values. Skipping rating filter.`);
         logSession(`[${reportName}] Invalid rating values. Skipping rating filter.`);
         return;
     }
@@ -485,7 +485,7 @@ async function SelectRating(page, Ratings, reportName) {
     const max = Math.max(start, end);
 
     if (min < 0 || max > 5) {
-        console.warn(`[${reportName}] Rating range out of bounds (must be 0–5). Skipping rating filter.`);
+        console.log(`[${reportName}] Rating range out of bounds (must be 0–5). Skipping rating filter.`);
         logSession(`[${reportName}] Rating range out of bounds (must be 0–5). Skipping rating filter.`);
         return;
     }
@@ -526,7 +526,7 @@ async function SelectReviewCount(page, ReviewCount, reportName) {
         const end = parseInt(endRaw);
 
         if (isNaN(start) || isNaN(end)) {
-            console.warn(`[${reportName}] Invalid review count values. Skipping filter.`);
+            console.log(`[${reportName}] Invalid review count values. Skipping filter.`);
             logSession(`[${reportName}] Invalid review count values. Skipping filter.`);
             return;
         }
@@ -573,7 +573,7 @@ async function SelectVisitDuration(page, VisitDuration, reportName) {
     const end = parseInt(endRaw, 10);
 
     if (isNaN(start) || isNaN(end)) {
-        console.warn(`[${reportName}] Invalid visit duration values. Skipping filter.`);
+        console.log(`[${reportName}] Invalid visit duration values. Skipping filter.`);
         logSession(`[${reportName}] Invalid visit duration values. Skipping filter.`);
         return;
     }
@@ -611,7 +611,7 @@ async function SelectAverageDailyVisits(page, valueRange, reportName) {
         const end = parseInt(endRaw);
 
         if (isNaN(start) || isNaN(end)) {
-            console.warn(`[${reportName}] Invalid Average Daily Visits range. Skipping filter.`);
+            console.log(`[${reportName}] Invalid Average Daily Visits range. Skipping filter.`);
             logSession(`[${reportName}] Invalid Average Daily Visits range. Skipping filter.`);
             return;
         }
@@ -659,7 +659,7 @@ async function SelectAverageMonthlyVisits(page, valueRange, reportName) {
         const end = parseInt(endRaw);
 
         if (isNaN(start) || isNaN(end)) {
-            console.warn(`[${reportName}] Invalid Average Monthly Visits range. Skipping filter.`);
+            console.log(`[${reportName}] Invalid Average Monthly Visits range. Skipping filter.`);
             logSession(`[${reportName}] Invalid Average Monthly Visits range. Skipping filter.`);
             return;
         }
@@ -707,7 +707,7 @@ async function SelectAverageDailyDevices(page, valueRange, reportName) {
         const end = parseInt(endRaw);
 
         if (isNaN(start) || isNaN(end)) {
-            console.warn(`[${reportName}] Invalid Average Daily Devices range. Skipping filter.`);
+            console.log(`[${reportName}] Invalid Average Daily Devices range. Skipping filter.`);
             logSession(`[${reportName}] Invalid Average Daily Devices range. Skipping filter.`);
             return;
         }
@@ -755,7 +755,7 @@ async function SelectAverageMonthlyDevices(page, valueRange, reportName) {
         const end = parseInt(endRaw);
 
         if (isNaN(start) || isNaN(end)) {
-            console.warn(`[${reportName}] Invalid Average Monthly Devices range. Skipping filter.`);
+            console.log(`[${reportName}] Invalid Average Monthly Devices range. Skipping filter.`);
             logSession(`[${reportName}] Invalid Average Monthly Devices range. Skipping filter.`);
             return;
         }
@@ -820,7 +820,7 @@ async function SelectQualityLifeScore(page, range, reportName) {
             logSession(`[${reportName}] Quality of Life Score toggle switched ON.`);
 
             // Wait for overlay/spinner to disappear
-            await page.waitForSelector("div[class*='overlay'], div[class*='loader']", { state: "detached", timeout: 10000 }).catch(() => {});
+            await page.waitForSelector("div[class*='overlay'], div[class*='loader']", { state: "detached", timeout: 10000 }).catch(() => { });
 
             // Wait for inputs to become enabled
             const enabled = await waitForInputsEnabled();
@@ -840,7 +840,7 @@ async function SelectQualityLifeScore(page, range, reportName) {
                     logSession(`[${reportName}] Toggle already ON, waiting again for inputs to enable.`);
                 }
 
-                await page.waitForSelector("div[class*='overlay'], div[class*='loader']", { state: "detached", timeout: 10000 }).catch(() => {});
+                await page.waitForSelector("div[class*='overlay'], div[class*='loader']", { state: "detached", timeout: 10000 }).catch(() => { });
                 await waitForInputsEnabled(8000);
             }
         }
@@ -899,28 +899,28 @@ async function clickCreateReportButton(page, reportName) {
 // Function to enter the report name
 async function enterReportName(page, reportName, reportNumber = false, multilayerReportsMap = false) {
     try {
-      const reportNameInput = page.locator("//input[@placeholder='Report Name']");
-  
-      // Playwright auto-waits for element to be ready before fill
-      await reportNameInput.fill(reportName); // clears existing value and types new one
-  
-      // Save only if reportNumber is provided AND map exists
-      if (reportNumber !== false && multilayerReportsMap) {
-        multilayerReportsMap.set(reportNumber, reportName);
-        console.log(`📌 Saved for multilayer -> ReportNumber: ${reportNumber}, ReportName: '${reportName}'`);
-        logSession(`📌 Saved for multilayer -> ReportNumber: ${reportNumber}, ReportName: '${reportName}'`);
-      }
-  
-      console.log(`✅ Report name '${reportName}' entered successfully.`);
-      logSession(`✅ Report name '${reportName}' entered successfully.`);
-      return reportName;   // ✅ Return the report name
+        const reportNameInput = page.locator("//input[@placeholder='Report Name']");
+
+        // Playwright auto-waits for element to be ready before fill
+        await reportNameInput.fill(reportName); // clears existing value and types new one
+
+        // Save only if reportNumber is provided AND map exists
+        if (reportNumber !== false && multilayerReportsMap) {
+            multilayerReportsMap.set(reportNumber, reportName);
+            console.log(`📌 Saved for multilayer -> ReportNumber: ${reportNumber}, ReportName: '${reportName}'`);
+            logSession(`📌 Saved for multilayer -> ReportNumber: ${reportNumber}, ReportName: '${reportName}'`);
+        }
+
+        console.log(`✅ Report name '${reportName}' entered successfully.`);
+        logSession(`✅ Report name '${reportName}' entered successfully.`);
+        return reportName;   // ✅ Return the report name
     } catch (err) {
-      console.error(`❌ Failed to enter report name '${reportName}': ${err.message}`);
-      logSession(`❌ Failed to enter report name '${reportName}': ${err.message}`);
-      return null; // return null if failed
+        console.error(`❌ Failed to enter report name '${reportName}': ${err.message}`);
+        logSession(`❌ Failed to enter report name '${reportName}': ${err.message}`);
+        return null; // return null if failed
     }
 }
-  
+
 // Function to select a  Explore report type
 async function selectExploreReportType(page, reportTypeRaw) {
     const reportType = reportTypeRaw.trim().toLowerCase();
@@ -1142,10 +1142,10 @@ async function Report_To_Persona_Flow(page, reportName) {
         console.log("✅ Clicked 'Initiate Workflow'");
         logSession("✅ Clicked 'Initiate Workflow'");
 
-         // Step 4: Wait for Explore page redirect
-         await page.waitForURL('**/explore'); // Smart wait
-         console.log("✅ Redirected to Explore page after initiating workflow.");
-         logSession("✅ Redirected to Explore page after initiating workflow.");
+        // Step 4: Wait for Explore page redirect
+        await page.waitForURL('**/explore'); // Smart wait
+        console.log("✅ Redirected to Explore page after initiating workflow.");
+        logSession("✅ Redirected to Explore page after initiating workflow.");
 
         // Step 5: Verify workflow success message (if visible)
         const workflowSuccessMessage = page.locator("div:text('Workflow created successfully!')");
@@ -1153,7 +1153,7 @@ async function Report_To_Persona_Flow(page, reportName) {
             console.log("✅ 'Workflow created successfully!' message verified.");
             logSession("✅ 'Workflow created successfully!' message verified.");
         } else {
-            console.warn("⚠️ Success message not visible immediately. Check workflow status manually.");
+            console.log("⚠️ Success message not visible immediately. Check workflow status manually.");
             logSession("⚠️ Success message not visible immediately. Check workflow status manually.");
         }
 
@@ -1563,7 +1563,7 @@ async function VerifyItemExist(page, section, itemName) {
 async function uploadCSVFile(page, filePathFromInputData, reportName) {
     try {
         if (!filePathFromInputData || filePathFromInputData.trim() === "") {
-            console.warn(`[${reportName}] ⚠️ Upload File is a mandatory field but was not provided in inputData. .`);
+            console.log(`[${reportName}] ⚠️ Upload File is a mandatory field but was not provided in inputData. .`);
             logSession(`[${reportName}] ⚠️ Upload File is a mandatory field but was not provided in inputData. .`);
             return;
         }
@@ -1595,7 +1595,7 @@ async function searchAndClickReport(page, reportName) {
         try {
             if (!reportName || reportName.trim() === "") {
                 const msg = "⚠️ Report name is required for search.";
-                console.warn(msg);
+                console.log(msg);
                 logSession(msg);
                 return;
             }
@@ -1630,7 +1630,7 @@ async function searchAndClickReport(page, reportName) {
 
         } catch (err) {
             const msg = `⚠️ Attempt ${attempt}/${MAX_RETRIES} failed for report "${reportName}": ${err.message}`;
-            console.warn(msg);
+            console.log(msg);
             logSession(msg);
 
             if (attempt < MAX_RETRIES) {
@@ -1640,7 +1640,7 @@ async function searchAndClickReport(page, reportName) {
                 await page.waitForTimeout(RETRY_DELAY);
             } else {
                 const errMsg = `❌ Report "${reportName}" not found after ${MAX_RETRIES} attempts — continuing script.`;
-                console.warn(errMsg);
+                console.log(errMsg);
                 logSession(errMsg);
                 return; // ❗ Continue without throwing
             }
@@ -1688,7 +1688,7 @@ async function uploadAudiences(page, platforms) {
             const lowerPlatform = platform.toLowerCase();
             const label = platformLabelMap[lowerPlatform];
             if (!label) {
-                console.warn(`⚠️ Unknown platform "${platform}" skipped.`);
+                console.log(`⚠️ Unknown platform "${platform}" skipped.`);
                 logSession(`⚠️ Unknown platform "${platform}" skipped.`);
                 continue;
             }
@@ -1708,7 +1708,7 @@ async function uploadAudiences(page, platforms) {
                         const url = event.response.url;
                         const apiPlatform =
                             lowerPlatform === "meta" ? "facebook" :
-                            lowerPlatform === "google" ? "google" : null;
+                                lowerPlatform === "google" ? "google" : null;
 
                         if (url.includes("/audiences/uploadCustomAudience") && url.includes(`platform=${apiPlatform}`)) {
                             cdpSession.off("Network.responseReceived", listener);
@@ -1808,13 +1808,13 @@ async function MatchRateFetch(page, reportName, maxRetries = 3, retryDelayMs = 2
 
             const matchRatePercentage = (await matchRateElement.textContent())?.trim() || null;
 
-            console.log(`✅ POI(s) Match Rate for ${reportName}: ${matchRatePercentage}`);
-            logSession(`✅ POI(s) Match Rate for ${reportName}: ${matchRatePercentage}`);
+            console.log(`✅  Match Rate for ${reportName}: ${matchRatePercentage}`);
+            logSession(`✅ Match Rate for ${reportName}: ${matchRatePercentage}`);
 
             return matchRatePercentage;
         } catch (error) {
             const msg = `⚠️ Attempt ${attempt} failed: ${error.message}`;
-            console.warn(msg);
+            console.log(msg);
             logSession(msg);
 
             if (attempt < maxRetries) {
@@ -1823,38 +1823,9 @@ async function MatchRateFetch(page, reportName, maxRetries = 3, retryDelayMs = 2
             } else {
                 console.error(`❌ All ${maxRetries} attempts failed. Could not fetch Match Rate.`);
                 logSession(`❌ All ${maxRetries} attempts failed. Could not fetch Match Rate.`);
-                return null;
+                return false;
             }
         }
-    }
-}
-
-// Function to check if data uploaded successfully
-async function CHECKDataUploadedSuccessfully(page, reportName, timeout = 30 * 60 * 1000) {
-    const optionalLocators = [
-        "//div[text()='Data uploaded successfully!']",
-        "//button[text()='Table']",
-        "//button[text()='Match Rate']",
-        "//button[text()='About']"
-    ];
-
-    let found = false;
-
-    for (const locator of optionalLocators) {
-        try {
-            await page.locator(locator).waitFor({ state: 'visible', timeout });
-            console.log(`✅ [${reportName}] Element appeared: ${locator}`);
-            logSession(`✅ [${reportName}] Element appeared: ${locator}`);
-            found = true;
-        } catch (err) {
-            console.log(`ℹ️ [${reportName}] Element did NOT appear (optional): ${locator}`);
-            logSession(`ℹ️ [${reportName}] Element did NOT appear (optional): ${locator}`);
-        }
-    }
-
-    if (!found) {
-        console.log(`⚠️ [${reportName}] None of the optional elements appeared within the timeout.`);
-        logSession(`⚠️ [${reportName}] None of the optional elements appeared within the timeout.`);
     }
 }
 
@@ -1868,9 +1839,119 @@ async function safeWait(page, time = 2000) {
     }
 }
 
+// Function to search and click on a report by name in Repository if it is completed
+async function searchAndClickInRepository(page, reportName) {
+    const MAX_RETRIES = 30;
+    const REFRESH_DELAY = 60000; // 1 minute
+
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        try {
+            // 1️⃣ Navigate to Repository only if not already on Repository page
+            const currentURL = page.url();
+
+            if (!currentURL.includes('/repository')) {
+                const repoBtn = page.locator("xpath=//a[@href='/repository' and @data-sidebar='menu-button']");
+                await repoBtn.waitFor({ state: 'visible', timeout: 15000 });
+                await repoBtn.click();
+
+                await page.waitForURL('**/repository', { timeout: 15000 });
+                console.log("📁 Navigated to Repository");
+                logSession("📁 Navigated to Repository");
+            } else {
+                console.log("📁 Already on Repository — skipping navigation");
+                logSession("📁 Already on Repository — skipping navigation");
+            }
+
+            // 2️⃣ Search report
+            const searchInput = page.locator("xpath=//input[@placeholder='Search']");
+            if (await searchInput.isVisible()) {
+                await searchInput.fill(reportName);
+                await searchInput.press('Enter');
+            }
+
+            // 3️⃣ Get the report row using safe XPath
+            const reportRow = page.locator(`xpath=//a[normalize-space(text())='${reportName}']/ancestor::div[contains(@class,'mt-2 w-full')]`);
+            await reportRow.waitFor({ state: "visible", timeout: 15000 });
+
+            // 4️⃣ Extract Status (FIXED XPath)
+            const statusLocator = reportRow.locator(`xpath=.//p[span[contains(text(),'Status')]]/span[last()]`);
+            const statusText = (await statusLocator.textContent())?.trim()?.toLowerCase();
+
+            const msgStatus = `🔍 Attempt ${attempt}/${MAX_RETRIES}: Report "${reportName}" status = ${statusText}`;
+            console.log(msgStatus);
+            logSession(msgStatus);
+
+            // ✔ COMPLETED → click row and exit
+            if (statusText === "completed") {
+                const reportLink = page.locator(`xpath=//a[normalize-space(text())='${reportName}']`);
+
+                await reportLink.waitFor({ state: 'visible', timeout: 15000 });
+                await reportLink.click();
+
+                const msg = `✅ Report "${reportName}" is completed and clicked successfully.`;
+                console.log(msg);
+                logSession(msg);
+
+                return true;  // <-- FIXED
+            }
+
+            // ❌ FAILED → stop checking, do NOT retry
+            if (statusText === "failed") {
+                const msg = `❌ Report "${reportName}" has FAILED. Stopping checks and continuing script.`;
+                console.log(msg);
+                logSession(msg);
+
+                return false; // <-- FIXED
+            }
+
+            // ⏳ PENDING → retry (this is the ONLY retried state)
+            if (statusText === "pending") {
+                const msg = `⏳ Report "${reportName}" is still pending. Refreshing in 1 minutes...`;
+                console.log(msg);
+                logSession(msg);
+
+                await page.waitForTimeout(REFRESH_DELAY);
+
+                // 👉 Step 1: Navigate to Explore
+                const exploreBtn = page.locator("xpath=//a[@href='/explore' and @data-sidebar='menu-button']");
+                await exploreBtn.waitFor({ state: "visible", timeout: 15000 });
+                await exploreBtn.click();
+                await page.waitForURL("**/explore");
+
+                // 👉 Step 2: UI stability wait
+                await page.waitForTimeout(2000);
+
+                // 👉 Step 3: Return to Repository
+                const repoBtn = page.locator("xpath=//a[@href='/repository' and @data-sidebar='menu-button']");
+                await repoBtn.waitFor({ state: "visible", timeout: 15000 });
+                await repoBtn.click();
+                await page.waitForURL("**/repository");
+                continue;
+            }
+
+            // ⚠ UNKNOWN → NO RETRY
+            const msgUnknown = `⚠️ Unknown status "${statusText}". Not retrying. Continuing script.`;
+            console.log(msgUnknown);
+            logSession(msgUnknown);
+
+            return false; // <-- FIXED
+
+        } catch (err) {
+            const msg = `❌ Error on attempt ${attempt}/${MAX_RETRIES}: ${err.message}`;
+            console.log(msg);
+            logSession(msg);
+
+            return false; // <-- FIXED
+        }
+    }
+
+    return false; // <-- Already correct (timeout)
+}
+
+
 module.exports = {
+    searchAndClickInRepository,
     safeWait,
-    CHECKDataUploadedSuccessfully,
     MatchRateFetch,
     VerifyItemExist,
     navigateAndCreateExploreReport,
