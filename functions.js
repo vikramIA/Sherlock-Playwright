@@ -1846,21 +1846,22 @@ async function searchAndClickInRepository(page, reportName) {
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
         try {
-            // 1️⃣ Navigate to Repository only if not already on Repository page
-            const currentURL = page.url();
+            // 1️⃣ Navigate to Explore
+            const repoBtn1 = page.locator("xpath=//a[@href='/explore' and @data-sidebar='menu-button']");
+            await repoBtn1.waitFor({ state: 'visible', timeout: 15000 });
+            await repoBtn1.click();
+            await page.waitForURL('**/explore', { timeout: 15000 });
+            console.log("📁 Navigated to Explore");
+            logSession("📁 Navigated to Explore");
 
-            if (!currentURL.includes('/repository')) {
-                const repoBtn = page.locator("xpath=//a[@href='/repository' and @data-sidebar='menu-button']");
-                await repoBtn.waitFor({ state: 'visible', timeout: 15000 });
-                await repoBtn.click();
+            // 2️⃣ Navigate to Repository
+            const repoBtn2 = page.locator("xpath=//a[@href='/repository' and @data-sidebar='menu-button']");
+            await repoBtn2.waitFor({ state: 'visible', timeout: 15000 });
+            await repoBtn2.click();
+            await page.waitForURL('**/repository', { timeout: 15000 });
+            console.log("📁 Navigated to Repository");
+            logSession("📁 Navigated to Repository");
 
-                await page.waitForURL('**/repository', { timeout: 15000 });
-                console.log("📁 Navigated to Repository");
-                logSession("📁 Navigated to Repository");
-            } else {
-                console.log("📁 Already on Repository — skipping navigation");
-                logSession("📁 Already on Repository — skipping navigation");
-            }
 
             // 2️⃣ Search report
             const searchInput = page.locator("xpath=//input[@placeholder='Search']");

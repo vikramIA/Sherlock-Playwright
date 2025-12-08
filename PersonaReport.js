@@ -138,7 +138,11 @@ async function PersonaFlow(page, inputData) {
 
         // === Custom Audience to IFAs or Custom Places or Custom Place Codes ===
         else if (inputData.reportType.toLowerCase() === 'custom audience to ifas' || inputData.reportType.toLowerCase() === 'custom places' || inputData.reportType.toLowerCase() === 'custom place codes') {
+
             const type = inputData.reportType;
+
+            // FIX #1 — Declare matchRateValue so it is available in Step 6
+            let matchRateValue = null;
 
             try {
                 console.log(`✅ Selected ${type} report type`);
@@ -157,7 +161,6 @@ async function PersonaFlow(page, inputData) {
                 } catch (err) {
                     console.error(`❌ Upload success message NOT found: ${err.message}`);
                     logSession(`❌ Upload success message NOT found: ${err.message}`);
-                    // Continue script
                 }
 
                 // STEP 3: Redirect to repository
@@ -168,10 +171,9 @@ async function PersonaFlow(page, inputData) {
                 } catch (err) {
                     console.error(`❌ Failed redirect to repository: ${err.message}`);
                     logSession(`❌ Failed redirect to repository: ${err.message}`);
-                    // Continue execution
                 }
 
-                // STEP 4: Check if report exists in repository
+                // STEP 4: Check if report exists
                 try {
                     const exists = await VerifyItemExist(page, 'repository', inputData.reportName);
 
@@ -179,47 +181,97 @@ async function PersonaFlow(page, inputData) {
                         console.log(`✅ Report found in repository: ${inputData.reportName}`);
                         logSession(`✅ Report found in repository: ${inputData.reportName}`);
 
-                        // STEP 5: Extract Match Rate 
+                        // STEP 5: Extract Match Rate (only if DirectIFAS is NOT YES)
                         try {
-                            // If DirectIFAS is YES, skip Match Rate
                             if (inputData.DirectIFAS?.toUpperCase() === "YES") {
                                 console.log("⏭️ Skipping Match Rate — DirectIFAS = YES");
                                 logSession("⏭️ Skipping Match Rate — DirectIFAS = YES");
-                                return;
-                            }
-            
-                            // Search and click on the report in repository
-                            const repoClicked = await searchAndClickInRepository(page, inputData.reportName);
-                            if (!repoClicked) {
-                                const msg = `❌ Skipping report "${inputData.reportName}" because searchAndClickInRepository returned false.`;
-                                console.error(msg);
-                                logSession(msg);
-                                return;  
-                            }
+                                // FIX #2 — DO NOT RETURN HERE
+                            } else {
+                                // Search & click report
+                                const repoClicked = await searchAndClickInRepository(page, inputData.reportName);
+                                if (!repoClicked) {
+                                    const msg = `❌ Skipping report "${inputData.reportName}" because searchAndClickInRepository returned false.`;
+                                    console.error(msg);
+                                    logSession(msg);
+                                    return;
+                                }
 
-                            // Extract Match Rate
-                            const matchSuccess = await MatchRateFetch(page, inputData.reportName);
-                            if (!matchSuccess) {
-                                const msg = `❌ Skipping report "${inputData.reportName}" because MatchRateFetch failed.`;
-                                console.error(msg);
-                                logSession(msg);
-                                return;  
+                                // Extract Match Rate
+                                matchRateValue = await MatchRateFetch(page, inputData.reportName);
+
+                                if (!matchRateValue) {
+                                    const msg = `❌ Skipping report "${inputData.reportName}" because MatchRateFetch failed.`;
+                                    console.error(msg);
+                                    logSession(msg);
+                                    return;
+                                }
+
+                                // Parse Match Rate to number
+                                if (matchRateValue) {
+                                    matchRateValue = parseFloat(matchRateValue.toString().replace('%', '').trim());
+                                    console.log(`📌 Parsed Match Rate (number): ${matchRateValue}`);
+                                    logSession(`📌 Parsed Match Rate (number): ${matchRateValue}`);
+                                }
                             }
 
                         } catch (err) {
                             console.error(`❌ Match Rate extraction failed: ${err.message}`);
                             logSession(`❌ Match Rate extraction failed: ${err.message}`);
-                            return;  
+                            return;
                         }
-
 
                     } else {
                         console.log(`❌ Report NOT found in repository: ${inputData.reportName}`);
                         logSession(`❌ Report NOT found in repository: ${inputData.reportName}`);
                     }
+
                 } catch (err) {
                     console.error(`❌ Repository check failed: ${err.message}`);
                     logSession(`❌ Repository check failed: ${err.message}`);
+                }
+
+                // ==== STEP 6: Trigger CDP (ONLY for Custom Audience to IFAs) ====
+                if (inputData.reportType.toLowerCase() === "custom audience to ifas") {
+
+                    const directIFAS = inputData.DirectIFAS?.toUpperCase() === "YES";
+
+                    // Direct IFAS → Always trigger CDP
+                    if (directIFAS) {
+                        console.log("🚀 Triggering CDP — DirectIFAS = YES (Match Rate ignored)");
+                        logSession("🚀 Triggering CDP — DirectIFAS = YES (Match Rate ignored)");
+
+                        const repoClicked = await searchAndClickInRepository(page, inputData.reportName);
+                        if (!repoClicked) {
+                            const msg = `❌ Skipping report "${inputData.reportName}" because searchAndClickInRepository returned false.`;
+                            console.error(msg);
+                            logSession(msg);
+                            return;
+                        }
+
+                        await CDPTriggerAfterUpload(page, inputData);
+                        return;
+                    }
+
+                    // Non-direct → Match Rate required
+                    if (matchRateValue > 0) {
+                        console.log(`🚀 Triggering CDP — Match Rate = ${matchRateValue}% (> 0)`);
+                        logSession(`🚀 Triggering CDP — Match Rate = ${matchRateValue}% (> 0)`);
+
+                        const repoClicked = await searchAndClickInRepository(page, inputData.reportName);
+                        if (!repoClicked) {
+                            const msg = `❌ Skipping report "${inputData.reportName}" because searchAndClickInRepository returned false.`;
+                            console.error(msg);
+                            logSession(msg);
+                            return;
+                        }
+
+                        await CDPTriggerAfterUpload(page, inputData);
+
+                    } else {
+                        console.log(`⛔ CDP NOT triggered — Match Rate = ${matchRateValue} (must be > 0)`);
+                        logSession(`⛔ CDP NOT triggered — Match Rate = ${matchRateValue} (must be > 0)`);
+                    }
                 }
 
             } catch (error) {
@@ -227,6 +279,7 @@ async function PersonaFlow(page, inputData) {
                 logSession(`❌ Unexpected error in ${type} flow: ${error.message}`);
             }
         }
+
 
         // === Unknown Report Type ===
         else {
@@ -252,6 +305,127 @@ async function PersonaFlow(page, inputData) {
         console.log("Clicked 'Initiate Workflow'");
         logSession("Clicked 'Initiate Workflow'");
     }
+
+    // === CDP Trigger After Upload ===
+    async function CDPTriggerAfterUpload(page, inputData) {
+        try {
+            const postReports = inputData.postUploadReports;
+
+            if (!Array.isArray(postReports) || postReports.length === 0) {
+                const msg = "❌ No postUploadReports found. Skipping CDP trigger.";
+                console.error(msg);
+                logSession(msg);
+                return;   // STOP only this report flow
+            }
+
+            const report = postReports[0];
+
+            if (!report.reportName) {
+                const msg = "❌ postUploadReports[0].reportName missing. Skipping CDP.";
+                console.error(msg);
+                logSession(msg);
+                return;
+            }
+
+            // === Generate Random Suffix for Persona Report ===
+            const randomSuffix = () => Math.random().toString(36).substring(2, 7);
+            const newReportName = `${report.reportName} - ${randomSuffix()}`;
+            report.reportName = newReportName;
+
+            console.log(`🆕 Persona Report Name Updated: ${newReportName}`);
+            logSession(`🆕 Persona Report Name Updated: ${newReportName}`);
+
+            // ✅ Click the first visible "Create Persona Workflow" button
+            const personaButton = page.getByRole('button', { name: 'Create Persona Workflow' }).first();
+            await personaButton.click();
+
+            console.log(`✅ Clicked 'Create Persona Workflow' for ${newReportName}`);
+            logSession(`✅ Clicked 'Create Persona Workflow' for ${newReportName}`);
+
+
+            // 1️⃣ Persona Report Name
+            try {
+                await PersonaReportName(page, newReportName);
+            } catch (err) {
+                console.error(`❌ PersonaReportName failed: ${err.message}`);
+                logSession(`❌ PersonaReportName failed: ${err.message}`);
+                return; // Stop this persona creation only
+            }
+
+            // 2️⃣ Behaviors
+            try {
+                if (report.behaviors) {
+                    await selectBehaviors(page, report.behaviors, newReportName);
+                }
+            } catch (err) {
+                console.error(`❌ selectBehaviors failed: ${err.message}`);
+                logSession(`❌ selectBehaviors failed: ${err.message}`);
+                return;
+            }
+
+            // 3️⃣ Age Ranges
+            try {
+                if (report.age) {
+                    await selectAgeRanges(page, report.age, newReportName);
+                }
+            } catch (err) {
+                console.error(`❌ selectAgeRanges failed: ${err.message}`);
+                logSession(`❌ selectAgeRanges failed: ${err.message}`);
+                return;
+            }
+
+            // 4️⃣ Lifestyle
+            // try {
+            //     await selectLifestyle(page, report.lifestyle ?? "", newReportName);
+            // } catch (err) {
+            //     console.error(`❌ selectLifestyle failed: ${err.message}`);
+            //     logSession(`❌ selectLifestyle failed: ${err.message}`);
+            //     return;
+            // }
+
+            const initiateBtn = page.locator("//button[contains(., 'Initiate Workflow')]");
+            await initiateBtn.waitFor({ state: 'visible', timeout: 20000 });
+            await initiateBtn.click();
+            console.log("Clicked 'Initiate Workflow'");
+            logSession("Clicked 'Initiate Workflow'");
+
+            await page.waitForURL('**/explore', { timeout: 10 * 60 * 1000 });
+            console.log("✅ Redirected to Explore section after initiating workflow.");
+            logSession("✅ Redirected to Explore section after initiating workflow.");
+
+            // Verify Workflow success
+            const workflowSuccessMessage = page.locator("//div[text()='Workflow created successfully!']");
+            try {
+                await workflowSuccessMessage.waitFor({ state: 'visible', timeout: 10000 });
+                console.log("✅ 'Workflow created successfully!' message verified.");
+                logSession("✅ 'Workflow created successfully!' message verified.");
+            } catch (error) {
+                console.error(`❌ Could not verify 'Workflow created successfully!' message: ${error.message}`);
+                logSession(`❌ Could not verify 'Workflow created successfully!' message: ${error.message}`);
+            }
+
+            // Verify Report exists in Explore
+            const reportExists = await VerifyItemExist(page, 'persona', newReportName);
+            if (reportExists) {
+                console.log(`✅ Report found in Explore for ${newReportName}`);
+                logSession(`✅ Report found in Explore for ${newReportName}`);
+                console.log(`✅ CDP TRIGGER AFTER UPLOAD flow completed successfully! Report: ${newReportName}`);
+                logSession(`✅ CDP TRIGGER AFTER UPLOAD flow completed successfully! Report: ${newReportName}`);
+            } else {
+                console.log(`❌ Report not found in Explore for ${newReportName}`);
+                logSession(`❌ Report not found in Explore for ${newReportName}`);
+                console.log(`❌ CDP TRIGGER AFTER UPLOAD flow failed! Report: ${newReportName}`);
+                logSession(`❌ CDP TRIGGER AFTER UPLOAD flow failed! Report: ${newReportName}`);
+            }
+
+
+
+        } catch (error) {
+            console.error(`❌ Unexpected failure inside CDPTriggerAfterUpload: ${error.message}`);
+            logSession(`❌ Unexpected failure inside CDPTriggerAfterUpload: ${error.message}`);
+        }
+    }
 }
+
 
 module.exports = PersonaFlow;

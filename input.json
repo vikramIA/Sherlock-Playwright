@@ -121,6 +121,52 @@
     ],
     "Persona": [
       {
+        "reportType": "Custom Audience to IFAs",
+        "reportName": "Test_Custom_Audience_to_IFAs_Using_IFAS",
+        "country": "India",
+        "DirectIFAS": "YES",
+        "UploadFilePath": "data/Custom_IFAS_India_Autohangar.csv",
+        "postUploadReports": [
+          {
+            "Persona": "YES",
+            "reportName": "Persona Report Using IFAS as Audience",
+            "behaviors": "Daily Gaming; Daily Shopping",
+            "age": "18-25; 65+; 26-35; 36-45",
+            "lifestyle": ""
+          }
+        ]
+      },
+      {
+        "reportType": "Custom Audience to IFAs",
+        "reportName": "Test_Custom_Audience_to_IFAs_Using_Emails",
+        "country": "India",
+        "UploadFilePath": "data/Custom_Email_To_IFA.csv",
+        "postUploadReports": [
+          {
+            "Persona": "YES",
+            "reportName": "Persona Report Using Email as Audience",
+            "behaviors": "Daily Gaming; Daily Shopping",
+            "age": "18-25; 65+; 26-35; 36-45",
+            "lifestyle": ""
+          }
+        ]
+      },
+      {
+        "reportType": "Custom Audience to IFAs",
+        "reportName": "Test_Custom_Audience_to_IFAs_Using_Phone_Numbers",
+        "country": "India",
+        "UploadFilePath": "data/Custom_Phones_To_IFAS.csv",
+        "postUploadReports": [
+          {
+            "Persona": "YES",
+            "reportName": "Persona Report Using Phone Numbers as Audience",
+            "behaviors": "Daily Gaming; Daily Shopping",
+            "age": "18-25; 65+; 26-35; 36-45",
+            "lifestyle": ""
+          }
+        ]
+      },
+      {
         "reportType": "Custom Places",
           "reportName": "Test_Custom_Places_Using_Address",
           "country": "India",
@@ -283,25 +329,6 @@
         ]
       },
       {
-        "reportType": "Custom Audience to IFAs",
-        "reportName": "Test_Custom_Audience_to_IFAs_Using_Emails",
-        "country": "India",
-        "UploadFilePath": "data/Custom_Email_To_IFA.csv"
-      },
-      {
-        "reportType": "Custom Audience to IFAs",
-        "reportName": "Test_Custom_Audience_to_IFAs_Using_IFAS",
-        "country": "India",
-        "DirectIFAS": "YES",
-        "UploadFilePath": "data/Custom_IFAS_India_Autohangar.csv"
-      },
-      {
-        "reportType": "Custom Audience to IFAs",
-        "reportName": "Test_Custom_Audience_to_IFAs_Using_Phone_Numbers",
-        "country": "India",
-        "UploadFilePath": "data/Custom_Phones_To_IFAS.csv"
-      },
-      {
         "reportType": "Occasion and Behavior Based Audiences",
         "reportName":"Persona Report Using Occasion Behaviors and Age" ,
         "ExploreReportName": "",
@@ -311,6 +338,7 @@
         "attributes": "",
         "behaviors": "Daily Gaming; Daily Shopping",
         "age": "18-25; 65+; 26-35; 36-45",
+        "lifestyle": "",
         "Brands": "",
         "SubCategory": "",
         "VisitDuration": "",
