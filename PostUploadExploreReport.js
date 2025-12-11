@@ -1,0 +1,317 @@
+const { logSession, logReport } = require('./Logger');
+const {
+    selectBehaviors, selectAgeRanges, clearSearchBar, uploadAudiences, searchAndClickReport, selectDateRange, clickCreateReportButton, enterReportName,
+    selectExploreReportType, keplerDatasetsFetch, Report_To_Persona_Flow, selectSubCategory, selectBrands, SelectRating, SelectReviewCount,
+    SelectVisitDuration, SelectAverageDailyVisits, SelectAverageMonthlyVisits, SelectAverageDailyDevices, SelectAverageMonthlyDevices,
+    selectAvailableAttributes, SelectQualityLifeScore, safeWait} = require('./functions');
+
+
+async function postUploadExploreReportFlow(page, inputData, isForMultilayer = false, multilayerReportsMap = false) {
+    const randomSuffix = () => Math.random().toString(36).substring(2, 7);
+    inputData.reportName = `${inputData.reportName}: ${randomSuffix()}`;
+
+    try {
+        // Step 1: Navigate to Explore and create a new report
+        try {
+            const createBtnXPath = "//button[@data-sidebar='menu-button' and .//span[text()='Create Report']]";
+            await page.locator(createBtnXPath).click();
+            console.log(`✅ Clicked 'Create Report' for ${inputData.reportName}`);
+            logSession(`✅ Clicked 'Create Report' for ${inputData.reportName}`)
+        } catch (err) {
+            console.error(`❌ Failed during navigation: ${err.message}`);
+            logSession(`❌ Failed during navigation: ${err.message}`);
+            return;
+        }
+
+        // Step 2: Wait and select Report Type
+        try {
+            await safeWait(page, 3000);
+            await selectExploreReportType(page, inputData.reportType);
+            const type = inputData.reportType.trim().toLowerCase();
+
+            // --------- PLACE LEVEL VISITS ---------
+            if (type === 'place level visits') {
+                try {
+                    const reportName = await enterReportName(page, inputData.reportName, isForMultilayer ? inputData.ReportNumber : false, multilayerReportsMap);
+                    await safeWait(page, 1000);
+
+                    await selectDateRange(page, inputData.StartDateRange, inputData.EndDateRange);
+                    await safeWait(page, 1000);
+
+                    await selectAvailableAttributes(page, inputData.attributes, inputData.reportName);
+                    await safeWait(page, 2000);
+
+                    await selectSubCategory(page, inputData.SubCategory, inputData.reportName);
+                    await safeWait(page, 2000);
+
+                    await selectBrands(page, inputData.Brands, inputData.reportName);
+                    await safeWait(page, 3000);
+
+                    await SelectRating(page, inputData.Rating, inputData.reportName);
+                    await safeWait(page, 2000);
+
+                    await SelectReviewCount(page, inputData.ReviewCount, inputData.reportName);
+                    await safeWait(page, 2000);
+
+                    await SelectAverageDailyVisits(page, inputData.AverageDailyVisits, inputData.reportName);
+                    await safeWait(page, 2000);
+
+                    await SelectAverageMonthlyVisits(page, inputData.AverageMonthlyVisits, inputData.reportName);
+                    await safeWait(page, 2000);
+
+                    await SelectAverageDailyDevices(page, inputData.AverageDailyDevices, inputData.reportName);
+                    await safeWait(page, 2000);
+
+                    await SelectAverageMonthlyDevices(page, inputData.AverageMonthlyDevices, inputData.reportName);
+                    await safeWait(page, 2000);
+
+                    await clickCreateReportButton(page, inputData.reportName);
+                    await safeWait(page, 1000);
+
+                    const result = await keplerDatasetsFetch(page, inputData.reportName);
+                    await safeWait(page, 2000);
+
+                    if (result.status === 'no_data') {
+                        console.log(`[${inputData.reportName}] Skipping Persona flow Due To No Data Found.`);
+                        logSession(`[${inputData.reportName}] Skipping Persona flow Due To No Data Found.`);
+                    } else if (inputData.Persona?.toUpperCase() === "YES") {
+                        await Report_To_Persona_Flow(page, inputData.reportName);
+                    }
+
+                    if (result.status === 'no_data') {
+                        console.log(`[${inputData.reportName}] ⏩ Skipping Upload Audience flow due to no data found.`);
+                        logSession(`[${inputData.reportName}] ⏩ Skipping Upload Audience flow due to no data found.`);
+                    } else if (Array.isArray(inputData.UploadAudience) && inputData.UploadAudience.length > 0) {
+                        for (const platform of inputData.UploadAudience) {
+                            try {
+                                console.log(`--- Starting upload process for platform: ${platform} ---`);
+                                logSession(`--- Starting upload process for platform: ${platform} ---`);
+                                await searchAndClickReport(page, reportName);
+                                await safeWait(page, 2000);
+
+                                await uploadAudiences(page, [platform]);
+                                await safeWait(page, 2000);
+
+                                await clearSearchBar(page);
+                                await safeWait(page, 2000);
+                            } catch (err) {
+                                console.error(`❌ Upload process failed for platform ${platform}: ${err.message}`);
+                                logSession(`❌ Upload process failed for platform ${platform}: ${err.message}`);
+                            }
+                        }
+                    } else {
+                        console.log(`[${inputData.reportName}] ⏩ No platforms defined in UploadAudience, skipping upload.`);
+                        logSession(`[${inputData.reportName}] ⏩ No platforms defined in UploadAudience, skipping upload.`);
+                    }
+
+                } catch (err) {
+                    console.error(`❌ Error in 'place level visits' flow: ${err.message}`);
+                    logSession(`❌ Error in 'place level visits' flow: ${err.message}`);
+                }
+            }
+
+            // --------- DEVICE LEVEL VISITS ---------
+            else if (type === 'device level visits') {
+                try {
+                    const DeviceReportName = await enterReportName(page, inputData.reportName, isForMultilayer ? inputData.ReportNumber : false, multilayerReportsMap);
+                    await safeWait(page, 1000);
+
+                    await selectDateRange(page, inputData.StartDateRange, inputData.EndDateRange);
+                    await safeWait(page, 1000);
+
+                    await selectSubCategory(page, inputData.SubCategory, inputData.reportName);
+                    await safeWait(page, 2000);
+
+                    await SelectQualityLifeScore(page, inputData.QualityLifeScore, inputData.reportName);
+                    await safeWait(page, 1000);
+
+                    await selectBehaviors(page, inputData.behaviors, inputData.reportName);
+                    await safeWait(page, 2000);
+
+                    await selectAgeRanges(page, inputData.age, inputData.reportName);
+                    await safeWait(page, 2000);
+
+                    await selectBrands(page, inputData.Brands, inputData.reportName);
+                    await safeWait(page, 2000);
+
+                    await SelectRating(page, inputData.Rating, inputData.reportName);
+                    await safeWait(page, 2000);
+
+                    await SelectReviewCount(page, inputData.ReviewCount, inputData.reportName);
+                    await safeWait(page, 2000);
+
+                    await SelectVisitDuration(page, inputData.VisitDuration, inputData.reportName);
+                    await safeWait(page, 2000);
+
+                    await SelectAverageDailyVisits(page, inputData.AverageDailyVisits, inputData.reportName);
+                    await safeWait(page, 2000);
+
+                    await SelectAverageMonthlyVisits(page, inputData.AverageMonthlyVisits, inputData.reportName);
+                    await safeWait(page, 2000);
+
+                    await SelectAverageDailyDevices(page, inputData.AverageDailyDevices, inputData.reportName);
+                    await safeWait(page, 2000);
+
+                    await SelectAverageMonthlyDevices(page, inputData.AverageMonthlyDevices, inputData.reportName);
+                    await safeWait(page, 2000);
+
+                    await clickCreateReportButton(page, inputData.reportName);
+
+                    const result = await keplerDatasetsFetch(page, inputData.reportName);
+                    await safeWait(page, 2000);
+
+                    if (result.status === 'no_data') {
+                        console.log(`[${inputData.reportName}] Skipping Persona flow Due To No Data Found.`);
+                        logSession(`[${inputData.reportName}] Skipping Persona flow Due To No Data Found.`);
+                    } else if (inputData.Persona?.toUpperCase() === "YES") {
+                        await Report_To_Persona_Flow(page, inputData.reportName);
+                    }
+
+                    if (result.status === 'no_data') {
+                        console.log(`[${inputData.reportName}] ⏩ Skipping Upload Audience flow due to no data found.`);
+                        logSession(`[${inputData.reportName}] ⏩ Skipping Upload Audience flow due to no data found.`);
+                    } else if (Array.isArray(inputData.UploadAudience) && inputData.UploadAudience.length > 0) {
+                        for (const platform of inputData.UploadAudience) {
+                            try {
+                                console.log(`--- Starting upload process for platform: ${platform} ---`);
+                                logSession(`--- Starting upload process for platform: ${platform} ---`);
+
+                                // SPA-safe, retry-enabled report selection
+                                try {
+                                    await searchAndClickReport(page, DeviceReportName, 1); // retry once if fails
+                                    await safeWait(page, 2000);
+                                } catch (err) {
+                                    console.warn(`⚠️ Could not select report "${DeviceReportName}" for upload: ${err.message}`);
+                                    logSession(`⚠️ Could not select report "${DeviceReportName}" for upload: ${err.message}`);
+                                    // Skip this platform if report cannot be selected
+                                    continue;
+                                }
+
+                                await uploadAudiences(page, [platform]);
+                                await safeWait(page, 2000);
+
+                                await clearSearchBar(page);
+                                await safeWait(page, 2000);
+                            } catch (err) {
+                                console.error(`❌ Upload process failed for platform ${platform}: ${err.message}`);
+                                logSession(`❌ Upload process failed for platform ${platform}: ${err.message}`);
+                            }
+                        }
+                    } else {
+                        console.log(`[${inputData.reportName}] ⏩ No platforms defined in UploadAudience, skipping upload.`);
+                        logSession(`[${inputData.reportName}] ⏩ No platforms defined in UploadAudience, skipping upload.`);
+                    }
+
+                } catch (err) {
+                    console.error(`❌ Error in 'device level visits' flow: ${err.message}`);
+                    logSession(`❌ Error in 'device level visits' flow: ${err.message}`);
+                }
+            }
+
+            // --------- PLACES ---------
+            else if (type === 'places') {
+                try {
+                    const PlaceReportName = await enterReportName(page, inputData.reportName, isForMultilayer ? inputData.ReportNumber : false, multilayerReportsMap);
+                    await safeWait(page, 1000);
+
+                    await selectAvailableAttributes(page, inputData.attributes, inputData.reportName);
+                    await safeWait(page, 2000);
+
+                    await selectSubCategory(page, inputData.SubCategory, inputData.reportName);
+                    await safeWait(page, 2000);
+
+                    await selectBrands(page, inputData.Brands, inputData.reportName);
+                    await safeWait(page, 2000);
+
+                    await SelectRating(page, inputData.Rating, inputData.reportName);
+                    await safeWait(page, 2000);
+
+                    await SelectReviewCount(page, inputData.ReviewCount, inputData.reportName);
+                    await safeWait(page, 2000);
+
+                    await SelectAverageDailyVisits(page, inputData.AverageDailyVisits, inputData.reportName);
+                    await safeWait(page, 2000);
+
+                    await SelectAverageMonthlyVisits(page, inputData.AverageMonthlyVisits, inputData.reportName);
+                    await safeWait(page, 2000);
+
+                    await SelectAverageDailyDevices(page, inputData.AverageDailyDevices, inputData.reportName);
+                    await safeWait(page, 2000);
+
+                    await SelectAverageMonthlyDevices(page, inputData.AverageMonthlyDevices, inputData.reportName);
+                    await safeWait(page, 2000);
+
+                    await clickCreateReportButton(page, inputData.reportName);
+
+                    const result = await keplerDatasetsFetch(page, inputData.reportName);
+                    await safeWait(page, 2000);
+
+                    // Handling Places -> Places Level Visit Report
+                    if (inputData.PLACES_TO_Visit_Report?.toUpperCase() === "YES" && result.status !== 'no_data') {
+                        const VisitReportInputs = inputData.VisitReportDetails;
+                        VisitReportInputs.reportName = `${VisitReportInputs.reportName}: ${randomSuffix()}`;
+
+                        console.log(`➡️ Creating Places Level Visit report linked to POI: ${PlaceReportName}`);
+                        logSession(`➡️ Creating Places Level Visit report linked to POI: ${PlaceReportName}`);
+
+                        try {
+                            // Use retry-enabled searchAndClickReport
+                            await searchAndClickReport(page, PlaceReportName, 1); // retry once if fails
+                            await safeWait(page, 2000);
+
+                            const createVisitationBtn = page.locator("//button[normalize-space()='Create Place Level Visits']");
+                            await createVisitationBtn.waitFor({ state: 'visible', timeout: 10000 });
+                            await createVisitationBtn.click();
+
+                            console.log("✅ 'Create Places Level Visits Report' button clicked.");
+                            logSession("✅ 'Create Places Level Visits Report' button clicked.");
+
+                            await enterReportName(page, VisitReportInputs.reportName, isForMultilayer ? inputData.ReportNumber : false, multilayerReportsMap);
+                            await safeWait(page, 1000);
+
+                            await selectDateRange(page, VisitReportInputs.StartDateRange, VisitReportInputs.EndDateRange);
+                            await safeWait(page, 1000);
+
+                            await clickCreateReportButton(page, VisitReportInputs.reportName);
+                            const visitResult = await keplerDatasetsFetch(page, VisitReportInputs.reportName);
+                            await safeWait(page, 2000);
+
+                            if (visitResult.status === 'no_data') {
+                                console.log(`[${VisitReportInputs.reportName}] Skipping Persona flow Due To No Data Found.`);
+                                logSession(`[${VisitReportInputs.reportName}] Skipping Persona flow Due To No Data Found.`);
+                            } else if (VisitReportInputs.Persona?.toUpperCase() === "YES") {
+                                await Report_To_Persona_Flow(page, VisitReportInputs.reportName);
+                            }
+
+                        } catch (err) {
+                            console.error(`❌ Error in 'places' flow for ${PlaceReportName}: ${err.message}`);
+                            logSession(`❌ Error in 'places' flow for ${PlaceReportName}: ${err.message}`);
+                        } finally {
+                            // Always clear search bar and continue safely
+                            await safeWait(page, 2000);
+                            await clearSearchBar(page);
+                            await safeWait(page, 2000);
+                        }
+                    }
+
+
+                } catch (err) {
+                    console.error(`❌ Error in 'places' flow: ${err.message}`);
+                    logSession(`❌ Error in 'places' flow: ${err.message}`);
+                }
+            }
+        } catch (err) {
+            const errMsg = `❌ Error while selecting report type '${inputData.reportType}': ${err.message}`;
+            console.error(errMsg);
+            logSession(errMsg);
+            return;
+        }
+
+    } catch (err) {
+        const finalError = `❌ General Error in Explore flow for ${inputData.reportName}: ${err.message}`;
+        console.error(finalError);
+        logSession(finalError);
+    }
+}
+
+module.exports = postUploadExploreReportFlow;

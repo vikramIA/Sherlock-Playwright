@@ -9,6 +9,7 @@ const {
     SelectAverageMonthlyDevices, SelectQualityLifeScore,
     selectCountry, uploadCSVFile, safeWait, searchAndClickInRepository
 } = require('./functions'); // Assumes functions.js is converted
+const postUploadExploreReportFlow = require("./PostUploadExploreReport.js");
 
 async function PersonaFlow(page, inputData) {
     const randomSuffix = () => Math.random().toString(36).substring(2, 7);
@@ -274,13 +275,56 @@ async function PersonaFlow(page, inputData) {
                     }
                 }
 
-            } catch (error) {
-                console.error(`❌ Unexpected error in ${type} flow: ${error.message}`);
-                logSession(`❌ Unexpected error in ${type} flow: ${error.message}`);
+                // ==== STEP 7: Trigger Places, Devices level visit and Places Level Visit Reports ====
+                if (inputData.reportType.toLowerCase() === 'custom places' || inputData.reportType.toLowerCase() === 'custom place codes') {
+                    try {
+                        // Validate list exists
+                        if (!Array.isArray(inputData.postUploadReports) || inputData.postUploadReports.length === 0) {
+                            console.log("⏭️ No post-upload Explore reports to create.");
+                            logSession("⏭️ No post-upload Explore reports to create.");
+                            return;
+                        }
+
+                        // Post Upload Explore Report Flow
+                        for (const report of inputData.postUploadReports) {
+
+                            try {
+                                console.log(`📌 Starting Explore Report: ${report.reportType} - ${report.reportName}`);
+                                logSession(`📌 Starting Explore Report: ${report.reportType} - ${report.reportName}`);
+
+                                const repoClicked = await searchAndClickInRepository(page, inputData.reportName);
+
+                                if (!repoClicked) {
+                                    const msg = `❌ Cannot open main report in repository for "${inputData.reportName}". Skipping this Explore report.`;
+                                    console.error(msg);
+                                    logSession(msg);
+                                    continue;
+                                }
+
+                                await postUploadExploreReportFlow(page, report);
+
+                                console.log(`✅ Completed Explore Report: ${report.reportType} - ${report.reportName}`);
+                                logSession(`✅ Completed Explore Report: ${report.reportType} - ${report.reportName}`);
+
+                            } catch (err) {
+
+                                console.error(`❌ Failed Explore Report: ${report.reportName} → ${err.message}`);
+                                logSession(`❌ Failed Explore Report: ${report.reportName} → ${err.message}`);
+                                continue;
+                            }
+                        }
+                    } catch (error) {
+                        console.error(`❌ Unexpected error in ${type} flow: ${error.message}`);
+                        logSession(`❌ Unexpected error in ${type} flow: ${error.message}`);
+                    }
+                }
+
+            } catch (err) {
+                console.error(`❌ Error in PostUploadExploreReport Creation flow: ${err.message}`);
+                logSession(`❌ Error in PostUploadExploreReport Creation flow: ${err.message}`);
+                return;
             }
         }
-
-
         // === Unknown Report Type ===
         else {
             console.error(`❌ Unknown report type: ${inputData.reportType}`);
@@ -373,16 +417,7 @@ async function PersonaFlow(page, inputData) {
                 logSession(`❌ selectAgeRanges failed: ${err.message}`);
                 return;
             }
-
-            // 4️⃣ Lifestyle
-            // try {
-            //     await selectLifestyle(page, report.lifestyle ?? "", newReportName);
-            // } catch (err) {
-            //     console.error(`❌ selectLifestyle failed: ${err.message}`);
-            //     logSession(`❌ selectLifestyle failed: ${err.message}`);
-            //     return;
-            // }
-
+            
             const initiateBtn = page.locator("//button[contains(., 'Initiate Workflow')]");
             await initiateBtn.waitFor({ state: 'visible', timeout: 20000 });
             await initiateBtn.click();

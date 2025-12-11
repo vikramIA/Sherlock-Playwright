@@ -1378,6 +1378,9 @@ async function PersonaReportName(page, reportName) {
         const reportNameInput = page.locator("//input[@name='name']");
         await reportNameInput.waitFor({ state: 'visible', timeout: 10000 });
 
+        await reportNameInput.clear();
+        await page.waitForTimeout(300);
+
         await reportNameInput.fill(reportName);
         console.log(`✅ Report name entered: '${reportName}'`);
         logSession(`✅ Report name entered: '${reportName}'`);

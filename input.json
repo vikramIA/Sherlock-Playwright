@@ -168,13 +168,13 @@
       },
       {
         "reportType": "Custom Places",
-          "reportName": "Test_Custom_Places_Using_Address",
-          "country": "India",
-          "UploadFilePath": "data/Upload_School_Address_Test.csv",
+        "reportName": "Test_Custom_Places_Using_LatLong",
+        "country": "India",
+        "UploadFilePath": "data/Upload_School_Lat_Long_Test.csv",
         "postUploadReports": [
           {
             "reportType": "Place Level Visits",
-            "reportName": "Test Place Level Visits",
+            "reportName": "Test Place Level Visits Using LatLong",
             "StartDateRange": "2025-08-13",
             "EndDateRange": "2025-08-14",
             "SubCategory": "",
@@ -190,7 +190,7 @@
           },
           {
             "reportType": "Device Level Visits",
-            "reportName": "Test Device Level Visits Report",
+            "reportName": "Test Device Level Visits Report Using LatLong",
             "StartDateRange": "2025-08-13",
             "EndDateRange": "2025-08-14",
             "VisitDuration": "10-50",
@@ -209,64 +209,10 @@
           },
           {
             "reportType": "Places",
-            "reportName": "Test Places Report",
+            "reportName": "Test Places Report Using LatLong",
             "PLACES_TO_Visit_Report": "YES",
             "VisitReportDetails": {
-              "reportName": "Test Places Level Visit Report From Places Report",
-              "StartDateRange": "2025-08-13",
-              "EndDateRange": "2025-08-14",
-              "Persona": "NO"
-            }
-          }
-        ]
-      },
-      {
-        "reportType": "Custom Places",
-          "reportName": "Test_Custom_Places_Using_LatLong",
-          "country": "India",
-          "UploadFilePath": "data/Upload_School_Lat_Long_Test.csv",
-        "postUploadReports": [
-          {
-            "reportType": "Place Level Visits",
-            "reportName": "Test Place Level Visits",
-            "StartDateRange": "2025-08-13",
-            "EndDateRange": "2025-08-14",
-            "SubCategory": "",
-            "attributes": "",
-            "Rating": "",
-            "ReviewCount": "",
-            "Brands": "",
-            "AverageDailyVisits": "",
-            "AverageMonthlyVisits": "",
-            "AverageDailyDevices": "",
-            "AverageMonthlyDevices": "",
-            "Persona": "No"
-          },
-          {
-            "reportType": "Device Level Visits",
-            "reportName": "Test Device Level Visits Report",
-            "StartDateRange": "2025-08-13",
-            "EndDateRange": "2025-08-14",
-            "VisitDuration": "10-50",
-            "behaviors": "",
-            "age": "",
-            "SubCategory": "",
-            "QualityLifeScore": "30-100",
-            "Rating": "",
-            "ReviewCount": "",
-            "Brands": "",
-            "AverageDailyVisits": "",
-            "AverageMonthlyVisits": "",
-            "AverageDailyDevices": "",
-            "AverageMonthlyDevices": "",
-            "Persona": "No"
-          },
-          {
-            "reportType": "Places",
-            "reportName": "Test Places Report",
-            "PLACES_TO_Visit_Report": "YES",
-            "VisitReportDetails": {
-              "reportName": "Test Places Level Visit Report From Places Report",
+              "reportName": "Test Places Level Visit Report From Places Report Using LatLong",
               "StartDateRange": "2025-08-13",
               "EndDateRange": "2025-08-14",
               "Persona": "NO"
@@ -279,6 +225,60 @@
           "reportName": "Test_Custom_Place_Codes",
           "country": "India",
           "UploadFilePath": "data/Upload_College_Poicode_Test.csv",
+        "postUploadReports": [
+          {
+            "reportType": "Place Level Visits",
+            "reportName": "Test Place Level Visits Using Poicode",
+            "StartDateRange": "2025-08-13",
+            "EndDateRange": "2025-08-14",
+            "SubCategory": "",
+            "attributes": "",
+            "Rating": "",
+            "ReviewCount": "",
+            "Brands": "",
+            "AverageDailyVisits": "",
+            "AverageMonthlyVisits": "",
+            "AverageDailyDevices": "",
+            "AverageMonthlyDevices": "",
+            "Persona": "No"
+          },
+          {
+            "reportType": "Device Level Visits",
+            "reportName": "Test Device Level Visits Report Using Poicode",
+            "StartDateRange": "2025-08-13",
+            "EndDateRange": "2025-08-14",
+            "VisitDuration": "10-50",
+            "behaviors": "",
+            "age": "",
+            "SubCategory": "",
+            "QualityLifeScore": "30-100",
+            "Rating": "",
+            "ReviewCount": "",
+            "Brands": "",
+            "AverageDailyVisits": "",
+            "AverageMonthlyVisits": "",
+            "AverageDailyDevices": "",
+            "AverageMonthlyDevices": "",
+            "Persona": "No"
+          },
+          {
+            "reportType": "Places",
+            "reportName": "Test Places Report Using Poicode",
+            "PLACES_TO_Visit_Report": "YES",
+            "VisitReportDetails": {
+              "reportName": "Test Places Level Visit Report From Places Report Using Poicode",
+              "StartDateRange": "2025-08-13",
+              "EndDateRange": "2025-08-14",
+              "Persona": "NO"
+            }
+          }
+        ]
+      },
+      {
+        "reportType": "Custom Places",
+          "reportName": "Test_Custom_Places_Using_Address",
+          "country": "India",
+          "UploadFilePath": "data/Upload_School_Address_Test.csv",
         "postUploadReports": [
           {
             "reportType": "Place Level Visits",
