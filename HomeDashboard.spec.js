@@ -3,13 +3,13 @@ const exploreFlow = require("./ExploreReport.js");
 const PersonaFlow = require("./PersonaReport.js");
 const Multilayerflow = require("./MultilayerReport.js");
 const input = require("./input.json");
-const { loginAndNavigate } = require("./functions");
+const { loginAndNavigate, safeWait } = require("./functions");
 const fs = require("fs");
 const path = require("path");
 const envConfig = require("./Environments.json");
 const { getSessionHeader, getLastSessionNumber, logSession, logReport } = require("./Logger");
 const NetworkLogger = require("./networkLogger.js");
-const RecordingManager = require("./Recording.js"); // ✅ New import
+const RecordingManager = require("./Recording.js"); 
 
 const env = process.argv[2] || "dev";
 if (!envConfig[env]) {
@@ -115,14 +115,15 @@ async function main() {
         await Multilayerflow(page, report.reportName, report.Report_TO_Merge, report.MergeType, multilayerReportsMap);
       }
     }
+    await safeWait(page, 10000);
 
     //Explore Flow
     for (const report of input.explore || []) await exploreFlow(page, report);
+    await safeWait(page, 10000);
 
-
-     //Persona Flow
-     for (const report of input.Persona || []) await PersonaFlow(page, report);
-
+    //Persona Flow
+    for (const report of input.Persona || []) await PersonaFlow(page, report);
+    await safeWait(page, 10000);
 
   } catch (err) {
     console.error(`❌ Script failed: ${err.message}`);

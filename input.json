@@ -3,10 +3,10 @@
       {
         "reportType": "Device Level Visits",
         "reportName": "Test Device Level Visits Report",
-        "place": "health.clinic.alternative",
-        "location": "Mumbai, Maharashtra, India",
+        "place": "food.restaurant.fast_food",
+        "location": "Mexico City, Mexico",
         "StartDateRange": "2025-08-01",
-        "EndDateRange": "2025-08-14",
+        "EndDateRange": "2025-08-03",
         "UploadAudience": [
           "META",
           "GOOGLE"
@@ -15,10 +15,10 @@
       {
         "reportType": "Place Level Visits",
         "reportName": "Test Place Level Visits",
-        "place": "health.clinic.alternative",
-        "location": "Mumbai, Maharashtra, India",
-        "StartDateRange": "2025-08-13",
-        "EndDateRange": "2025-08-14",
+        "place": "food.restaurant.fast_food",
+        "location": "Mexico City, Mexico",
+        "StartDateRange": "2025-08-01",
+        "EndDateRange": "2025-08-03",
         "SubCategory": "",
         "attributes": "",
         "Rating": "",
@@ -33,10 +33,10 @@
       {
         "reportType": "Device Level Visits",
         "reportName": "Test Device Level Visits Report",
-        "place": "health.clinic.alternative",
-        "location": "Mumbai, Maharashtra, India",
-        "StartDateRange": "2025-08-13",
-        "EndDateRange": "2025-08-14",
+        "place": "food.restaurant.fast_food",
+        "location": "Mexico City, Mexico",
+        "StartDateRange": "2025-08-01",
+        "EndDateRange": "2025-08-03",
         "VisitDuration": "10-50",
         "behaviors": "",
         "age": "",
@@ -54,29 +54,29 @@
       {
         "reportType": "Places",
         "reportName": "Test Places Report",
-        "place": "health.clinic.alternative",
-        "location": "Mumbai, Maharashtra, India",
+        "place": "food.restaurant.fast_food",
+        "location": "Mexico City, Mexico",
         "PLACES_TO_Visit_Report": "YES",
         "VisitReportDetails": {
           "reportName": "Test Places Level Visit Report From Places Report",
-          "StartDateRange": "2025-08-13",
-          "EndDateRange": "2025-08-14",
+          "StartDateRange": "2025-08-01",
+          "EndDateRange": "2025-08-03",
           "Persona": "YES"
         }
       },
       {
         "reportType": "Quality of Life Index",
         "reportName": "Test Quality of Life Index Report",
-        "location": "Mumbai, Maharashtra, India",
+        "location": "Mexico City, Mexico",
         "QualityLifeScore": "10-90"
       },
       {
         "reportType": "Place Level Visits",
         "reportName": "Test Place Level Visits",
-        "place": "health.clinic.alternative",
-        "location": "Mumbai, Maharashtra, India",
-        "StartDateRange": "2025-08-13",
-        "EndDateRange": "2025-08-14",
+        "place": "food.restaurant.fast_food",
+        "location": "Mexico City, Mexico",
+        "StartDateRange": "2025-08-01",
+        "EndDateRange": "2025-08-03",
         "UploadAudience": [
           "GOOGLE",
           "META"
@@ -85,25 +85,25 @@
       {
         "reportType": "Population",
         "reportName": "Test Population Report",
-        "location": "Mumbai, Maharashtra, India"
+        "location": "Mexico City, Mexico"
       },
       {
         "reportType": "H9 Master",
         "reportName": "Test H9 Master Report",
-        "location": "Mumbai, Maharashtra, India"
+        "location": "Mexico City, Mexico"
       },
       {
         "reportType": "Quality of Life Index Raw",
         "reportName": "Test Quality of Life Index Raw Report",
-        "location": "Mumbai, Maharashtra, India"
+        "location": "Mexico City, Mexico"
       }
     ],
     "PersonaExploreReports": [
     {
       "reportType": "Device Level Visits",
       "reportName": "Test Device Level Visits Report",
-      "StartDateRange": "2025-08-13",
-      "EndDateRange": "2025-08-14",
+      "StartDateRange": "2025-08-01",
+      "EndDateRange": "2025-08-03",
       "VisitDuration": "10-50",
       "behaviors": "",
       "age": "",
@@ -175,8 +175,8 @@
           {
             "reportType": "Place Level Visits",
             "reportName": "Test Place Level Visits Using LatLong",
-            "StartDateRange": "2025-08-13",
-            "EndDateRange": "2025-08-14",
+            "StartDateRange": "2025-08-01",
+            "EndDateRange": "2025-08-03",
             "SubCategory": "",
             "attributes": "",
             "Rating": "",
@@ -191,8 +191,8 @@
           {
             "reportType": "Device Level Visits",
             "reportName": "Test Device Level Visits Report Using LatLong",
-            "StartDateRange": "2025-08-13",
-            "EndDateRange": "2025-08-14",
+            "StartDateRange": "2025-08-01",
+            "EndDateRange": "2025-08-03",
             "VisitDuration": "10-50",
             "behaviors": "",
             "age": "",
@@ -213,8 +213,8 @@
             "PLACES_TO_Visit_Report": "YES",
             "VisitReportDetails": {
               "reportName": "Test Places Level Visit Report From Places Report Using LatLong",
-              "StartDateRange": "2025-08-13",
-              "EndDateRange": "2025-08-14",
+              "StartDateRange": "2025-08-01",
+              "EndDateRange": "2025-08-03",
               "Persona": "NO"
             }
           }
@@ -229,8 +229,8 @@
           {
             "reportType": "Place Level Visits",
             "reportName": "Test Place Level Visits Using Poicode",
-            "StartDateRange": "2025-08-13",
-            "EndDateRange": "2025-08-14",
+            "StartDateRange": "2024-12-01",
+            "EndDateRange": "2024-12-03",
             "SubCategory": "",
             "attributes": "",
             "Rating": "",
@@ -245,8 +245,8 @@
           {
             "reportType": "Device Level Visits",
             "reportName": "Test Device Level Visits Report Using Poicode",
-            "StartDateRange": "2025-08-13",
-            "EndDateRange": "2025-08-14",
+            "StartDateRange": "2024-12-01",
+            "EndDateRange": "2024-12-03",
             "VisitDuration": "10-50",
             "behaviors": "",
             "age": "",
@@ -267,8 +267,8 @@
             "PLACES_TO_Visit_Report": "YES",
             "VisitReportDetails": {
               "reportName": "Test Places Level Visit Report From Places Report Using Poicode",
-              "StartDateRange": "2025-08-13",
-              "EndDateRange": "2025-08-14",
+              "StartDateRange": "2024-12-01",
+              "EndDateRange": "2024-12-03",
               "Persona": "NO"
             }
           }
@@ -283,8 +283,8 @@
           {
             "reportType": "Place Level Visits",
             "reportName": "Test Place Level Visits",
-            "StartDateRange": "2025-08-13",
-            "EndDateRange": "2025-08-14",
+            "StartDateRange": "2025-08-01",
+            "EndDateRange": "2025-08-03",
             "SubCategory": "",
             "attributes": "",
             "Rating": "",
@@ -299,8 +299,8 @@
           {
             "reportType": "Device Level Visits",
             "reportName": "Test Device Level Visits Report",
-            "StartDateRange": "2025-08-13",
-            "EndDateRange": "2025-08-14",
+            "StartDateRange": "2025-08-01",
+            "EndDateRange": "2025-08-03",
             "VisitDuration": "10-50",
             "behaviors": "",
             "age": "",
@@ -321,8 +321,8 @@
             "PLACES_TO_Visit_Report": "YES",
             "VisitReportDetails": {
               "reportName": "Test Places Level Visit Report From Places Report",
-              "StartDateRange": "2025-08-13",
-              "EndDateRange": "2025-08-14",
+              "StartDateRange": "2025-08-01",
+              "EndDateRange": "2025-08-03",
               "Persona": "NO"
             }
           }
@@ -332,7 +332,7 @@
         "reportType": "Occasion and Behavior Based Audiences",
         "reportName":"Persona Report Using Occasion Behaviors and Age" ,
         "ExploreReportName": "",
-        "location": "Mumbai City, Maharashtra, India; Mumbai Suburban, Maharashtra, India",
+        "location": "Mexico City, Mexico",
         "occasion": "Energise / Retain",
         "place": "",
         "attributes": "",
@@ -356,10 +356,10 @@
         "reportType": "Place Level Visits",
         "reportName": "Test Place Level Visits",
         "ReportNumber": 1,
-        "place": "health.clinic.alternative",
-        "location": "Mumbai, Maharashtra, India",
-        "StartDateRange": "2025-08-13",
-        "EndDateRange": "2025-08-14",
+        "place": "food.restaurant.fast_food",
+        "location": "Mexico City, Mexico",
+        "StartDateRange": "2025-08-01",
+        "EndDateRange": "2025-08-03",
         "subcategory": "",
         "attributes": "",
         "Rating": "",
@@ -375,10 +375,10 @@
         "reportType": "Device Level Visits",
         "reportName": "Test Device Level Visits Report",
         "ReportNumber": 2,
-        "place": "health.clinic.alternative",
-        "location": "Mumbai, Maharashtra, India",
-        "StartDateRange": "2025-08-13",
-        "EndDateRange": "2025-08-14",
+        "place": "food.restaurant.fast_food",
+        "location": "Mexico City, Mexico",
+        "StartDateRange": "2025-08-01", 
+        "EndDateRange": "2025-08-03",
         "VisitDuration": "10-50",
         "subcategory": "",
         "QualityLifeScore": "30-100",
@@ -395,33 +395,33 @@
        "reportType": "Places",
        "reportName": "Test Places Report",
        "ReportNumber": 3,
-       "place": "health.clinic.alternative",
-       "location": "Mumbai, Maharashtra, India"
+       "place": "food.restaurant.fast_food",
+       "location": "Mexico City, Mexico"
      },
      {
        "reportType": "Quality of Life Index",
        "reportName": "Test Quality of Life Index Report",
        "ReportNumber": 4,
-       "location": "Mumbai, Maharashtra, India",
+       "location": "Mexico City, Mexico",
        "QualityLifeScore": "10-90"
      },
      {
        "reportType": "Population",
        "reportName": "Test Population Report",
        "ReportNumber": 5,
-       "location": "Mumbai, Maharashtra, India"
+       "location": "Mexico City, Mexico"
      },
      {
        "reportType": "H9 Master",
        "reportName": "Test H9 Master Report",
        "ReportNumber": 6,
-       "location": "Mumbai, Maharashtra, India"
+       "location": "Mexico City, Mexico"
      },
      {
        "reportType": "Quality of Life Index Raw",
        "reportName": "Test Quality of Life Index Raw Report",
        "ReportNumber": 7,
-       "location": "Mumbai, Maharashtra, India"
+       "location": "Mexico City, Mexico"
      }
  
     ],

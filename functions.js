@@ -1001,7 +1001,7 @@ async function keplerDatasetsFetch(page, reportName) {
     try {
         const overlay = page.locator("div.bg-surface-container-backdrop");
         const keplerArrow = page.locator("button.side-bar__close");
-        const datasetsSpan = page.locator("div.sc-bmuA-DX span:has-text('Datasets')");
+        const datasetsSpan = page.locator("//button[.//text()[normalize-space()='Add Data']]/preceding-sibling::span");
         const toastDivs = page.locator("div:has-text('No Data'), div:has-text('Failed')");
         const summaryMsg = page.locator("div:has-text('Large dataset detected')");
 

@@ -12,6 +12,11 @@ const {
 const postUploadExploreReportFlow = require("./PostUploadExploreReport.js");
 
 async function PersonaFlow(page, inputData) {
+
+    console.log("✅ Persona Flow started");
+    logSession("✅ Persona Flow started");
+    await safeWait(page, 10000); // Wait for 10 seconds to ensure the page is loaded
+
     const randomSuffix = () => Math.random().toString(36).substring(2, 7);
     inputData.reportName = `${inputData.reportName} - ${randomSuffix()}`;
 
