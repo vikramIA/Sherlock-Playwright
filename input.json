@@ -1,10 +1,30 @@
 {
     "explore": [
       {
+        "reportType": "Places",
+        "reportName": "Test Places Report",
+        "place": "health.clinic.alternative",
+        "location": "Pune, Maharashtra, India",
+        "PLACES_TO_Place_Level_Visit_Report": "YES",
+        "PLACES_TO_Device_Level_Visit_Report": "YES",
+        "PLVReportDetails": {
+          "reportName": "Test Places Level Visit Report From Places Report",
+          "StartDateRange": "2025-08-01",
+          "EndDateRange": "2025-08-03",
+          "Persona": "YES"
+        },
+        "DLVReportDetails": {
+          "reportName": "Test Device Level Visit Report From Places Report",
+          "StartDateRange": "2025-08-01",
+          "EndDateRange": "2025-08-03",
+          "Persona": "YES"
+        }
+      },
+      {
         "reportType": "Device Level Visits",
         "reportName": "Test Device Level Visits Report",
-        "place": "food.restaurant.fast_food",
-        "location": "Mexico City, Mexico",
+        "place": "health.clinic.alternative",
+        "location": "Pune, Maharashtra, India",
         "StartDateRange": "2025-08-01",
         "EndDateRange": "2025-08-03",
         "UploadAudience": [
@@ -15,8 +35,8 @@
       {
         "reportType": "Place Level Visits",
         "reportName": "Test Place Level Visits",
-        "place": "food.restaurant.fast_food",
-        "location": "Mexico City, Mexico",
+        "place": "health.clinic.alternative",
+        "location": "Pune, Maharashtra, India",
         "StartDateRange": "2025-08-01",
         "EndDateRange": "2025-08-03",
         "SubCategory": "",
@@ -33,8 +53,8 @@
       {
         "reportType": "Device Level Visits",
         "reportName": "Test Device Level Visits Report",
-        "place": "food.restaurant.fast_food",
-        "location": "Mexico City, Mexico",
+        "place": "health.clinic.alternative",
+        "location": "Pune, Maharashtra, India",
         "StartDateRange": "2025-08-01",
         "EndDateRange": "2025-08-03",
         "VisitDuration": "10-50",
@@ -52,29 +72,16 @@
         "Persona": "YES"
       },
       {
-        "reportType": "Places",
-        "reportName": "Test Places Report",
-        "place": "food.restaurant.fast_food",
-        "location": "Mexico City, Mexico",
-        "PLACES_TO_Visit_Report": "YES",
-        "VisitReportDetails": {
-          "reportName": "Test Places Level Visit Report From Places Report",
-          "StartDateRange": "2025-08-01",
-          "EndDateRange": "2025-08-03",
-          "Persona": "YES"
-        }
-      },
-      {
         "reportType": "Quality of Life Index",
         "reportName": "Test Quality of Life Index Report",
-        "location": "Mexico City, Mexico",
+        "location": "Pune, Maharashtra, India",
         "QualityLifeScore": "10-90"
       },
       {
         "reportType": "Place Level Visits",
         "reportName": "Test Place Level Visits",
-        "place": "food.restaurant.fast_food",
-        "location": "Mexico City, Mexico",
+        "place": "health.clinic.alternative",
+        "location": "Pune, Maharashtra, India",
         "StartDateRange": "2025-08-01",
         "EndDateRange": "2025-08-03",
         "UploadAudience": [
@@ -85,17 +92,17 @@
       {
         "reportType": "Population",
         "reportName": "Test Population Report",
-        "location": "Mexico City, Mexico"
+        "location": "Pune, Maharashtra, India"
       },
       {
         "reportType": "H9 Master",
         "reportName": "Test H9 Master Report",
-        "location": "Mexico City, Mexico"
+        "location": "Pune, Maharashtra, India"
       },
       {
         "reportType": "Quality of Life Index Raw",
         "reportName": "Test Quality of Life Index Raw Report",
-        "location": "Mexico City, Mexico"
+        "location": "Pune, Maharashtra, India"
       }
     ],
     "PersonaExploreReports": [
@@ -170,22 +177,13 @@
         "reportType": "Custom Places",
         "reportName": "Test_Custom_Places_Using_LatLong",
         "country": "India",
-        "UploadFilePath": "data/Upload_School_Lat_Long_Test.csv",
+        "UploadFilePath": "data/Upload_College_Lat_Long.csv",
         "postUploadReports": [
           {
             "reportType": "Place Level Visits",
             "reportName": "Test Place Level Visits Using LatLong",
             "StartDateRange": "2025-08-01",
             "EndDateRange": "2025-08-03",
-            "SubCategory": "",
-            "attributes": "",
-            "Rating": "",
-            "ReviewCount": "",
-            "Brands": "",
-            "AverageDailyVisits": "",
-            "AverageMonthlyVisits": "",
-            "AverageDailyDevices": "",
-            "AverageMonthlyDevices": "",
             "Persona": "No"
           },
           {
@@ -193,26 +191,21 @@
             "reportName": "Test Device Level Visits Report Using LatLong",
             "StartDateRange": "2025-08-01",
             "EndDateRange": "2025-08-03",
-            "VisitDuration": "10-50",
-            "behaviors": "",
-            "age": "",
-            "SubCategory": "",
-            "QualityLifeScore": "30-100",
-            "Rating": "",
-            "ReviewCount": "",
-            "Brands": "",
-            "AverageDailyVisits": "",
-            "AverageMonthlyVisits": "",
-            "AverageDailyDevices": "",
-            "AverageMonthlyDevices": "",
             "Persona": "No"
           },
           {
             "reportType": "Places",
             "reportName": "Test Places Report Using LatLong",
-            "PLACES_TO_Visit_Report": "YES",
-            "VisitReportDetails": {
-              "reportName": "Test Places Level Visit Report From Places Report Using LatLong",
+            "PLACES_TO_Place_Level_Visit_Report": "YES",
+            "PLACES_TO_Device_Level_Visit_Report": "YES",
+            "PLVReportDetails": {
+              "reportName": "Test Places Level Visit Report From Places Report Using LatLong From Places Report",
+              "StartDateRange": "2025-08-01",
+              "EndDateRange": "2025-08-03",
+              "Persona": "NO"
+            },
+            "DLVReportDetails": {
+              "reportName": "Test Device Level Visit Report From Places Report Using LatLong From Places Report",
               "StartDateRange": "2025-08-01",
               "EndDateRange": "2025-08-03",
               "Persona": "NO"
@@ -229,46 +222,32 @@
           {
             "reportType": "Place Level Visits",
             "reportName": "Test Place Level Visits Using Poicode",
-            "StartDateRange": "2024-12-01",
-            "EndDateRange": "2024-12-03",
-            "SubCategory": "",
-            "attributes": "",
-            "Rating": "",
-            "ReviewCount": "",
-            "Brands": "",
-            "AverageDailyVisits": "",
-            "AverageMonthlyVisits": "",
-            "AverageDailyDevices": "",
-            "AverageMonthlyDevices": "",
+            "StartDateRange": "2025-08-01",
+            "EndDateRange": "2025-08-03",
             "Persona": "No"
           },
           {
             "reportType": "Device Level Visits",
             "reportName": "Test Device Level Visits Report Using Poicode",
-            "StartDateRange": "2024-12-01",
-            "EndDateRange": "2024-12-03",
-            "VisitDuration": "10-50",
-            "behaviors": "",
-            "age": "",
-            "SubCategory": "",
-            "QualityLifeScore": "30-100",
-            "Rating": "",
-            "ReviewCount": "",
-            "Brands": "",
-            "AverageDailyVisits": "",
-            "AverageMonthlyVisits": "",
-            "AverageDailyDevices": "",
-            "AverageMonthlyDevices": "",
+            "StartDateRange": "2025-08-01",
+            "EndDateRange": "2025-08-03",
             "Persona": "No"
           },
           {
             "reportType": "Places",
             "reportName": "Test Places Report Using Poicode",
-            "PLACES_TO_Visit_Report": "YES",
-            "VisitReportDetails": {
-              "reportName": "Test Places Level Visit Report From Places Report Using Poicode",
-              "StartDateRange": "2024-12-01",
-              "EndDateRange": "2024-12-03",
+            "PLACES_TO_Place_Level_Visit_Report": "YES",
+            "PLACES_TO_Device_Level_Visit_Report": "YES",
+            "PLVReportDetails": {
+              "reportName": "Test Places Level Visit Report From Places Report Using Poicode From Places Report",
+              "StartDateRange": "2025-08-01",
+              "EndDateRange": "2025-08-03",
+              "Persona": "NO"
+            },
+            "DLVReportDetails": {
+              "reportName": "Test Device Level Visit Report From Places Report Using Poicode From Places Report",
+              "StartDateRange": "2025-08-01",
+              "EndDateRange": "2025-08-03",
               "Persona": "NO"
             }
           }
@@ -278,51 +257,37 @@
         "reportType": "Custom Places",
           "reportName": "Test_Custom_Places_Using_Address",
           "country": "India",
-          "UploadFilePath": "data/Upload_School_Address_Test.csv",
+          "UploadFilePath": "data/Upload_College_Address_Test.csv",
         "postUploadReports": [
           {
             "reportType": "Place Level Visits",
-            "reportName": "Test Place Level Visits",
+            "reportName": "Test Place Level Visits Using Address",
             "StartDateRange": "2025-08-01",
             "EndDateRange": "2025-08-03",
-            "SubCategory": "",
-            "attributes": "",
-            "Rating": "",
-            "ReviewCount": "",
-            "Brands": "",
-            "AverageDailyVisits": "",
-            "AverageMonthlyVisits": "",
-            "AverageDailyDevices": "",
-            "AverageMonthlyDevices": "",
             "Persona": "No"
           },
           {
             "reportType": "Device Level Visits",
-            "reportName": "Test Device Level Visits Report",
+            "reportName": "Test Device Level Visits Report Using Address",
             "StartDateRange": "2025-08-01",
             "EndDateRange": "2025-08-03",
-            "VisitDuration": "10-50",
-            "behaviors": "",
-            "age": "",
-            "SubCategory": "",
-            "QualityLifeScore": "30-100",
-            "Rating": "",
-            "ReviewCount": "",
-            "Brands": "",
-            "AverageDailyVisits": "",
-            "AverageMonthlyVisits": "",
-            "AverageDailyDevices": "",
-            "AverageMonthlyDevices": "",
             "Persona": "No"
           },
           {
             "reportType": "Places",
-            "reportName": "Test Places Report",
-            "PLACES_TO_Visit_Report": "YES",
-            "VisitReportDetails": {
-              "reportName": "Test Places Level Visit Report From Places Report",
+            "reportName": "Test Places Report Using Address",
+            "PLACES_TO_Place_Level_Visit_Report": "YES",
+            "PLACES_TO_Device_Level_Visit_Report": "YES",
+            "PLVReportDetails": {
+              "reportName": "Test Places Level Visit Report From Places Report Using Address From Places Report",
               "StartDateRange": "2025-08-01",
               "EndDateRange": "2025-08-03",
+              "Persona": "NO"
+            },
+            "DLVReportDetails": {
+              "reportName": "Test Device Level Visit Report From Places Report Using Address From Places Report",
+              "StartDateRange": "2025-08-01",
+              "EndDateRange": "2025-08-05",
               "Persona": "NO"
             }
           }
@@ -332,7 +297,7 @@
         "reportType": "Occasion and Behavior Based Audiences",
         "reportName":"Persona Report Using Occasion Behaviors and Age" ,
         "ExploreReportName": "",
-        "location": "Mexico City, Mexico",
+        "location": "Pune, Maharashtra, India",
         "occasion": "Energise / Retain",
         "place": "",
         "attributes": "",
@@ -356,8 +321,8 @@
         "reportType": "Place Level Visits",
         "reportName": "Test Place Level Visits",
         "ReportNumber": 1,
-        "place": "food.restaurant.fast_food",
-        "location": "Mexico City, Mexico",
+        "place": "health.clinic.alternative",
+        "location": "Pune, Maharashtra, India",
         "StartDateRange": "2025-08-01",
         "EndDateRange": "2025-08-03",
         "subcategory": "",
@@ -375,8 +340,8 @@
         "reportType": "Device Level Visits",
         "reportName": "Test Device Level Visits Report",
         "ReportNumber": 2,
-        "place": "food.restaurant.fast_food",
-        "location": "Mexico City, Mexico",
+        "place": "health.clinic.alternative",
+        "location": "Pune, Maharashtra, India",
         "StartDateRange": "2025-08-01", 
         "EndDateRange": "2025-08-03",
         "VisitDuration": "10-50",
@@ -395,33 +360,33 @@
        "reportType": "Places",
        "reportName": "Test Places Report",
        "ReportNumber": 3,
-       "place": "food.restaurant.fast_food",
-       "location": "Mexico City, Mexico"
+       "place": "health.clinic.alternative",
+       "location": "Pune, Maharashtra, India"
      },
      {
        "reportType": "Quality of Life Index",
        "reportName": "Test Quality of Life Index Report",
        "ReportNumber": 4,
-       "location": "Mexico City, Mexico",
+       "location": "Pune, Maharashtra, India",
        "QualityLifeScore": "10-90"
      },
      {
        "reportType": "Population",
        "reportName": "Test Population Report",
        "ReportNumber": 5,
-       "location": "Mexico City, Mexico"
+       "location": "Pune, Maharashtra, India"
      },
      {
        "reportType": "H9 Master",
        "reportName": "Test H9 Master Report",
        "ReportNumber": 6,
-       "location": "Mexico City, Mexico"
+       "location": "Pune, Maharashtra, India"
      },
      {
        "reportType": "Quality of Life Index Raw",
        "reportName": "Test Quality of Life Index Raw Report",
        "ReportNumber": 7,
-       "location": "Mexico City, Mexico"
+       "location": "Pune, Maharashtra, India"
      }
  
     ],

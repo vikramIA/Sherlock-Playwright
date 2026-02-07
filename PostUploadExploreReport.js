@@ -3,7 +3,7 @@ const {
     selectBehaviors, selectAgeRanges, clearSearchBar, uploadAudiences, searchAndClickReport, selectDateRange, clickCreateReportButton, enterReportName,
     selectExploreReportType, keplerDatasetsFetch, Report_To_Persona_Flow, selectSubCategory, selectBrands, SelectRating, SelectReviewCount,
     SelectVisitDuration, SelectAverageDailyVisits, SelectAverageMonthlyVisits, SelectAverageDailyDevices, SelectAverageMonthlyDevices,
-    selectAvailableAttributes, SelectQualityLifeScore, safeWait} = require('./functions');
+    selectAvailableAttributes, SelectQualityLifeScore, safeWait } = require('./functions');
 
 
 async function postUploadExploreReportFlow(page, inputData, isForMultilayer = false, multilayerReportsMap = false) {
@@ -247,17 +247,24 @@ async function postUploadExploreReportFlow(page, inputData, isForMultilayer = fa
                     await safeWait(page, 2000);
 
                     // Handling Places -> Places Level Visit Report
-                    if (inputData.PLACES_TO_Visit_Report?.toUpperCase() === "YES" && result.status !== 'no_data') {
-                        const VisitReportInputs = inputData.VisitReportDetails;
-                        VisitReportInputs.reportName = `${VisitReportInputs.reportName}: ${randomSuffix()}`;
+                    if (inputData.PLACES_TO_Place_Level_Visit_Report?.toUpperCase() === "YES" && result.status !== 'no_data') {
+                        const PLVReportInputs = inputData.PLVReportDetails;
+                        PLVReportInputs.reportName = `${PLVReportInputs.reportName}: ${randomSuffix()}`;
 
                         console.log(`➡️ Creating Places Level Visit report linked to POI: ${PlaceReportName}`);
                         logSession(`➡️ Creating Places Level Visit report linked to POI: ${PlaceReportName}`);
 
                         try {
                             // Use retry-enabled searchAndClickReport
-                            await searchAndClickReport(page, PlaceReportName, 1); // retry once if fails
+                            const isReportFound = await searchAndClickReport(page, PlaceReportName, 1); // retry once if fails
                             await safeWait(page, 2000);
+
+                            if (!isReportFound) {
+                                const msg = `⚠️ Skipping visitation creation Using Places — report "${PlaceReportName}" not found.`;
+                                console.log(msg);
+                                logSession(msg);
+                                return;
+                            }                            
 
                             const createVisitationBtn = page.locator("//button[normalize-space()='Create Place Level Visits']");
                             await createVisitationBtn.waitFor({ state: 'visible', timeout: 10000 });
@@ -266,21 +273,76 @@ async function postUploadExploreReportFlow(page, inputData, isForMultilayer = fa
                             console.log("✅ 'Create Places Level Visits Report' button clicked.");
                             logSession("✅ 'Create Places Level Visits Report' button clicked.");
 
-                            await enterReportName(page, VisitReportInputs.reportName, isForMultilayer ? inputData.ReportNumber : false, multilayerReportsMap);
+                            await enterReportName(page, PLVReportInputs.reportName, isForMultilayer ? inputData.ReportNumber : false, multilayerReportsMap);
                             await safeWait(page, 1000);
 
-                            await selectDateRange(page, VisitReportInputs.StartDateRange, VisitReportInputs.EndDateRange);
+                            await selectDateRange(page, PLVReportInputs.StartDateRange, PLVReportInputs.EndDateRange);
                             await safeWait(page, 1000);
 
-                            await clickCreateReportButton(page, VisitReportInputs.reportName);
-                            const visitResult = await keplerDatasetsFetch(page, VisitReportInputs.reportName);
+                            await clickCreateReportButton(page, PLVReportInputs.reportName);
+                            const visitResult = await keplerDatasetsFetch(page, PLVReportInputs.reportName);
                             await safeWait(page, 2000);
 
                             if (visitResult.status === 'no_data') {
-                                console.log(`[${VisitReportInputs.reportName}] Skipping Persona flow Due To No Data Found.`);
-                                logSession(`[${VisitReportInputs.reportName}] Skipping Persona flow Due To No Data Found.`);
-                            } else if (VisitReportInputs.Persona?.toUpperCase() === "YES") {
-                                await Report_To_Persona_Flow(page, VisitReportInputs.reportName);
+                                console.log(`[${PLVReportInputs.reportName}] Skipping Persona flow Due To No Data Found.`);
+                                logSession(`[${PLVReportInputs.reportName}] Skipping Persona flow Due To No Data Found.`);
+                            } else if (PLVReportInputs.Persona?.toUpperCase() === "YES") {
+                                await Report_To_Persona_Flow(page, PLVReportInputs.reportName);
+                            }
+
+                        } catch (err) {
+                            console.error(`❌ Error in 'places' flow for ${PlaceReportName}: ${err.message}`);
+                            logSession(`❌ Error in 'places' flow for ${PlaceReportName}: ${err.message}`);
+                        } finally {
+                            // Always clear search bar and continue safely
+                            await safeWait(page, 2000);
+                            await clearSearchBar(page);
+                            await safeWait(page, 2000);
+                        }
+                    }
+
+                    // Handling Places -> Device Level Visit Report
+                    if (inputData.PLACES_TO_Device_Level_Visit_Report?.toUpperCase() === "YES" && result.status !== 'no_data') {
+                        const DLVReportInputs = inputData.DLVReportDetails;
+                        DLVReportInputs.reportName = `${DLVReportInputs.reportName}: ${randomSuffix()}`;
+
+                        console.log(`➡️ Creating Device Level Visit report linked to POI: ${PlaceReportName}`);
+                        logSession(`➡️ Creating Device Level Visit report linked to POI: ${PlaceReportName}`);
+
+                        try {
+                            // Use retry-enabled searchAndClickReport
+                            const isReportFound = await searchAndClickReport(page, PlaceReportName, 1); // retry once if fails
+                            await safeWait(page, 2000);
+
+                            if (!isReportFound) {
+                                const msg = `⚠️ Skipping visitation creation Using Places — report "${PlaceReportName}" not found.`;
+                                console.log(msg);
+                                logSession(msg);
+                                return;
+                            }    
+                            
+                            const createVisitationBtn = page.locator("//button[normalize-space()='Create Device Level Visits']");
+                            await createVisitationBtn.waitFor({ state: 'visible', timeout: 10000 });
+                            await createVisitationBtn.click();
+
+                            console.log("✅ 'Create Device Level Visits Report' button clicked.");
+                            logSession("✅ 'Create Device Level Visits Report' button clicked.");
+
+                            await enterReportName(page, DLVReportInputs.reportName, isForMultilayer ? inputData.ReportNumber : false, multilayerReportsMap);
+                            await safeWait(page, 1000);
+
+                            await selectDateRange(page, DLVReportInputs.StartDateRange, DLVReportInputs.EndDateRange);
+                            await safeWait(page, 1000);
+
+                            await clickCreateReportButton(page, DLVReportInputs.reportName);
+                            const visitResult = await keplerDatasetsFetch(page, DLVReportInputs.reportName);
+                            await safeWait(page, 2000);
+
+                            if (visitResult.status === 'no_data') {
+                                console.log(`[${DLVReportInputs.reportName}] Skipping Persona flow Due To No Data Found.`);
+                                logSession(`[${DLVReportInputs.reportName}] Skipping Persona flow Due To No Data Found.`);
+                            } else if (DLVReportInputs.Persona?.toUpperCase() === "YES") {
+                                await Report_To_Persona_Flow(page, DLVReportInputs.reportName);
                             }
 
                         } catch (err) {

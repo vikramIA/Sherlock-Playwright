@@ -97,29 +97,29 @@ async function main() {
 
     
    
-    //Multilayer Flow
-    if (input.Multilayer?.length > 0) {
-      const multilayerReportsMap = new Map();
-      const requiredReports = new Set(input.Multilayer.flatMap(m => m.Report_TO_Merge));
+    // //Multilayer Flow
+    // if (input.Multilayer?.length > 0) {
+    //   const multilayerReportsMap = new Map();
+    //   const requiredReports = new Set(input.Multilayer.flatMap(m => m.Report_TO_Merge));
 
-      for (const report of input.ReportForMultilayer || []) {
-        if (requiredReports.has(report.ReportNumber)) {
-          await exploreFlow(page, report, true, multilayerReportsMap);
-        }
-      }
+    //   for (const report of input.ReportForMultilayer || []) {
+    //     if (requiredReports.has(report.ReportNumber)) {
+    //       await exploreFlow(page, report, true, multilayerReportsMap);
+    //     }
+    //   }
 
-      console.log("📂 multilayerReportsMap before multilayer:", Array.from(multilayerReportsMap.entries()));
-      logSession("📂 multilayerReportsMap before multilayer:", Array.from(multilayerReportsMap.entries()));
+    //   console.log("📂 multilayerReportsMap before multilayer:", Array.from(multilayerReportsMap.entries()));
+    //   logSession("📂 multilayerReportsMap before multilayer:", Array.from(multilayerReportsMap.entries()));
 
-      for (const report of input.Multilayer) {
-        await Multilayerflow(page, report.reportName, report.Report_TO_Merge, report.MergeType, multilayerReportsMap);
-      }
-    }
-    await safeWait(page, 10000);
+    //   for (const report of input.Multilayer) {
+    //     await Multilayerflow(page, report.reportName, report.Report_TO_Merge, report.MergeType, multilayerReportsMap);
+    //   }
+    // }
+    // await safeWait(page, 10000);
 
-    //Explore Flow
-    for (const report of input.explore || []) await exploreFlow(page, report);
-    await safeWait(page, 10000);
+    // //Explore Flow
+    // for (const report of input.explore || []) await exploreFlow(page, report);
+    // await safeWait(page, 10000);
 
     //Persona Flow
     for (const report of input.Persona || []) await PersonaFlow(page, report);

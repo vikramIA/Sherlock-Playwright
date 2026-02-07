@@ -245,9 +245,9 @@ async function selectLocations(page, locationString, reportName) {
         const locations = locationString.split(';').map(loc => loc.trim());
         for (const loc of locations) {
             await locationInput.fill(loc);
-            await page.waitForTimeout(800);
+            await page.waitForTimeout(3000);
             await locationInput.press('ArrowDown');
-            await page.waitForTimeout(800);
+            await page.waitForTimeout(1000);
             await locationInput.press('Enter');
 
             console.log(`✅ Location '${loc}' selected successfully for report '${reportName}'.`);
@@ -1594,15 +1594,15 @@ async function searchAndClickReport(page, reportName) {
     const MAX_RETRIES = 3;
     const RETRY_DELAY = 2000; // ms delay between retries
 
+    if (!reportName || reportName.trim() === "") {
+        const msg = "⚠️ Report name is required for search.";
+        console.log(msg);
+        logSession(msg);
+        return false; // ❌ invalid input
+    }
+
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
         try {
-            if (!reportName || reportName.trim() === "") {
-                const msg = "⚠️ Report name is required for search.";
-                console.log(msg);
-                logSession(msg);
-                return;
-            }
-
             // 1️⃣ Go to Explore
             const exploreBtn = page.locator("//a[@href='/explore' and @data-sidebar='menu-button']");
             await exploreBtn.waitFor({ state: 'visible', timeout: 10000 });
@@ -1629,8 +1629,8 @@ async function searchAndClickReport(page, reportName) {
             const msg = `✅ Report "${reportName}" found and 3-dot menu clicked (Attempt ${attempt}/${MAX_RETRIES}).`;
             console.log(msg);
             logSession(msg);
-            return; // ✅ Exit after success
 
+            return true; // ✅ FOUND
         } catch (err) {
             const msg = `⚠️ Attempt ${attempt}/${MAX_RETRIES} failed for report "${reportName}": ${err.message}`;
             console.log(msg);
@@ -1641,14 +1641,15 @@ async function searchAndClickReport(page, reportName) {
                 console.log(waitMsg);
                 logSession(waitMsg);
                 await page.waitForTimeout(RETRY_DELAY);
-            } else {
-                const errMsg = `❌ Report "${reportName}" not found after ${MAX_RETRIES} attempts — continuing script.`;
-                console.log(errMsg);
-                logSession(errMsg);
-                return; // ❗ Continue without throwing
             }
         }
     }
+
+    const errMsg = `❌ Report "${reportName}" not found after ${MAX_RETRIES} attempts — continuing script.`;
+    console.log(errMsg);
+    logSession(errMsg);
+
+    return false; // ❌ NOT FOUND after all retries
 }
 
 // Function to clear the search bar after using it
@@ -1800,7 +1801,7 @@ async function MatchRateFetch(page, reportName, maxRetries = 3, retryDelayMs = 2
             logSession(`⏳ Attempt ${attempt}: Waiting for 'Match Rate' button`);
 
             const matchRateBtn = page.locator("//button[normalize-space()='Match Rate']");
-            await matchRateBtn.waitFor({ state: 'visible', timeout: 180_000 }); // 3 min
+            await matchRateBtn.waitFor({ state: 'visible', timeout: 180_000 });
             await matchRateBtn.click();
 
             console.log("✅ Clicked 'Match Rate' button");
@@ -1809,12 +1810,23 @@ async function MatchRateFetch(page, reportName, maxRetries = 3, retryDelayMs = 2
             const matchRateElement = page.locator("//div[div[contains(text(),'Match Rate')]]/div[2]");
             await matchRateElement.waitFor({ state: 'visible', timeout: 60_000 });
 
-            const matchRatePercentage = (await matchRateElement.textContent())?.trim() || null;
+            const rawText = (await matchRateElement.textContent())?.trim();
 
-            console.log(`✅  Match Rate for ${reportName}: ${matchRatePercentage}`);
-            logSession(`✅ Match Rate for ${reportName}: ${matchRatePercentage}`);
+            if (!rawText) {
+                throw new Error("Match Rate text is empty");
+            }
 
-            return matchRatePercentage;
+            const numericValue = parseFloat(rawText.replace('%', ''));
+
+            if (Number.isNaN(numericValue)) {
+                throw new Error(`Invalid Match Rate value: ${rawText}`);
+            }
+
+            console.log(`✅ Match Rate for ${reportName}: ${numericValue}%`);
+            logSession(`✅ Match Rate for ${reportName}: ${numericValue}%`);
+
+            return numericValue; // ✅ always number (0 allowed)
+
         } catch (error) {
             const msg = `⚠️ Attempt ${attempt} failed: ${error.message}`;
             console.log(msg);
@@ -1826,7 +1838,7 @@ async function MatchRateFetch(page, reportName, maxRetries = 3, retryDelayMs = 2
             } else {
                 console.error(`❌ All ${maxRetries} attempts failed. Could not fetch Match Rate.`);
                 logSession(`❌ All ${maxRetries} attempts failed. Could not fetch Match Rate.`);
-                return false;
+                return null; // ✅ explicit failure
             }
         }
     }

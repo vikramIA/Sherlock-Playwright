@@ -147,8 +147,8 @@ async function PersonaFlow(page, inputData) {
 
             const type = inputData.reportType;
 
-            // FIX #1 — Declare matchRateValue so it is available in Step 6
             let matchRateValue = null;
+            let skipCurrentReport = false;
 
             try {
                 console.log(`✅ Selected ${type} report type`);
@@ -200,45 +200,49 @@ async function PersonaFlow(page, inputData) {
                                     const msg = `❌ Skipping report "${inputData.reportName}" because searchAndClickInRepository returned false.`;
                                     console.error(msg);
                                     logSession(msg);
-                                    return;
+                                    skipCurrentReport = true;
                                 }
 
                                 // Extract Match Rate
                                 matchRateValue = await MatchRateFetch(page, inputData.reportName);
 
-                                if (!matchRateValue) {
-                                    const msg = `❌ Skipping report "${inputData.reportName}" because MatchRateFetch failed.`;
+                                if (matchRateValue === null) {
+                                    const msg = `⛔ Match Rate fetch failed for "${inputData.reportName}". Skipping this report.`;
                                     console.error(msg);
                                     logSession(msg);
-                                    return;
+                                    skipCurrentReport = true;
+                                }
+                                
+                                if (matchRateValue === 0) {
+                                    const msg = `⛔ Match Rate is 0 for "${inputData.reportName}". Skipping further actions.`;
+                                    console.log(msg);
+                                    logSession(msg);
+                                    skipCurrentReport = true;
                                 }
 
-                                // Parse Match Rate to number
-                                if (matchRateValue) {
-                                    matchRateValue = parseFloat(matchRateValue.toString().replace('%', '').trim());
-                                    console.log(`📌 Parsed Match Rate (number): ${matchRateValue}`);
-                                    logSession(`📌 Parsed Match Rate (number): ${matchRateValue}`);
-                                }
+                               
                             }
 
                         } catch (err) {
                             console.error(`❌ Match Rate extraction failed: ${err.message}`);
                             logSession(`❌ Match Rate extraction failed: ${err.message}`);
-                            return;
+                            skipCurrentReport = true;
                         }
 
                     } else {
                         console.log(`❌ Report NOT found in repository: ${inputData.reportName}`);
                         logSession(`❌ Report NOT found in repository: ${inputData.reportName}`);
+                        skipCurrentReport = true;
                     }
 
                 } catch (err) {
                     console.error(`❌ Repository check failed: ${err.message}`);
                     logSession(`❌ Repository check failed: ${err.message}`);
+                    skipCurrentReport = true;
                 }
 
                 // ==== STEP 6: Trigger CDP (ONLY for Custom Audience to IFAs) ====
-                if (inputData.reportType.toLowerCase() === "custom audience to ifas") {
+                if (!skipCurrentReport && inputData.reportType.toLowerCase() === "custom audience to ifas") {
 
                     const directIFAS = inputData.DirectIFAS?.toUpperCase() === "YES";
 
@@ -260,7 +264,7 @@ async function PersonaFlow(page, inputData) {
                     }
 
                     // Non-direct → Match Rate required
-                    if (matchRateValue > 0) {
+                    else if (matchRateValue > 0) {
                         console.log(`🚀 Triggering CDP — Match Rate = ${matchRateValue}% (> 0)`);
                         logSession(`🚀 Triggering CDP — Match Rate = ${matchRateValue}% (> 0)`);
 
@@ -269,10 +273,11 @@ async function PersonaFlow(page, inputData) {
                             const msg = `❌ Skipping report "${inputData.reportName}" because searchAndClickInRepository returned false.`;
                             console.error(msg);
                             logSession(msg);
-                            return;
+                            skipCurrentReport = true;
                         }
-
-                        await CDPTriggerAfterUpload(page, inputData);
+                        if (!skipCurrentReport) {
+                            await CDPTriggerAfterUpload(page, inputData);
+                        }
 
                     } else {
                         console.log(`⛔ CDP NOT triggered — Match Rate = ${matchRateValue} (must be > 0)`);
@@ -281,13 +286,13 @@ async function PersonaFlow(page, inputData) {
                 }
 
                 // ==== STEP 7: Trigger Places, Devices level visit and Places Level Visit Reports ====
-                if (inputData.reportType.toLowerCase() === 'custom places' || inputData.reportType.toLowerCase() === 'custom place codes') {
+                if (!skipCurrentReport && (inputData.reportType.toLowerCase() === 'custom places' || inputData.reportType.toLowerCase() === 'custom place codes')) {
                     try {
                         // Validate list exists
                         if (!Array.isArray(inputData.postUploadReports) || inputData.postUploadReports.length === 0) {
                             console.log("⏭️ No post-upload Explore reports to create.");
                             logSession("⏭️ No post-upload Explore reports to create.");
-                            return;
+                            skipCurrentReport = true;
                         }
 
                         // Post Upload Explore Report Flow
@@ -303,7 +308,7 @@ async function PersonaFlow(page, inputData) {
                                     const msg = `❌ Cannot open main report in repository for "${inputData.reportName}". Skipping this Explore report.`;
                                     console.error(msg);
                                     logSession(msg);
-                                    continue;
+                                    skipCurrentReport = true;
                                 }
 
                                 await postUploadExploreReportFlow(page, report);
@@ -315,7 +320,7 @@ async function PersonaFlow(page, inputData) {
 
                                 console.error(`❌ Failed Explore Report: ${report.reportName} → ${err.message}`);
                                 logSession(`❌ Failed Explore Report: ${report.reportName} → ${err.message}`);
-                                continue;
+                                skipCurrentReport = true;
                             }
                         }
                     } catch (error) {
@@ -330,6 +335,7 @@ async function PersonaFlow(page, inputData) {
                 return;
             }
         }
+        
         // === Unknown Report Type ===
         else {
             console.error(`❌ Unknown report type: ${inputData.reportType}`);
