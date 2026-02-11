@@ -71,17 +71,17 @@ async function postUploadExploreReportFlow(page, inputData, isForMultilayer = fa
                     const result = await keplerDatasetsFetch(page, inputData.reportName);
                     await safeWait(page, 2000);
 
-                    if (result.status === 'no_data') {
-                        console.log(`[${inputData.reportName}] Skipping Persona flow Due To No Data Found.`);
-                        logSession(`[${inputData.reportName}] Skipping Persona flow Due To No Data Found.`);
-                    } else if (inputData.Persona?.toUpperCase() === "YES") {
+                    if (result.status === 'no_data' || result.status === 'error' || result.status === 'timeout' || result.status === 'summary') {
+                        console.log(`[${inputData.reportName}] ⛔ Skipping further flows due to Kepler status: ${result.status}`);
+                        logSession(`[${inputData.reportName}] ⛔ Skipping further flows due to Kepler status: ${result.status}`);
+                        return; // 🚨 THIS is what stops execution
+                    }
+
+                    if (inputData.Persona?.toUpperCase() === "YES") {
                         await Report_To_Persona_Flow(page, inputData.reportName);
                     }
 
-                    if (result.status === 'no_data') {
-                        console.log(`[${inputData.reportName}] ⏩ Skipping Upload Audience flow due to no data found.`);
-                        logSession(`[${inputData.reportName}] ⏩ Skipping Upload Audience flow due to no data found.`);
-                    } else if (Array.isArray(inputData.UploadAudience) && inputData.UploadAudience.length > 0) {
+                    if (Array.isArray(inputData.UploadAudience) && inputData.UploadAudience.length > 0) {
                         for (const platform of inputData.UploadAudience) {
                             try {
                                 console.log(`--- Starting upload process for platform: ${platform} ---`);
@@ -99,9 +99,6 @@ async function postUploadExploreReportFlow(page, inputData, isForMultilayer = fa
                                 logSession(`❌ Upload process failed for platform ${platform}: ${err.message}`);
                             }
                         }
-                    } else {
-                        console.log(`[${inputData.reportName}] ⏩ No platforms defined in UploadAudience, skipping upload.`);
-                        logSession(`[${inputData.reportName}] ⏩ No platforms defined in UploadAudience, skipping upload.`);
                     }
 
                 } catch (err) {
@@ -160,17 +157,17 @@ async function postUploadExploreReportFlow(page, inputData, isForMultilayer = fa
                     const result = await keplerDatasetsFetch(page, inputData.reportName);
                     await safeWait(page, 2000);
 
-                    if (result.status === 'no_data') {
-                        console.log(`[${inputData.reportName}] Skipping Persona flow Due To No Data Found.`);
-                        logSession(`[${inputData.reportName}] Skipping Persona flow Due To No Data Found.`);
-                    } else if (inputData.Persona?.toUpperCase() === "YES") {
+                    if (result.status === 'no_data' || result.status === 'error' || result.status === 'timeout' || result.status === 'summary') {
+                        console.log(`[${inputData.reportName}] ⛔ Skipping further flows due to Kepler status: ${result.status}`);
+                        logSession(`[${inputData.reportName}] ⛔ Skipping further flows due to Kepler status: ${result.status}`);
+                        return; // 🚨 THIS is what stops execution
+                    }
+
+                    if (inputData.Persona?.toUpperCase() === "YES") {
                         await Report_To_Persona_Flow(page, inputData.reportName);
                     }
 
-                    if (result.status === 'no_data') {
-                        console.log(`[${inputData.reportName}] ⏩ Skipping Upload Audience flow due to no data found.`);
-                        logSession(`[${inputData.reportName}] ⏩ Skipping Upload Audience flow due to no data found.`);
-                    } else if (Array.isArray(inputData.UploadAudience) && inputData.UploadAudience.length > 0) {
+                    if (Array.isArray(inputData.UploadAudience) && inputData.UploadAudience.length > 0) {
                         for (const platform of inputData.UploadAudience) {
                             try {
                                 console.log(`--- Starting upload process for platform: ${platform} ---`);
@@ -197,9 +194,6 @@ async function postUploadExploreReportFlow(page, inputData, isForMultilayer = fa
                                 logSession(`❌ Upload process failed for platform ${platform}: ${err.message}`);
                             }
                         }
-                    } else {
-                        console.log(`[${inputData.reportName}] ⏩ No platforms defined in UploadAudience, skipping upload.`);
-                        logSession(`[${inputData.reportName}] ⏩ No platforms defined in UploadAudience, skipping upload.`);
                     }
 
                 } catch (err) {
@@ -246,8 +240,14 @@ async function postUploadExploreReportFlow(page, inputData, isForMultilayer = fa
                     const result = await keplerDatasetsFetch(page, inputData.reportName);
                     await safeWait(page, 2000);
 
+                    if (result.status === 'no_data' || result.status === 'error' || result.status === 'timeout') {
+                        console.log(`[${inputData.reportName}] ⛔ Skipping further flows due to Kepler status: ${result.status}`);
+                        logSession(`[${inputData.reportName}] ⛔ Skipping further flows due to Kepler status: ${result.status}`);
+                        return; // 🚨 THIS is what stops execution
+                    }
+
                     // Handling Places -> Places Level Visit Report
-                    if (inputData.PLACES_TO_Place_Level_Visit_Report?.toUpperCase() === "YES" && result.status !== 'no_data') {
+                    if (inputData.PLACES_TO_Place_Level_Visit_Report?.toUpperCase() === "YES") {
                         const PLVReportInputs = inputData.PLVReportDetails;
                         PLVReportInputs.reportName = `${PLVReportInputs.reportName}: ${randomSuffix()}`;
 
@@ -264,7 +264,7 @@ async function postUploadExploreReportFlow(page, inputData, isForMultilayer = fa
                                 console.log(msg);
                                 logSession(msg);
                                 return;
-                            }                            
+                            }
 
                             const createVisitationBtn = page.locator("//button[normalize-space()='Create Place Level Visits']");
                             await createVisitationBtn.waitFor({ state: 'visible', timeout: 10000 });
@@ -283,11 +283,14 @@ async function postUploadExploreReportFlow(page, inputData, isForMultilayer = fa
                             const visitResult = await keplerDatasetsFetch(page, PLVReportInputs.reportName);
                             await safeWait(page, 2000);
 
-                            if (visitResult.status === 'no_data') {
-                                console.log(`[${PLVReportInputs.reportName}] Skipping Persona flow Due To No Data Found.`);
-                                logSession(`[${PLVReportInputs.reportName}] Skipping Persona flow Due To No Data Found.`);
-                            } else if (PLVReportInputs.Persona?.toUpperCase() === "YES") {
-                                await Report_To_Persona_Flow(page, PLVReportInputs.reportName);
+                            if (visitResult.status === 'no_data' || visitResult.status === 'error' || visitResult.status === 'timeout' || visitResult.status === 'summary') {
+                                console.log(`[${PLVReportInputs.reportName}] ⛔ Skipping further flows due to Kepler status: ${visitResult.status}`);
+                                logSession(`[${PLVReportInputs.reportName}] ⛔ Skipping further flows due to Kepler status: ${visitResult.status}`);
+                            }
+                            else {
+                                if (PLVReportInputs.Persona?.toUpperCase() === "YES") {
+                                    await Report_To_Persona_Flow(page, PLVReportInputs.reportName);
+                                }
                             }
 
                         } catch (err) {
@@ -302,7 +305,7 @@ async function postUploadExploreReportFlow(page, inputData, isForMultilayer = fa
                     }
 
                     // Handling Places -> Device Level Visit Report
-                    if (inputData.PLACES_TO_Device_Level_Visit_Report?.toUpperCase() === "YES" && result.status !== 'no_data') {
+                    if (inputData.PLACES_TO_Device_Level_Visit_Report?.toUpperCase() === "YES") {
                         const DLVReportInputs = inputData.DLVReportDetails;
                         DLVReportInputs.reportName = `${DLVReportInputs.reportName}: ${randomSuffix()}`;
 
@@ -319,8 +322,8 @@ async function postUploadExploreReportFlow(page, inputData, isForMultilayer = fa
                                 console.log(msg);
                                 logSession(msg);
                                 return;
-                            }    
-                            
+                            }
+
                             const createVisitationBtn = page.locator("//button[normalize-space()='Create Device Level Visits']");
                             await createVisitationBtn.waitFor({ state: 'visible', timeout: 10000 });
                             await createVisitationBtn.click();
@@ -338,13 +341,15 @@ async function postUploadExploreReportFlow(page, inputData, isForMultilayer = fa
                             const visitResult = await keplerDatasetsFetch(page, DLVReportInputs.reportName);
                             await safeWait(page, 2000);
 
-                            if (visitResult.status === 'no_data') {
-                                console.log(`[${DLVReportInputs.reportName}] Skipping Persona flow Due To No Data Found.`);
-                                logSession(`[${DLVReportInputs.reportName}] Skipping Persona flow Due To No Data Found.`);
-                            } else if (DLVReportInputs.Persona?.toUpperCase() === "YES") {
-                                await Report_To_Persona_Flow(page, DLVReportInputs.reportName);
+                            if (visitResult.status === 'no_data' || visitResult.status === 'error' || visitResult.status === 'timeout' || visitResult.status === 'summary') {
+                                console.log(`[${DLVReportInputs.reportName}] ⛔ Skipping further flows due to Kepler status: ${visitResult.status}`);
+                                logSession(`[${DLVReportInputs.reportName}] ⛔ Skipping further flows due to Kepler status: ${visitResult.status}`);
                             }
-
+                            else {
+                                if (DLVReportInputs.Persona?.toUpperCase() === "YES") {
+                                    await Report_To_Persona_Flow(page, DLVReportInputs.reportName);
+                                }
+                            }
                         } catch (err) {
                             console.error(`❌ Error in 'places' flow for ${PlaceReportName}: ${err.message}`);
                             logSession(`❌ Error in 'places' flow for ${PlaceReportName}: ${err.message}`);

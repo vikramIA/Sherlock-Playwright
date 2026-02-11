@@ -1006,10 +1006,19 @@ async function keplerDatasetsFetch(page, reportName) {
         const summaryMsg = page.locator("div:has-text('Large dataset detected')");
 
         // Wait for overlay to disappear
-        if (await overlay.isVisible()) {
-            console.log("⏳ Waiting for overlay to disappear...");
-            await overlay.waitFor({ state: "hidden", timeout: 30 * 60 * 1000 });
+        // if (await overlay.isVisible()) {
+        //     console.log("⏳ Waiting for overlay to disappear...");
+        //     await overlay.waitFor({ state: "hidden", timeout: 30 * 60 * 1000 });
+        // }
+
+        if (await overlay.count() > 0) {
+            console.log("⏳ Waiting for loader overlay to disappear...");
+            await overlay.first().waitFor({
+                state: "hidden",
+                timeout: 30 * 60 * 1000
+            });
         }
+        
 
         // Begin continuous monitoring
         const MAX_WAIT_MS = 30 * 60 * 1000; // 30 minutes
@@ -1041,7 +1050,7 @@ async function keplerDatasetsFetch(page, reportName) {
                     reportName,
                     url: currentURL,
                     text: "Summary Page detected (likely large dataset). Please verify manually.",
-                    status: "no_data",
+                    status: "summary",
                     timeMinutes: elapsedMin,
                     timeSeconds: elapsedSec
                 });
@@ -1375,12 +1384,14 @@ async function selectExploreReportInPersona(page, ExploreReportName, reportName)
 // Function to enter persona report name
 async function PersonaReportName(page, reportName) {
     try {
+        await safeWait(page, 5000);
         const reportNameInput = page.locator("//input[@name='name']");
         await reportNameInput.waitFor({ state: 'visible', timeout: 10000 });
 
         await reportNameInput.clear();
         await page.waitForTimeout(300);
 
+        await safeWait(page, 5000);
         await reportNameInput.fill(reportName);
         console.log(`✅ Report name entered: '${reportName}'`);
         logSession(`✅ Report name entered: '${reportName}'`);
@@ -1560,7 +1571,6 @@ async function VerifyItemExist(page, section, itemName) {
         }
     }
 }
-
 
 // Function to upload a CSV file
 async function uploadCSVFile(page, filePathFromInputData, reportName) {
