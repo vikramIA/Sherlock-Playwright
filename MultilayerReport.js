@@ -1,5 +1,5 @@
 const { performance } = require('perf_hooks');
-const { keplerDatasetsFetch, safeWait } = require('./functions');
+const { keplerDatasetsFetch, safeWait, monitorMultilayerReport } = require('./functions');
 const { logSession, logReport } = require('./Logger');
 
 // =============== Layered Merge Flow ===============
@@ -199,10 +199,13 @@ async function unifiedMerge(page, reportName, Report_TO_Merge, multilayerReports
     await createBtn.click({ timeout: 10000 }).catch(() => logSession("⚠️ Create Multilayer button not clickable"));
     console.log("✅ Clicked 'Create Multilayer' button");
     logSession("✅ Clicked 'Create Multilayer' button");
+    
+    // 🔥 Monitor Multilayer (THIS IS THE MAIN PART)
+    const multilayerResult = await monitorMultilayerReport(page, reportName);
 
-    await safeWait(page, 60000);
-    await keplerDatasetsFetch(page, reportName);
-    await safeWait(page, 2000);
+    console.log("📊 Multilayer Result:");
+    console.log(multilayerResult);
+    logSession(JSON.stringify(multilayerResult, null, 2));
 
     const exploreXPath = "//a[@href='/explore' and @data-sidebar='menu-button']";
     const exploreBtn = page.locator(`xpath=${exploreXPath}`);

@@ -1018,7 +1018,7 @@ async function keplerDatasetsFetch(page, reportName) {
                 timeout: 30 * 60 * 1000
             });
         }
-        
+
 
         // Begin continuous monitoring
         const MAX_WAIT_MS = 30 * 60 * 1000; // 30 minutes
@@ -1974,6 +1974,229 @@ async function searchAndClickInRepository(page, reportName) {
     return false; // <-- Already correct (timeout)
 }
 
+// Function to search and click on a report by name in Explore if it is completed for Multilayer Reports
+async function searchReportWithRetry(page, reportName) {
+
+    const MAX_RETRIES = 5;
+    const RETRY_DELAY = 5000;
+
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+
+        try {
+
+            // Ensure we are in /explore
+            if (!page.url().includes("/explore")) {
+                const exploreBtn = page.locator("//a[@href='/explore' and @data-sidebar='menu-button']");
+                await exploreBtn.click({ timeout: 10000 });
+                await page.waitForURL("**/explore", { timeout: 15000 });
+                await page.waitForTimeout(2000);
+            }
+
+            const searchInput = page.locator("//input[@placeholder='Search for a file']");
+            await searchInput.waitFor({ state: "visible", timeout: 15000 });
+
+            // Ctrl + A + Backspace
+            await searchInput.click();
+            await page.keyboard.press("Control+A");
+            await page.keyboard.press("Backspace");
+
+            await searchInput.fill(reportName);
+            await searchInput.press("Enter");
+
+            console.log(`🔎 Attempt ${attempt}: Searching ${reportName}`);
+            logSession(`🔎 Attempt ${attempt}: Searching ${reportName}`);
+
+            const reportContainer = page.locator(`//a[normalize-space()='${reportName}']/ancestor::div[@data-state]`);
+
+            await reportContainer.waitFor({ state: "visible", timeout: 15000 });
+
+            return reportContainer;
+
+        } catch (err) {
+
+            console.log(`⚠ Attempt ${attempt} failed`);
+            logSession(`⚠ Attempt ${attempt} failed`);
+
+            if (attempt < MAX_RETRIES) {
+                await page.waitForTimeout(RETRY_DELAY);
+            }
+        }
+    }
+
+    console.log(`❌ Report ${reportName} not found after 5 attempts`);
+    logSession(`❌ Report ${reportName} not found after 5 attempts`);
+
+    return null;
+}
+
+// Function to monitor the status of a multilayer report
+async function monitorMultilayerReport(page, reportName) {
+
+    const MAX_WAIT_TIME = 30 * 60 * 1000; // 30 minutes
+    const CHECK_INTERVAL = 30000; // 30 sec
+
+    const processingStartTime = Date.now();
+    let statusChangeTime = null;
+    let finalStatus = "";
+    let reason = "";
+
+    try {
+
+        // 🔎 Search report safely with retry
+        const reportContainer = await searchReportWithRetry(page, reportName);
+
+        if (!reportContainer) {
+            return {
+                "ReportName": reportName,
+                "Final Status of Multilayer": "Not Found",
+                "Reason": "Report not found after 5 attempts",
+                "Status of Maps Loading": "Not Triggered",
+                [`Processing Time for Multilayer ${reportName}`]: "0 minutes",
+                [`Loading Time of Map (${reportName})`]: "0 minutes",
+                [`Final Time of Multilayer ${reportName}`]: "0 minutes"
+            };
+        }
+
+        console.log(`🔍 Monitoring Multilayer Report: ${reportName}`);
+        logSession(`🔍 Monitoring Multilayer Report: ${reportName}`);
+
+        // 🔁 Monitor Multilayer Status
+        let checkCount = 0;
+
+        while (Date.now() - processingStartTime < MAX_WAIT_TIME) {
+
+            checkCount++;
+
+            let statusText = await reportContainer
+                .locator("xpath=.//p[contains(text(),'Status:')]//span")
+                .textContent();
+
+            statusText = statusText?.trim().toLowerCase();
+
+            const elapsedMinutes = Math.floor(
+                (Date.now() - processingStartTime) / 60000
+            );
+
+            console.log(
+                `⏳ [${elapsedMinutes} min] Check #${checkCount} | Status: ${statusText}`
+            );
+            logSession(
+                `⏳ [${elapsedMinutes} min] Check #${checkCount} | Status: ${statusText}`
+            );
+
+            if (statusText === "completed" || statusText === "failed") {
+
+                finalStatus = statusText;
+                statusChangeTime = Date.now();
+
+                console.log(`🎯 Status changed to "${statusText}" after ${elapsedMinutes} minutes.`);
+                logSession(`🎯 Status changed to "${statusText}" after ${elapsedMinutes} minutes.`);
+                break;
+            }
+
+            await page.waitForTimeout(CHECK_INTERVAL);
+        }
+
+
+        const processingTimeMinutes =
+            (((statusChangeTime || Date.now()) - processingStartTime) / (1000 * 60)).toFixed(2);
+
+        // ===============================
+        // 🔴 FAILED CASE
+        // ===============================
+        if (finalStatus === "failed") {
+
+            reason = "Report generation failed";
+
+            console.log(`❌ FAILED: ${reportName} failed after ${processingTimeMinutes} minutes.`);
+            logSession(`❌ FAILED: ${reportName} failed after ${processingTimeMinutes} minutes.`);
+
+            return {
+                "ReportName": reportName,
+                "Final Status of Multilayer": "Failed",
+                "Reason": reason,
+                "Status of Maps Loading": "Not Triggered",
+                [`Processing Time for Multilayer ${reportName}`]: `${processingTimeMinutes} minutes`,
+                [`Loading Time of Map (${reportName})`]: "0 minutes",
+                [`Final Time of Multilayer ${reportName}`]: `${processingTimeMinutes} minutes`
+            };
+        }
+
+        // ===============================
+        // ⏰ TIMEOUT CASE
+        // ===============================
+        if (!statusChangeTime) {
+
+            reason = "Processing exceeded 30 minutes";
+
+            console.log(`⏰ TIMEOUT: ${reportName} exceeded 30 minutes.`);
+            logSession(`⏰ TIMEOUT: ${reportName} exceeded 30 minutes.`);
+
+            return {
+                "ReportName": reportName,
+                "Final Status of Multilayer": "Timeout",
+                "Reason": reason,
+                "Status of Maps Loading": "Not Triggered",
+                [`Processing Time for Multilayer ${reportName}`]: `${processingTimeMinutes} minutes`,
+                [`Loading Time of Map (${reportName})`]: "0 minutes",
+                [`Final Time of Multilayer ${reportName}`]: `${processingTimeMinutes} minutes`
+            };
+        }
+
+        // ===============================
+        // 🟢 COMPLETE CASE
+        // ===============================
+
+        console.log(`✅ COMPLETE: ${reportName} completed in ${processingTimeMinutes} minutes.`);
+        logSession(`✅ COMPLETE: ${reportName} completed in ${processingTimeMinutes} minutes.`);
+
+        const reportLink = reportContainer.locator(`xpath=.//a[contains(normalize-space(.),'${reportName}')]`);
+
+        const loadStartTime = Date.now();
+
+        await reportLink.click();
+
+        // 🔥 Get Kepler Result
+        const keplerResult = await keplerDatasetsFetch(page, reportName);
+
+        // 🔥 Stop timer when kepler completes
+        const loadEndTime = Date.now();
+
+        // Calculate loading time
+        let loadingTimeMinutes =(loadEndTime - loadStartTime) / (1000 * 60);
+
+        const finalTime = (parseFloat(processingTimeMinutes) + parseFloat(loadingTimeMinutes)).toFixed(2);
+
+        return {
+            "ReportName": reportName,
+            "Final Status of Multilayer": "Complete",
+            "Status of Maps Loading": keplerResult,
+            [`Processing Time for Multilayer ${reportName}`]: `${processingTimeMinutes} minutes`,
+            [`Loading Time of Map (${reportName})`]: `${loadingTimeMinutes.toFixed(2)} minutes`,
+            [`Final Time of Multilayer ${reportName}`]: `${finalTime} minutes`
+        };
+    }
+
+    catch (error) {
+
+        console.log(`⚠ ERROR: ${error.message}`);
+        logSession(`⚠ ERROR: ${error.message}`);
+        
+        return {
+            "ReportName": reportName,
+            "Final Status of Multilayer": "Error",
+            "Reason": error.message,
+            "Status of Maps Loading": "Not Triggered",
+            [`Processing Time for Multilayer ${reportName}`]: "0 minutes",
+            [`Loading Time of Map (${reportName})`]: "0 minutes",
+            [`Final Time of Multilayer ${reportName}`]: "0 minutes"
+        };
+    }
+}
+
+
+
+
 
 module.exports = {
     searchAndClickInRepository,
@@ -2012,5 +2235,6 @@ module.exports = {
     loginAndNavigate,
     searchAndClickReport,
     clearSearchBar,
-    uploadAudiences
+    uploadAudiences,
+    monitorMultilayerReport
 }

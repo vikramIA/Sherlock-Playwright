@@ -324,17 +324,7 @@
         "place": "health.clinic.alternative",
         "location": "Pune, Maharashtra, India",
         "StartDateRange": "2025-08-01",
-        "EndDateRange": "2025-08-03",
-        "subcategory": "",
-        "attributes": "",
-        "Rating": "",
-        "ReviewCount": "",
-        "Brands": "",
-        "AverageDailyVisits": "",
-        "AverageMonthlyVisits": "",
-        "AverageDailyDevices": "",
-        "AverageMonthlyDevices": "",
-        "Persona": "No"
+        "EndDateRange": "2025-08-03"
       },
       {
         "reportType": "Device Level Visits",
@@ -343,18 +333,7 @@
         "place": "health.clinic.alternative",
         "location": "Pune, Maharashtra, India",
         "StartDateRange": "2025-08-01", 
-        "EndDateRange": "2025-08-03",
-        "VisitDuration": "10-50",
-        "subcategory": "",
-        "QualityLifeScore": "30-100",
-        "Rating": "",
-        "ReviewCount": "",
-        "Brands": "",
-        "AverageDailyVisits": "",
-        "AverageMonthlyVisits": "",
-        "AverageDailyDevices": "",
-        "AverageMonthlyDevices": "",
-        "Persona": "No"
+        "EndDateRange": "2025-08-03"
       },  
       {
        "reportType": "Places",
