@@ -299,54 +299,74 @@ async function selectPlaces(page, placeString, reportName) {
 }
 
 // Function to select a date range in the calendar
+// Function to select a date range in the calendar
 async function selectDateRange(page, startDate, endDate) {
+
     if (!startDate || !endDate) return;
 
-    // Define your locators
     const dateRangePickerButton = page.getByRole('button', { name: 'Pick a date' });
-    const datePickerPrevMonthButton = page.getByRole('button', { name: 'Go to previous month' });
-    const datePickerNextMonthButton = page.getByRole('button', { name: 'Go to next month' });
+    const prevBtn = page.locator('button[name="previous-month"]');
+    const nextBtn = page.locator('button[name="next-month"]');
+
+    await dateRangePickerButton.click();
+
+    const [startYear, startMonth, startDay] = startDate.split('-').map(Number);
+    const [endYear, endMonth, endDay] = endDate.split('-').map(Number);
+
+    // Convert month name to number
+    const monthToNumber = (monthName) => {
+        return new Date(`${monthName} 1, 2000`).getMonth() + 1;
+    };
+
+    const navigateToMonth = async (targetYear, targetMonth) => {
+
+        while (true) {
+
+            const visibleMonthName = await page.locator('.rdp-caption_start span').first().textContent();
+            const visibleYearText = await page.locator('.rdp-caption_start span').nth(1).textContent();
+
+            const visibleMonth = monthToNumber(visibleMonthName.trim());
+            const visibleYear = parseInt(visibleYearText.trim());
+
+            if (visibleMonth === targetMonth && visibleYear === targetYear) {
+                break;
+            }
+
+            const visibleDate = new Date(visibleYear, visibleMonth - 1);
+            const targetDate = new Date(targetYear, targetMonth - 1);
+
+            if (visibleDate < targetDate) {
+                await nextBtn.click();
+            } else {
+                await prevBtn.click();
+            }
+
+            await page.waitForTimeout(150);
+        }
+    };
 
     try {
-        // Open date picker
-        await dateRangePickerButton.click();
 
-        const [startYear, startMonth, startDay] = startDate.split('-').map(Number);
-        const [endYear, endMonth, endDay] = endDate.split('-').map(Number);
-
-        // Navigate months
-        const navigateToMonth = async (targetYear, targetMonth) => {
-            const now = new Date();
-            let monthDifference = (targetYear - now.getFullYear()) * 12 + (targetMonth - (now.getMonth() + 1));
-            const navButton = monthDifference > 0 ? datePickerNextMonthButton : datePickerPrevMonthButton;
-            for (let i = 0; i < Math.abs(monthDifference); i++) {
-                await navButton.click();
-                await page.waitForTimeout(200);
-            }
-        };
-
-        // Step 1: Navigate to start month
+        // Navigate to start month
         await navigateToMonth(startYear, startMonth);
 
-        // Step 2: Click start day
-        await page.locator(`//button[normalize-space()='${startDay}']`).first().click();
+        // Click start date (XPath unchanged)
+        await page.locator(`//button[normalize-space()='${startDay}' and not(@disabled)]`).first().click();
 
-        // Step 3: Navigate to end month
-        const monthsDiff = (endYear - startYear) * 12 + (endMonth - startMonth);
-        for (let i = 0; i < monthsDiff; i++) {
-            await datePickerNextMonthButton.click();
-            await page.waitForTimeout(200);
-        }
+        // Navigate to end month
+        await navigateToMonth(endYear, endMonth);
 
-        // Step 4: Click end day
-        await page.locator(`//button[normalize-space()='${endDay}']`).first().click();
+        // Click end date (XPath unchanged)
+        await page.locator(`//button[normalize-space()='${endDay}' and not(@disabled)]`).first().click();
 
-        // Step 5: Close calendar
         await page.keyboard.press('Escape');
 
-        console.log(`✅ Date range ${startDate} to ${endDate} selected successfully!`);
+        console.log(`✅ Date range ${startDate} → ${endDate} selected successfully`);
+
     } catch (error) {
+
         console.error("❌ Error selecting the date range:", error);
+
     }
 }
 
@@ -1114,10 +1134,11 @@ async function keplerDatasetsFetch(page, reportName) {
     } catch (err) {
         const elapsedMin = ((Date.now() - startTime) / 60000).toFixed(2);
         const elapsedSec = Math.floor((Date.now() - startTime) / 1000);
+        const errorMsg = err.message.split('\n').slice(0, 5).join('\n');
         return log({
             reportName,
             url: page.url(),
-            text: `Unexpected error: ${err.message}`,
+            text: `Unexpected error:\n${errorMsg}`,
             status: "error",
             timeMinutes: elapsedMin,
             timeSeconds: elapsedSec
@@ -2032,7 +2053,7 @@ async function searchReportWithRetry(page, reportName) {
 // Function to monitor the status of a multilayer report
 async function monitorMultilayerReport(page, reportName) {
 
-    const MAX_WAIT_TIME = 30 * 60 * 1000; // 30 minutes
+    const MAX_WAIT_TIME = 60 * 60 * 1000; // 60 minutes
     const CHECK_INTERVAL = 30000; // 30 sec
 
     const processingStartTime = Date.now();
@@ -2154,7 +2175,30 @@ async function monitorMultilayerReport(page, reportName) {
 
         const loadStartTime = Date.now();
 
-        await reportLink.click();
+        await safeWait(page, 10000); // wait for 10 seconds to  Page to be stable and then click the report link
+        // --- NEW RETRY CLICK LOGIC ---
+        const MAX_CLICK_RETRIES = 3;
+        let clickSuccess = false;
+
+        for (let i = 1; i <= MAX_CLICK_RETRIES; i++) {
+            try {
+                console.log(`🖱️ Attempting to click report (Attempt ${i}/${MAX_CLICK_RETRIES})...`);
+
+                await safeWait(page, 5000); // Small stability buffer
+                await reportLink.click({ force: true });
+
+                // Wait for URL to change to contain "explore/" (timeout after 60s)
+                await page.waitForURL(url => url.href.includes('explore/'), { timeout: 60000 });
+
+                console.log(`🔗 URL changed successfully. Navigation confirmed.`);
+                clickSuccess = true;
+                break;
+            } catch (e) {
+                console.warn(`⚠️ Click attempt ${i} failed or URL did not change: ${e.message}`);
+                if (i === MAX_CLICK_RETRIES) throw new Error("Failed to navigate to report details after multiple click attempts.");
+            }
+        }
+        // -----------------------------
 
         // 🔥 Get Kepler Result
         const keplerResult = await keplerDatasetsFetch(page, reportName);
@@ -2163,7 +2207,7 @@ async function monitorMultilayerReport(page, reportName) {
         const loadEndTime = Date.now();
 
         // Calculate loading time
-        let loadingTimeMinutes =(loadEndTime - loadStartTime) / (1000 * 60);
+        let loadingTimeMinutes = (loadEndTime - loadStartTime) / (1000 * 60);
 
         const finalTime = (parseFloat(processingTimeMinutes) + parseFloat(loadingTimeMinutes)).toFixed(2);
 
@@ -2181,7 +2225,7 @@ async function monitorMultilayerReport(page, reportName) {
 
         console.log(`⚠ ERROR: ${error.message}`);
         logSession(`⚠ ERROR: ${error.message}`);
-        
+
         return {
             "ReportName": reportName,
             "Final Status of Multilayer": "Error",

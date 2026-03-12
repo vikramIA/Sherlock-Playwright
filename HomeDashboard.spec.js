@@ -117,13 +117,13 @@ async function main() {
     }
     await safeWait(page, 10000);
 
-    // //Explore Flow
-    // for (const report of input.explore || []) await exploreFlow(page, report);
-    // await safeWait(page, 10000);
+    //Explore Flow
+    for (const report of input.explore || []) await exploreFlow(page, report);
+    await safeWait(page, 10000);
 
     //Persona Flow
-    // for (const report of input.Persona || []) await PersonaFlow(page, report);
-    // await safeWait(page, 10000);
+    for (const report of input.Persona || []) await PersonaFlow(page, report);
+    await safeWait(page, 10000);
 
   } catch (err) {
     console.error(`❌ Script failed: ${err.message}`);
