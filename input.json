@@ -22,7 +22,7 @@
       },
       {
         "reportType": "Device Level Visits",
-        "reportName": "Test Device Level Visits Report",
+        "reportName": "Test Device Level Visits Report and Upload google and Meta as Audience",
         "place": "health.clinic.alternative",
         "location": "Pune, Maharashtra, India",
         "StartDateRange": "2025-08-01",
@@ -31,6 +31,12 @@
           "META",
           "GOOGLE"
         ]
+      },
+      {
+        "reportType": "Places Internal",
+        "reportName": "Test Places Internal Report",
+        "place": "health.clinic.alternative",
+        "location": "Pune, Maharashtra, India"
       },
       {
         "reportType": "Place Level Visits",
@@ -79,7 +85,7 @@
       },
       {
         "reportType": "Place Level Visits",
-        "reportName": "Test Place Level Visits",
+        "reportName": "Test Place Level Visits and Upload google and Meta as Audience",
         "place": "health.clinic.alternative",
         "location": "Pune, Maharashtra, India",
         "StartDateRange": "2025-08-01",

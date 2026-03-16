@@ -245,9 +245,9 @@ async function selectLocations(page, locationString, reportName) {
         const locations = locationString.split(';').map(loc => loc.trim());
         for (const loc of locations) {
             await locationInput.fill(loc);
-            await page.waitForTimeout(3000);
+            await page.waitForTimeout(5000); // wait for the dropdown to appear and select the location
             await locationInput.press('ArrowDown');
-            await page.waitForTimeout(1000);
+            await page.waitForTimeout(2000);
             await locationInput.press('Enter');
 
             console.log(`✅ Location '${loc}' selected successfully for report '${reportName}'.`);
@@ -298,7 +298,6 @@ async function selectPlaces(page, placeString, reportName) {
     }
 }
 
-// Function to select a date range in the calendar
 // Function to select a date range in the calendar
 async function selectDateRange(page, startDate, endDate) {
 
@@ -1025,11 +1024,6 @@ async function keplerDatasetsFetch(page, reportName) {
         const toastDivs = page.locator("div:has-text('No Data'), div:has-text('Failed')");
         const summaryMsg = page.locator("div:has-text('Large dataset detected')");
 
-        // Wait for overlay to disappear
-        // if (await overlay.isVisible()) {
-        //     console.log("⏳ Waiting for overlay to disappear...");
-        //     await overlay.waitFor({ state: "hidden", timeout: 30 * 60 * 1000 });
-        // }
 
         if (await overlay.count() > 0) {
             console.log("⏳ Waiting for loader overlay to disappear...");
@@ -1052,7 +1046,8 @@ async function keplerDatasetsFetch(page, reportName) {
 
             // 1️⃣ Always check for toast first
             if (await toastDivs.count() > 0) {
-                const toastText = await toastDivs.first().innerText();
+                const rawText = await toastDivs.first().innerText();
+                const toastText = rawText.split("\n")[0].trim();  // only first line
                 const status = toastText.toLowerCase().includes("no data") ? "no_data" : "error";
                 return log({
                     reportName,
@@ -2237,10 +2232,6 @@ async function monitorMultilayerReport(page, reportName) {
         };
     }
 }
-
-
-
-
 
 module.exports = {
     searchAndClickInRepository,
