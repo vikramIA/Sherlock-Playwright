@@ -7,25 +7,57 @@ const { loginAndNavigate, safeWait } = require("./functions");
 const fs = require("fs");
 const path = require("path");
 const envConfig = require("./Environments.json");
-const { getSessionHeader, getLastSessionNumber, logSession, logReport } = require("./Logger");
+const { initLogger, getSessionHeader, getLastSessionNumber, logSession } = require("./Logger");
 const NetworkLogger = require("./networkLogger.js");
 const RecordingManager = require("./Recording.js"); 
 
-const env = process.argv[2] || "dev";
-if (!envConfig[env]) {
-  throw new Error(`❌ Environment "${env}" not found. Use one of: ${Object.keys(envConfig).join(", ")}`);
-}
-const { baseUrl, email, password, secret, login } = envConfig[env];
+const { exec } = require("child_process");
 
-function cleanupOldSessions(baseDir, keepLast = 5) {
+const cliEnvs = process.argv.slice(2);
+const allEnvs = Object.keys(envConfig);
+
+// ✅ Case 1: No env → run all in parallel
+if (cliEnvs.length === 0) {
+  console.log("🚀 No ENV passed → Running ALL envs in parallel...\n");
+
+  allEnvs.forEach(env => {
+    exec(`node HomeDashboard.spec.js ${env}`, (err, stdout, stderr) => {
+      console.log(`\n================ ${env.toUpperCase()} =================`);
+      console.log(stdout);
+      if (err) console.error(stderr);
+    });
+  });
+
+  return; // ✅ FIXED (removed process.exit)
+}
+
+// ✅ Only runs when env is provided
+const env = cliEnvs[0];
+
+if (!envConfig[env]) {
+  throw new Error(`❌ Environment "${env}" not found. Use: ${allEnvs.join(", ")}`);
+}
+
+const { baseUrl, email, password, secret, login } = envConfig[env];
+initLogger(env); // ✅ initialize env-based logging
+
+
+function cleanupOldSessions(baseDir, keepLast = 5, foldersList = null) {
   if (!fs.existsSync(baseDir)) return;
-  const folders = fs.readdirSync(baseDir)
-    .map(name => ({
-      name,
-      time: fs.statSync(path.join(baseDir, name)).birthtimeMs
-    }))
-    .sort((a, b) => b.time - a.time);
-  const oldFolders = folders.slice(keepLast);
+
+  const folders = foldersList
+    ? foldersList.map(name => ({
+        name,
+        time: fs.statSync(path.join(baseDir, name)).birthtimeMs
+      }))
+    : fs.readdirSync(baseDir).map(name => ({
+        name,
+        time: fs.statSync(path.join(baseDir, name)).birthtimeMs
+      }));
+
+  const sorted = folders.sort((a, b) => b.time - a.time);
+  const oldFolders = sorted.slice(keepLast);
+
   for (const folder of oldFolders) {
     const fullPath = path.join(baseDir, folder.name);
     fs.rmSync(fullPath, { recursive: true, force: true });
@@ -36,18 +68,23 @@ function cleanupOldSessions(baseDir, keepLast = 5) {
 
 function createSessionFolder() {
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-").replace("T", "_").split("Z")[0];
-  const sessionDir = path.join(__dirname, "session_artifacts", `Session_${timestamp}`);
+  const sessionDir = path.join(__dirname, "session_artifacts", `${env}_Session_${timestamp}`);
   fs.mkdirSync(sessionDir, { recursive: true });
   return sessionDir;
 }
 
 async function main() {
   const sessionBaseDir = path.join(__dirname, "session_artifacts");
-  cleanupOldSessions(sessionBaseDir, 5);
+
+  // ✅ Filter only current env folders
+  const envFolders = fs.existsSync(sessionBaseDir)
+    ? fs.readdirSync(sessionBaseDir).filter(f => f.startsWith(env))
+    : [];
+  
+  cleanupOldSessions(sessionBaseDir, 5, envFolders);  
 
   const newSession = getLastSessionNumber() + 1;
   logSession(getSessionHeader(newSession), true);
-  logReport(getSessionHeader(newSession), true);
 
   let browser, context, page, recording;
   const sessionDir = createSessionFolder();
@@ -61,7 +98,6 @@ async function main() {
       args: ['--start-maximized', '--force-device-scale-factor=1', '--high-dpi-support=1'],
     });
 
-    // ✅ Create context with recording enabled
     context = await browser.newContext({
       viewport: null,
       recordVideo: {
@@ -73,7 +109,7 @@ async function main() {
     page = await context.newPage();
     recording = new RecordingManager(context, page, sessionDir);
 
-    await recording.start(); // 🎥 Start recording
+    await recording.start();
 
     await context.tracing.start({
       screenshots: true,
@@ -95,9 +131,7 @@ async function main() {
       logSession("❌ Failed to update login credentials:", err);
     }
 
-    
-   
-    //Multilayer Flow
+    // Multilayer Flow
     if (input.Multilayer?.length > 0) {
       const multilayerReportsMap = new Map();
       const requiredReports = new Set(input.Multilayer.flatMap(m => m.Report_TO_Merge));
@@ -115,13 +149,14 @@ async function main() {
         await Multilayerflow(page, report.reportName, report.Report_TO_Merge, report.MergeType, multilayerReportsMap);
       }
     }
+
     await safeWait(page, 10000);
 
-    //Explore Flow
+    // Explore Flow
     for (const report of input.explore || []) await exploreFlow(page, report);
     await safeWait(page, 10000);
 
-    //Persona Flow
+    // Persona Flow
     for (const report of input.Persona || []) await PersonaFlow(page, report);
     await safeWait(page, 10000);
 
@@ -132,7 +167,6 @@ async function main() {
     if (context && page) {
       await context.tracing.stop({ path: tracePath });
 
-      // ✅ Stop and save video
       const videoPath = await recording.stop("session_recording.webm");
 
       await context.close();

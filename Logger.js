@@ -1,8 +1,17 @@
 const fs = require('fs');
 const path = require('path');
 
-const sessionLogPath = path.join(__dirname, 'log.txt');
-const reportLogPath = path.join(__dirname, 'ReportLog.txt');
+let sessionLogPath;
+
+function initLogger(env) {
+    const logDir = path.join(__dirname, 'logs');
+
+    if (!fs.existsSync(logDir)) {
+        fs.mkdirSync(logDir);
+    }
+
+    sessionLogPath = path.join(logDir, `${env}_log.txt`);
+}
 
 function getSessionHeader(sessionNumber) {
     const timestamp = new Date().toLocaleString('en-IN', {
@@ -23,7 +32,6 @@ function getLastSessionNumber() {
     return Math.max(...numbers);
 }
 
-// ✅ Generalized logger: write to any file
 function logToFile(filePath, message, isSessionStart = false) {
     const timestamp = new Date().toLocaleString('en-IN', {
         day: '2-digit', month: '2-digit', year: 'numeric',
@@ -31,24 +39,21 @@ function logToFile(filePath, message, isSessionStart = false) {
         hour12: false,
         timeZone: 'Asia/Kolkata'
     });
-    const logMessage = isSessionStart ? message : `[${timestamp}] ${message}\n`;
+
+    const logMessage = isSessionStart 
+        ? message 
+        : `[${timestamp}] ${message}\n`;
+
     fs.appendFileSync(filePath, logMessage, 'utf-8');
 }
 
-// ✅ Shortcut for session logs (log.txt)
 function logSession(message, isSessionStart = false) {
     logToFile(sessionLogPath, message, isSessionStart);
 }
 
-// ✅ Shortcut for report logs (ReportLog.txt)
-function logReport(message, isSessionStart = false) {
-    logToFile(reportLogPath, message, isSessionStart);
-}
-
 module.exports = {
+    initLogger,
     getSessionHeader,
     getLastSessionNumber,
-    logToFile,
-    logSession,
-    logReport
+    logSession
 };

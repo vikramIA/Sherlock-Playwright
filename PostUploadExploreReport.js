@@ -1,4 +1,4 @@
-const { logSession, logReport } = require('./Logger');
+const { logSession } = require('./Logger');
 const {
     selectBehaviors, selectAgeRanges, clearSearchBar, uploadAudiences, searchAndClickReport, selectDateRange, clickCreateReportButton, enterReportName,
     selectExploreReportType, keplerDatasetsFetch, Report_To_Persona_Flow, selectSubCategory, selectBrands, SelectRating, SelectReviewCount,

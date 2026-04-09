@@ -2,3 +2,5 @@ node_modules
 session_artifacts
 log.txt
 ReportLog.txt
+logs
+test-results

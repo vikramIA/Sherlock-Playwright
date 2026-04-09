@@ -1,6 +1,6 @@
 const { performance } = require('perf_hooks');
 const { keplerDatasetsFetch, safeWait, monitorMultilayerReport } = require('./functions');
-const { logSession, logReport } = require('./Logger');
+const { logSession } = require('./Logger');
 
 // =============== Layered Merge Flow ===============
 async function layeredMerge(page, reportName, Report_TO_Merge, multilayerReportsMap, startTime) {

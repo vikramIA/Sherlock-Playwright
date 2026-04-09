@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require("path");
-const { logSession, logReport } = require('./Logger');
+const { logSession } = require('./Logger');
 const { authenticator } = require('otplib');
 
 // Function to set LocalStorage from input data

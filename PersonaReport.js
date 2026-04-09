@@ -1,4 +1,4 @@
-const { logSession, logReport } = require('./Logger');
+const { logSession } = require('./Logger');
 const {
     MatchRateFetch, VerifyItemExist, PersonaReportName, navigateAndCreatePersonaFlow,
     selectPersonaReportType, selectExploreReportInPersona, selectLocations,
