@@ -3,176 +3,257 @@ const path = require("path");
 const { logSession } = require('./Logger');
 const { authenticator } = require('otplib');
 
-// Function to set LocalStorage from input data
-async function setLocalStorageFromInput(page, loginData) {
-    await page.evaluate((data) => {
-        for (const [key, value] of Object.entries(data)) {
-            localStorage.setItem(key, value);
-        }
-    }, loginData);
-}
+// Function to perform login and navigate to the home page
+async function loginAndNavigate(page, baseUrl, email, password, secret) {
+    const maxRetries = 3;
 
-// Function to get LocalStorage data excluding certain keys
-async function getLocalStorageData(page) {
-    return await page.evaluate(() => {
-        const ignorePatterns = [
-            /^_pendo_/,
-            /^NRBA_SESSION$/,
-        ];
-        const data = {};
-        for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            // Skip keys that match any ignore pattern
-            if (!ignorePatterns.some(pattern => pattern.test(key))) {
-                data[key] = localStorage.getItem(key);
-            }
-        }
-        return data;
-    });
-}
-
-// Function to login and navigate to the home page
-async function loginAndNavigate(page, baseUrl, login, email, password, secret) {
-    console.log("🔹 Trying LocalStorage login...");
-    logSession(`🔹 Trying LocalStorage login...`);
-    await page.goto(baseUrl);
-    await setLocalStorageFromInput(page, login);
-    await page.reload();
-
-    console.log("⏳ Waiting 60s for LocalStorage session to settle...");
-    logSession(`⏳ Waiting 60s for LocalStorage session to settle...`);
-    await page.waitForTimeout(120000);
-
-    // Retry loop for LocalStorage validation
-    for (let attempt = 1; attempt <= 3; attempt++) {
-        console.log(`🔄 LocalStorage validation attempt ${attempt}/3`);
-        logSession(`🔄 LocalStorage validation attempt ${attempt}/3`);
-
+    for (let retry = 1; retry <= maxRetries; retry++) {
         try {
-            // Playwright's auto-waiting handles this more gracefully.
-            // We wait for either 'Articles' or 'Login' to be visible.
-            const articlesLocator = page.locator("//div[normalize-space()='Articles']");
-            const loginBtnLocator = page.locator("//button[normalize-space()='Login']");
+            console.log(`\n🔄 Login Attempt ${retry}/${maxRetries}`);
+            logSession(`🔄 Login Attempt ${retry}/${maxRetries}`);
 
-            await Promise.race([
-                articlesLocator.waitFor({ state: 'visible', timeout: 20000 }),
-                loginBtnLocator.waitFor({ state: 'visible', timeout: 20000 })
-            ]);
+            await page.goto(baseUrl, {
+                waitUntil: "networkidle",
+                timeout: 60000
+            });
 
-            const articlesVisible = await articlesLocator.isVisible();
-            const loginBtnVisible = await loginBtnLocator.isVisible();
+            // ==========================
+            // STEP 1 : Click Login (if on Home page)
+            // ==========================
+            const loginButton = page.locator("//button[normalize-space()='Login']");
 
-            if (articlesVisible) {
-                const currentUrl = page.url();
-                if (currentUrl.endsWith("/home")) {
-                    console.log("✅ LocalStorage login valid. Home page loaded (Articles visible).");
-                    logSession(`✅ LocalStorage login valid. Home page loaded (Articles visible).`);
-                    return login; // Session still valid
-                } else {
-                    throw new Error(`⚠️ 'Articles' found but URL not ending with /home. Current URL: ${currentUrl}`);
+            if (await loginButton.isVisible({ timeout: 5000 }).catch(() => false)) {
+                console.log("➡ Login button found.");
+                logSession("➡ Login button found.");
+
+                await loginButton.click();
+                await page.waitForTimeout(1500);
+            }
+
+            // ==========================
+            // STEP 2 : Email Screen (if shown)
+            // ==========================
+            const emailInput = page.locator("#username");
+
+            if (await emailInput.isVisible({ timeout: 3000 }).catch(() => false)) {
+                console.log("➡ Email screen detected.");
+                logSession("➡ Email screen detected.");
+
+                await emailInput.fill(email);
+
+                await page.locator(
+                    "//button[contains(@class,'_button-login-id') and normalize-space()='Continue']"
+                ).click();
+
+                await page.waitForTimeout(1500);
+            }
+
+            // ==========================
+            // STEP 3 : Password Screen (if shown)
+            // ==========================
+            const passwordInput = page.locator("#password");
+
+            if (await passwordInput.isVisible({ timeout: 3000 }).catch(() => false)) {
+                console.log("➡ Password screen detected.");
+                logSession("➡ Password screen detected.");
+
+                await passwordInput.fill(password);
+
+                await page.locator(
+                    "//button[contains(@class,'_button-login-password') and normalize-space()='Continue']"
+                ).click();
+
+                await page.waitForTimeout(2000);
+            }
+
+            // ==========================
+            // STEP 4 : Optional "Not on this device"
+            // ==========================
+            try {
+                const notOnDevice = page.locator("//button[normalize-space()='Not on this device']");
+
+                if (await notOnDevice.isVisible({ timeout: 3000 })) {
+                    await notOnDevice.click();
+
+                    console.log("➡ Clicked 'Not on this device'.");
+                    logSession("➡ Clicked 'Not on this device'.");
+                }
+            } catch {}
+
+            // ==========================
+            // STEP 5 : Wait for MFA Screen
+            // ==========================
+            const otpInput = page.locator("//input[@autocomplete='one-time-code']");
+
+            await otpInput.waitFor({
+                state: "visible",
+                timeout: 20000
+            });
+
+            console.log("➡ MFA screen detected.");
+            logSession("➡ MFA screen detected.");
+
+            // ==========================
+            // STEP 6 : OTP Retry
+            // ==========================
+            let otpSuccess = false;
+            let currentOtp = authenticator.generate(secret);
+            let otpTime = Date.now();
+
+            for (let otpRetry = 1; otpRetry <= 5; otpRetry++) {
+
+                if (Date.now() - otpTime > 25000) {
+                    currentOtp = authenticator.generate(secret);
+                    otpTime = Date.now();
+
+                    console.log("🔄 Generated new OTP.");
+                    logSession("🔄 Generated new OTP.");
+                }
+
+                try {
+                    await otpInput.fill("");
+
+                    await otpInput.fill(currentOtp);
+
+                    await otpInput.press("Enter");
+
+                    await page.waitForURL("**/home", {
+                        timeout: 10000
+                    });
+
+                    otpSuccess = true;
+                    break;
+
+                } catch (err) {
+
+                    console.log(`⏳ OTP attempt ${otpRetry}/5 failed.`);
+                    logSession(`⏳ OTP attempt ${otpRetry}/5 failed.`);
+
+                    await page.waitForTimeout(3000);
                 }
             }
 
-            if (loginBtnVisible) {
-                console.log("⚠️ LocalStorage session invalid. Redirecting to manual login...");
-                logSession(`⚠️ LocalStorage session invalid. Redirecting to manual login...`);
-                return await performManualLogin(page, baseUrl, email, password, secret);
+            if (!otpSuccess) {
+                throw new Error("OTP verification failed.");
             }
 
+            // ==========================
+            // STEP 7 : Verify Dashboard
+            // ==========================
+            await page.locator("//div[normalize-space()='Articles']")
+                .waitFor({
+                    state: "visible",
+                    timeout: 15000
+                });
+
+            console.log("✅ Login Successful.");
+            logSession("✅ Login Successful.");
+
+            return;
+
         } catch (err) {
-            console.log(`⏳ Attempt ${attempt} failed: ${err.message}`);
-            logSession(`⏳ Attempt ${attempt} failed: ${err.message}`);
+
+            console.log(`❌ Login attempt ${retry} failed.`);
+            console.log(err.message);
+
+            logSession(`❌ Login attempt ${retry} failed.`);
+            logSession(err.message);
+
+            if (retry === maxRetries) {
+                throw new Error(
+                    `Login failed after ${maxRetries} attempts.\n${err.message}`
+                );
+            }
+
+            console.log("🔄 Restarting login flow...");
+            logSession("🔄 Restarting login flow...");
+
+            await page.waitForTimeout(5000);
         }
     }
-
-    // After 3 failed attempts
-    console.log("❌ After 3 attempts, not able to do LocalStorage login or Manual login with OTP. Please check, the Environment might be down. Quitting browser...");
-    logSession("❌ After 3 attempts, not able to do LocalStorage login or Manual login with OTP. Please check, the Environment might be down. Quitting browser...");
-    await page.context().browser().close(); // Close the browser
-    throw new Error("❌ Login failed after 3 attempts: No valid elements found. Possible Environment issue.");
 }
 
 // Function: Manual Login (with OTP)
-async function performManualLogin(page, baseUrl, email, password, secret) {
-    console.log("🔹 Performing full login...");
-    logSession(`🔹 Performing full login...`);
-    await page.goto(baseUrl);
-    await page.waitForTimeout(2000);
+// async function performManualLogin(page, baseUrl, email, password, secret) {
+//     console.log("🔹 Performing full login...");
+//     logSession(`🔹 Performing full login...`);
+//     await page.goto(baseUrl);
+//     await page.waitForTimeout(2000);
 
-    // Step 1: Email
-    await page.locator("//button[normalize-space()='Login']").click();
-    await page.waitForTimeout(2000);
+//     // Step 1: Email
+//     await page.locator("//button[normalize-space()='Login']").click();
+//     await page.waitForTimeout(2000);
 
-    await page.locator("//input[@id='username']").fill(email);
-    await page.locator("//button[contains(@class, '_button-login-id') and normalize-space()='Continue']").click();
-    await page.waitForTimeout(1500);
+//     await page.locator("//input[@id='username']").fill(email);
+//     await page.locator("//button[contains(@class, '_button-login-id') and normalize-space()='Continue']").click();
+//     await page.waitForTimeout(1500);
 
-    // Step 2: Password
-    await page.locator("//input[@id='password']").fill(password);
-    await page.locator("//button[contains(@class, '_button-login-password') and normalize-space()='Continue']").click();
-    await page.waitForTimeout(2000);
+//     // Step 2: Password
+//     await page.locator("//input[@id='password']").fill(password);
+//     await page.locator("//button[contains(@class, '_button-login-password') and normalize-space()='Continue']").click();
+//     await page.waitForTimeout(2000);
 
-    // Optional "Not on this device" step
-    try {
-        await page.locator("//button[normalize-space()='Not on this device']").click({ timeout: 5000 });
-        console.log("ℹ️ Clicked 'Not on this device'.");
-    } catch {
-        console.log("ℹ️ 'Not on this device' prompt not shown.");
-    }
+//     // Optional "Not on this device" step
+//     try {
+//         await page.locator("//button[normalize-space()='Not on this device']").click({ timeout: 5000 });
+//         console.log("ℹ️ Clicked 'Not on this device'.");
+//     } catch {
+//         console.log("ℹ️ 'Not on this device' prompt not shown.");
+//     }
 
-    // Step 3: OTP verification
-    let otpSuccess = false;
-    let currentOtp = authenticator.generate(secret);
-    let otpGeneratedTime = Date.now();
+//     // Step 3: OTP verification
+//     let otpSuccess = false;
+//     let currentOtp = authenticator.generate(secret);
+//     let otpGeneratedTime = Date.now();
 
-    for (let i = 0; i < 5; i++) {
-        try {
-            if ((Date.now() - otpGeneratedTime) > 25000) {
-                currentOtp = authenticator.generate(secret);
-                otpGeneratedTime = Date.now();
-                console.log("🔄 OTP refreshed due to expiration.");
-                logSession(`🔄 OTP refreshed due to expiration.`);
-            }
+//     for (let i = 0; i < 5; i++) {
+//         try {
+//             if ((Date.now() - otpGeneratedTime) > 25000) {
+//                 currentOtp = authenticator.generate(secret);
+//                 otpGeneratedTime = Date.now();
+//                 console.log("🔄 OTP refreshed due to expiration.");
+//                 logSession(`🔄 OTP refreshed due to expiration.`);
+//             }
 
-            const otpInput = page.locator("//input[@autocomplete='one-time-code']");
-            await otpInput.fill(currentOtp);
-            await otpInput.press('Enter');
+//             const otpInput = page.locator("//input[@autocomplete='one-time-code']");
+//             await otpInput.fill(currentOtp);
+//             await otpInput.press('Enter');
 
-            await page.waitForURL('**/home', { timeout: 10000 });
-            otpSuccess = true;
-            break;
-        } catch (otpErr) {
-            console.log(`⏳ OTP attempt ${i + 1} failed: ${otpErr.message}`);
-            logSession(`⏳ OTP attempt ${i + 1} failed: ${otpErr.message}`);
-            await page.waitForTimeout(2000);
-        }
-    }
+//             await page.waitForURL('**/home', { timeout: 10000 });
+//             otpSuccess = true;
+//             break;
+//         } catch (otpErr) {
+//             console.log(`⏳ OTP attempt ${i + 1} failed: ${otpErr.message}`);
+//             logSession(`⏳ OTP attempt ${i + 1} failed: ${otpErr.message}`);
+//             await page.waitForTimeout(2000);
+//         }
+//     }
 
-    if (!otpSuccess) {
-        throw new Error("❌ OTP verification failed after multiple attempts.");
-    }
+//     if (!otpSuccess) {
+//         throw new Error("❌ OTP verification failed after multiple attempts.");
+//     }
 
-    // Step 4: Verify home page
-    const finalUrl = page.url();
-    if (finalUrl.includes('/home')) {
-        try {
-            await page.waitForTimeout(5000);
-            await page.locator("//div[normalize-space()='Articles']").waitFor({ state: 'visible', timeout: 10000 });
-            console.log("✅ Manual login successful. Home page fully loaded (Articles visible).");
-            logSession(`✅ Manual login successful. Home page fully loaded (Articles visible).`);
-        } catch {
-            throw new Error("⚠️ Home page loaded but 'Articles' element not found.");
-        }
-    } else {
-        throw new Error(`❌ Redirect failed. Final URL: ${finalUrl}`);
-    }
+//     // Step 4: Verify home page
+//     const finalUrl = page.url();
+//     if (finalUrl.includes('/home')) {
+//         try {
+//             await page.waitForTimeout(5000);
+//             await page.locator("//div[normalize-space()='Articles']").waitFor({ state: 'visible', timeout: 10000 });
+//             console.log("✅ Manual login successful. Home page fully loaded (Articles visible).");
+//             logSession(`✅ Manual login successful. Home page fully loaded (Articles visible).`);
+//         } catch {
+//             throw new Error("⚠️ Home page loaded but 'Articles' element not found.");
+//         }
+//     } else {
+//         throw new Error(`❌ Redirect failed. Final URL: ${finalUrl}`);
+//     }
 
-    // Step 5: Return updated LocalStorage
-    const newLocalStorage = await getLocalStorageData(page);
-    console.log("💾 Updated LocalStorage fetched.");
-    logSession(`💾 Updated LocalStorage fetched.`);
-    return newLocalStorage;
-}
+//     // Step 5: Return updated LocalStorage
+//     const newLocalStorage = await getLocalStorageData(page);
+//     console.log("💾 Updated LocalStorage fetched.");
+//     logSession(`💾 Updated LocalStorage fetched.`);
+//     return newLocalStorage;
+// }
 
 // Function to navigate to Explore and click 'Create Report'
 async function navigateAndCreateExploreReport(page, inputData, maxRetries = 5) {

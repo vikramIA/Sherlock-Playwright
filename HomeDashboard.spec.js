@@ -3,9 +3,9 @@ const exploreFlow = require("./ExploreReport.js");
 const PersonaFlow = require("./PersonaReport.js");
 const Multilayerflow = require("./MultilayerReport.js");
 const input = require("./input.json");
-const { loginAndNavigate, safeWait } = require("./functions");
 const fs = require("fs");
 const path = require("path");
+const { loginAndNavigate, safeWait } = require("./functions");
 const envConfig = require("./Environments.json");
 const { initLogger, getSessionHeader, getLastSessionNumber, logSession } = require("./Logger");
 const NetworkLogger = require("./networkLogger.js");
@@ -38,7 +38,7 @@ if (!envConfig[env]) {
   throw new Error(`❌ Environment "${env}" not found. Use: ${allEnvs.join(", ")}`);
 }
 
-const { baseUrl, email, password, secret, login } = envConfig[env];
+const { baseUrl, email, password, secret } = envConfig[env];
 initLogger(env); // ✅ initialize env-based logging
 
 
@@ -119,17 +119,23 @@ async function main() {
 
     new NetworkLogger(page, sessionDir);
 
-    try {
-      const updatedLogin = await loginAndNavigate(page, baseUrl, login, email, password, secret);
-      const envData = JSON.parse(fs.readFileSync(path.join(__dirname, "Environments.json"), "utf-8"));
-      envData[env].login = updatedLogin;
-      fs.writeFileSync(path.join(__dirname, "Environments.json"), JSON.stringify(envData, null, 2));
-      console.log("💾 Login credentials updated");
-      logSession("💾 Login credentials updated");
-    } catch (err) {
-      console.error("❌ Failed to update login credentials:", err);
-      logSession("❌ Failed to update login credentials:", err);
-    }
+   try {
+    await loginAndNavigate(
+        page,
+        baseUrl,
+        email,
+        password,
+        secret
+    );
+
+    console.log("✅ Login completed.");
+    logSession("✅ Login completed.");
+
+} catch (err) {
+    console.error("❌ Login failed:", err);
+    logSession(`❌ Login failed: ${err.message}`);
+    throw err;
+}
 
     // Multilayer Flow
     if (input.Multilayer?.length > 0) {

@@ -1,4 +1,4 @@
-const { logSession, logReport } = require('./Logger');
+const { logSession } = require('./Logger');
 const {
     navigateAndCreateExploreReport, selectBehaviors, selectAgeRanges,
     clearSearchBar, uploadAudiences, searchAndClickReport, selectLocations,
