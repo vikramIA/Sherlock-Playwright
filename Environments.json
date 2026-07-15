@@ -7,8 +7,8 @@
   },
   "qa": {
     "baseUrl": "https://qa.thesherlock.ai/",
-    "email": "demo@thesherlock.ai",
-    "password": "TitanLinuxiPhone293!#",
+   "email": "selenium@ia.com",
+    "password": "^Gar4&P@.ifCMu7",
     "secret": "NQXIORMD3SHMO75BBCGCNXU6GKDFHFAF"
   },
   "prod": {
