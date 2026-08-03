@@ -137,6 +137,16 @@ async function main() {
     throw err;
 }
 
+    
+
+    // // Explore Flow
+    // for (const report of input.explore || []) await exploreFlow(page, report);
+    // await safeWait(page, 10000);
+
+    // // Persona Flow
+    // for (const report of input.Persona || []) await PersonaFlow(page, report);
+    // await safeWait(page, 10000);
+
     // Multilayer Flow
     if (input.Multilayer?.length > 0) {
       const multilayerReportsMap = new Map();
@@ -156,14 +166,6 @@ async function main() {
       }
     }
 
-    await safeWait(page, 10000);
-
-    // Explore Flow
-    for (const report of input.explore || []) await exploreFlow(page, report);
-    await safeWait(page, 10000);
-
-    // Persona Flow
-    for (const report of input.Persona || []) await PersonaFlow(page, report);
     await safeWait(page, 10000);
 
   } catch (err) {

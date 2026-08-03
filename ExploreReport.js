@@ -431,6 +431,26 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                 }
             }
 
+            // --------- HOME LOCATIONS ---------
+            else if (type === 'home locations') {
+                try {
+                    await enterReportName(page, inputData.reportName, isForMultilayer ? inputData.ReportNumber : false, multilayerReportsMap);
+                    await safeWait(page, 1000);
+
+                    await selectLocations(page, inputData.location, inputData.reportName);
+                    await safeWait(page, 1000);
+
+                    clickCreateReportButton(page, inputData.reportName);
+
+                    await keplerDatasetsFetch(page, inputData.reportName);
+                    await safeWait(page, 2000);
+
+                } catch (err) {
+                    console.error(`❌ Error in 'home locations' flow: ${err.message}`);
+                    logSession(`❌ Error in 'home locations' flow: ${err.message}`);
+                }
+            }  
+
             // --------- H9 MASTER ---------
             else if (type === 'h9 master') {
                 try {

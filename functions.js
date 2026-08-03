@@ -1045,6 +1045,9 @@ async function selectExploreReportType(page, reportTypeRaw) {
         case 'h9 master':
             reportXPath = "//p[text()='H9 Master']";
             break;
+        case 'home locations':
+            reportXPath = "//p[text()='Home Locations']";
+            break;
         case 'quality of life index raw':
             reportXPath = "//p[text()='Quality of Life Index Raw']";
             break;
