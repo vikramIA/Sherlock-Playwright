@@ -1,7 +1,7 @@
 const { logSession } = require('./Logger');
 const {
     MatchRateFetch, VerifyItemExist, PersonaReportName, navigateAndCreatePersonaFlow,
-    selectPersonaReportType, selectExploreReportInPersona, selectLocations,
+    selectPersonaReportType, selectReportInPersona, selectLocations,
     selectOccasion, selectPlaces, selectAvailableAttributes, selectBehaviors,
     selectAgeRanges, selectSubCategory, selectBrands, SelectRating,
     SelectReviewCount, SelectVisitDuration, SelectAverageDailyVisits,
@@ -37,8 +37,9 @@ async function PersonaFlow(page, inputData) {
 
                 await PersonaReportName(page, inputData.reportName);
 
-                // Step 2: Select Explore Report in Persona
-                const skipDetailedFilters = await selectExploreReportInPersona(page, inputData.ExploreReportName, inputData.reportName);
+                // Step 2: Select Existing Report (YES/NO)
+                const skipDetailedFilters = await selectReportInPersona(page, inputData.SelectReport, inputData.reportName);
+
 
                 if (!skipDetailedFilters) {
                     await selectLocations(page, inputData.location, inputData.reportName);
@@ -212,7 +213,7 @@ async function PersonaFlow(page, inputData) {
                                     logSession(msg);
                                     skipCurrentReport = true;
                                 }
-                                
+
                                 if (matchRateValue === 0) {
                                     const msg = `⛔ Match Rate is 0 for "${inputData.reportName}". Skipping further actions.`;
                                     console.log(msg);
@@ -220,7 +221,7 @@ async function PersonaFlow(page, inputData) {
                                     skipCurrentReport = true;
                                 }
 
-                               
+
                             }
 
                         } catch (err) {
@@ -335,7 +336,7 @@ async function PersonaFlow(page, inputData) {
                 return;
             }
         }
-        
+
         // === Unknown Report Type ===
         else {
             console.error(`❌ Unknown report type: ${inputData.reportType}`);
@@ -428,7 +429,7 @@ async function PersonaFlow(page, inputData) {
                 logSession(`❌ selectAgeRanges failed: ${err.message}`);
                 return;
             }
-            
+
             const initiateBtn = page.locator("//button[contains(., 'Initiate Workflow')]");
             await initiateBtn.waitFor({ state: 'visible', timeout: 20000 });
             await initiateBtn.click();

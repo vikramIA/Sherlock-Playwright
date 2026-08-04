@@ -12,7 +12,7 @@
     "secret": "NQXIORMD3SHMO75BBCGCNXU6GKDFHFAF"
   },
   "prod": {
-    "baseUrl": "https://live.thesherlock.ai/",
+    "baseUrl": "https://sherlocktest.infiniteanalytics.com/",
     "email": "selenium@ia.com",
     "password": "^Gar4&P@.ifCMu7",
     "secret": "NQXIORMD3SHMO75BBCGCNXU6GKDFHFAF"

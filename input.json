@@ -421,27 +421,6 @@
       "location": "Pune, Maharashtra, India"
     }
   ],
-  "PersonaExploreReports": [
-    {
-      "reportType": "Device Level Visits",
-      "reportName": "Test Device Level Visits Report",
-      "StartDateRange": "2025-08-01",
-      "EndDateRange": "2025-08-03",
-      "VisitDuration": "10-50",
-      "behaviors": "",
-      "age": "",
-      "SubCategory": "",
-      "QualityLifeScore": "30-100",
-      "Rating": "",
-      "ReviewCount": "",
-      "Brands": "",
-      "AverageDailyVisits": "",
-      "AverageMonthlyVisits": "",
-      "AverageDailyDevices": "",
-      "AverageMonthlyDevices": "",
-      "Persona": "No"
-    }
-  ],
   "Persona": [
     {
       "reportType": "Custom Audience to IFAs",
@@ -453,9 +432,8 @@
         {
           "Persona": "YES",
           "reportName": "Persona Report Using IFAS as Audience",
-          "behaviors": "Daily Gaming; Daily Shopping",
-          "age": "18-25; 65+; 26-35; 36-45",
-          "lifestyle": ""
+          "behaviors": "Live Music & Concert Attendees; Movie & Cinema Goers",
+          "age": "36-45"
         }
       ]
     },
@@ -468,9 +446,8 @@
         {
           "Persona": "YES",
           "reportName": "Persona Report Using Email as Audience",
-          "behaviors": "Daily Gaming; Daily Shopping",
-          "age": "18-25; 65+; 26-35; 36-45",
-          "lifestyle": ""
+          "behaviors": "Live Music & Concert Attendees; Movie & Cinema Goers",
+          "age": "18-25; 65+; 26-35; 36-45"
         }
       ]
     },
@@ -483,9 +460,8 @@
         {
           "Persona": "YES",
           "reportName": "Persona Report Using Phone Numbers as Audience",
-          "behaviors": "Daily Gaming; Daily Shopping",
-          "age": "18-25; 65+; 26-35; 36-45",
-          "lifestyle": ""
+           "behaviors": "Live Music & Concert Attendees; Movie & Cinema Goers",
+          "age": "18-25; 65+; 26-35; 36-45"
         }
       ]
     },
@@ -609,28 +585,82 @@
         }
       ]
     },
-    {
-      "reportType": "Occasion and Behavior Based Audiences",
-      "reportName": "Persona Report Using Occasion Behaviors and Age",
-      "ExploreReportName": "",
-      "location": "Pune, Maharashtra, India",
-      "occasion": "Energise / Retain",
-      "place": "",
-      "attributes": "",
-      "behaviors": "Daily Gaming; Daily Shopping",
-      "age": "18-25; 65+; 26-35; 36-45",
-      "lifestyle": "",
-      "Brands": "",
-      "SubCategory": "",
-      "VisitDuration": "",
-      "ReviewCount": "",
-      "Rating": "",
-      "AverageDailyVisits": "",
-      "AverageMonthlyVisits": "",
-      "AverageDailyDevices": "",
-      "AverageMonthlyDevices": "",
-      "QualityLifeScore": ""
-    }
+   {
+  "reportType": "Occasion and Behavior Based Audiences",
+  "reportName": "CDP_Occasion_Trigger_CDP",
+   "location": "Harris, Texas, USA",
+  "occasion": "Late-Night Eats"
+},
+{
+  "reportType": "Occasion and Behavior Based Audiences",
+  "reportName": "CDP_Offline_Behaviors",
+  "location": "Harris, Texas, USA",
+  "occasion": "Socializing & Nightlife",
+  "behaviors": "Live Music & Concert Attendees; Movie & Cinema Goers; Nightclub & Late-Night Venue Visitors"
+},
+{
+  "reportType": "Occasion and Behavior Based Audiences",
+  "reportName": "CDP_Online_Behaviors",
+  "location": "Harris, Texas, USA",
+  "occasion": "Socializing & Nightlife",
+  "behaviors": "Content/Contextual Interests Taxonomy"
+},
+{
+  "reportType": "Occasion and Behavior Based Audiences",
+  "reportName": "CDP_Age_Range",
+  "location": "Harris, Texas, USA",
+  "occasion": "Socializing & Nightlife",
+  "age": "18-25; 26-35"
+},
+{
+  "reportType": "Occasion and Behavior Based Audiences",
+  "reportName": "CDP_Age_Range",
+  "location": "Harris, Texas, USA",
+  "occasion": "Socializing & Nightlife",
+  "age": "18-25; 26-35"
+},
+{
+  "reportType": "Occasion and Behavior Based Audiences",
+  "reportName": "CDP_Occasion_Offline_Behaviors_Age",
+  "location": "Harris, Texas, USA",
+  "occasion": "Socializing & Nightlife",
+  "behaviors": "Live Music & Concert Attendees; Movie & Cinema Goers; Nightclub & Late-Night Venue Visitors",
+  "age": "18-25; 26-35"
+},
+{
+  "reportType": "Occasion and Behavior Based Audiences",
+  "reportName": "CDP_Occasion_OnlineBehavior_Age",
+  "location": "Harris, Texas, USA",
+  "occasion": "Socializing & Nightlife",
+  "behaviors": "Content/Contextual Interests Taxonomy",
+  "age": "18-25; 26-35"
+},
+{
+  "reportType": "Occasion and Behavior Based Audiences",
+  "reportName": "CDP_Select_Report",
+  "SelectReport": "YES"
+},
+{
+  "reportType": "Occasion and Behavior Based Audiences",
+  "reportName": "CDP_Normal_Report",
+  "SelectReport": "",
+  "location": "Harris, Texas, USA",
+  "occasion": "",
+  "place": "food.restaurant.american",
+  "attributes": "",
+  "behaviors": "",
+  "age": "",
+  "Brands": "",
+  "SubCategory": "",
+  "VisitDuration": "",
+  "ReviewCount": "",
+  "Rating": "",
+  "AverageDailyVisits": "",
+  "AverageMonthlyVisits": "",
+  "AverageDailyDevices": "",
+  "AverageMonthlyDevices": "",
+  "QualityLifeScore": ""
+}
   ],
   "ReportForMultilayer": [
     {

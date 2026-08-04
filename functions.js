@@ -78,7 +78,7 @@ async function loginAndNavigate(page, baseUrl, email, password, secret) {
                     console.log("➡ Clicked 'Not on this device'.");
                     logSession("➡ Clicked 'Not on this device'.");
                 }
-            } catch {}
+            } catch { }
 
             // ==========================
             // STEP 5 : Wait for MFA Screen
@@ -1392,8 +1392,9 @@ async function selectBehaviors(page, behaviorsString, reportName) {
     for (const behavior of behaviors) {
         try {
             await inputField.type(behavior);
-            // Select with ArrowDown + Enter
+            await page.waitForTimeout(500); // Optional
             await inputField.press('ArrowDown');
+            await page.waitForTimeout(500); // Optional
             await inputField.press('Enter');
 
             console.log(`[${reportName}] Behavior '${behavior}' selected via dropdown.`);
@@ -1451,33 +1452,35 @@ async function selectAgeRanges(page, ageRangeString, reportName) {
     await inputField.press('Tab'); // close dropdown and move focus
 }
 
-// Function to select a Explore report in Persona flow
-async function selectExploreReportInPersona(page, ExploreReportName, reportName) {
-    if (!ExploreReportName || ExploreReportName.trim() === "") {
-        console.log(`[${reportName}] ℹ️ Skipping Report ID input — no value provided in inputData.`);
-        logSession(`[${reportName}] ℹ️ Skipping Report ID input — no value provided in inputData.`);
+// Function to select the first available report in Persona if SelectReport = YES
+async function selectReportInPersona(page, SelectReport, reportName) {
+    // If NO, continue with normal filters
+    if (!SelectReport || SelectReport.trim().toUpperCase() !== "YES") {
+        console.log(`[${reportName}] ℹ️ SelectReport = NO. Continuing with normal filters.`);
+        logSession(`[${reportName}] ℹ️ SelectReport = NO. Continuing with normal filters.`);
         return false;
     }
-
     try {
-        const ExploreReportNameInput = page.locator("//input[@name='reportid']");
-        await ExploreReportNameInput.waitFor({ state: 'visible', timeout: 10000 });
+        const reportInput = page.locator("//input[@name='reportid']");
 
-        await ExploreReportNameInput.fill(ExploreReportName);
-        console.log(`[${reportName}] ✅ Typed Report ID: '${ExploreReportName}'`);
-        logSession(`[${reportName}] ✅ Typed Report ID: '${ExploreReportName}'`);
+        await reportInput.waitFor({ state: "visible", timeout: 5000 });
 
-        await ExploreReportNameInput.press('ArrowDown');
+        await reportInput.click();
         await page.waitForTimeout(500);
-        await ExploreReportNameInput.press('Enter');
-        console.log(`[${reportName}] ✅ Selected Report ID from suggestions`);
-        logSession(`[${reportName}] ✅ Selected Report ID from suggestions`);
 
-        return true;  // Skip filters
+        await reportInput.press("ArrowDown");
+        await page.waitForTimeout(300);
+        await reportInput.press("Enter");
+
+        console.log(`[${reportName}] ✅ First available report selected.`);
+        logSession(`[${reportName}] ✅ First available report selected.`);
+
+        return true;
     } catch (err) {
-        console.error(`[${reportName}] ❌ Failed during Report ID selection: ${err.message}`);
-        logSession(`[${reportName}] ❌ Failed during Report ID selection: ${err.message}`);
-        throw err;
+        const errorMsg = `[${reportName}] ❌ SelectReport = YES, but Report selection field was not found or could not be selected.`;
+        console.error(errorMsg);
+        logSession(errorMsg);
+        throw new Error(errorMsg);
     }
 }
 
@@ -1609,14 +1612,30 @@ async function VerifyItemExist(page, section, itemName) {
 
             // Navigate to the correct section
             const sectionBtn = page.locator(sectionXPath).first();
+
+
             await sectionBtn.click();
             await page.waitForURL(`**/${urlPart}`);
 
+            await page.waitForLoadState('networkidle');
+            await page.waitForTimeout(3000);
+
             // Optional: Search the item if search bar exists
             searchInput = page.locator("//input[@placeholder='Search for a file']");
+
+            await searchInput.waitFor({
+                state: "visible",
+                timeout: 30000
+            });
             if (await searchInput.isVisible()) {
+                await searchInput.clear();
                 await searchInput.fill(itemName);
-                await searchInput.press('Enter');
+
+                await page.waitForTimeout(500);
+
+                await searchInput.press("Enter");
+
+                await page.waitForTimeout(2000);
             }
 
             // Locate items matching itemXPath
@@ -1651,10 +1670,20 @@ async function VerifyItemExist(page, section, itemName) {
             logSession(`❌ Error verifying ${section} item: ${error.message}`);
 
             if (attempt < maxRetries) {
-                console.log(`🔁 Retry ${attempt} for ${section} -> ${itemName} after ${retryDelay / 1000}s`);
-                logSession(`🔁 Retry ${attempt} for ${section} -> ${itemName} after ${retryDelay / 1000}s`);
-                await new Promise(resolve => setTimeout(resolve, retryDelay)); // non-blocking wait
-                continue; // retry
+
+                console.log(`🔄 Refreshing Repository...`);
+                logSession(`🔄 Refreshing Repository...`);
+
+                await page.reload({
+                    waitUntil: "networkidle"
+                });
+
+                await page.waitForTimeout(3000);
+
+                console.log(`🔁 Retry ${attempt} for ${section} -> ${itemName}`);
+                logSession(`🔁 Retry ${attempt} for ${section} -> ${itemName}`);
+
+                continue;
             }
 
             return false;
@@ -1906,19 +1935,33 @@ async function MatchRateFetch(page, reportName, maxRetries = 3, retryDelayMs = 2
 
     while (attempt < maxRetries) {
         attempt++;
+
         try {
-            console.log(`⏳ Attempt ${attempt}: Waiting for 'Match Rate' button`);
-            logSession(`⏳ Attempt ${attempt}: Waiting for 'Match Rate' button`);
+            console.log(`⏳ Attempt ${attempt}: Opening Details panel`);
+            logSession(`⏳ Attempt ${attempt}: Opening Details panel`);
 
-            const matchRateBtn = page.locator("//button[normalize-space()='Match Rate']");
-            await matchRateBtn.waitFor({ state: 'visible', timeout: 180_000 });
-            await matchRateBtn.click();
+            // Click Details button
+            const detailsBtn = page.getByRole("button", { name: "Details" });
 
-            console.log("✅ Clicked 'Match Rate' button");
-            logSession("✅ Clicked 'Match Rate' button");
+            await detailsBtn.waitFor({
+                state: "visible",
+                timeout: 180000
+            });
 
-            const matchRateElement = page.locator("//div[div[contains(text(),'Match Rate')]]/div[2]");
-            await matchRateElement.waitFor({ state: 'visible', timeout: 60_000 });
+            await detailsBtn.click();
+
+            console.log("✅ Clicked Details button");
+            logSession("✅ Clicked Details button");
+
+            // Wait for Match Rate section
+            const matchRateElement = page.locator(
+                "//div[normalize-space()='Match Rate']/parent::div//div[contains(text(),'%')]"
+            );
+
+            await matchRateElement.waitFor({
+                state: "visible",
+                timeout: 60000
+            });
 
             const rawText = (await matchRateElement.textContent())?.trim();
 
@@ -1926,7 +1969,7 @@ async function MatchRateFetch(page, reportName, maxRetries = 3, retryDelayMs = 2
                 throw new Error("Match Rate text is empty");
             }
 
-            const numericValue = parseFloat(rawText.replace('%', ''));
+            const numericValue = parseFloat(rawText.replace("%", "").trim());
 
             if (Number.isNaN(numericValue)) {
                 throw new Error(`Invalid Match Rate value: ${rawText}`);
@@ -1935,7 +1978,28 @@ async function MatchRateFetch(page, reportName, maxRetries = 3, retryDelayMs = 2
             console.log(`✅ Match Rate for ${reportName}: ${numericValue}%`);
             logSession(`✅ Match Rate for ${reportName}: ${numericValue}%`);
 
-            return numericValue; // ✅ always number (0 allowed)
+            // Close Details panel
+            try {
+                const closeBtn = page.locator(
+                    "svg.lucide.lucide-x.absolute.right-6"
+                );
+
+                await closeBtn.waitFor({
+                    state: "visible",
+                    timeout: 10000
+                });
+
+                await closeBtn.click();
+
+                console.log("✅ Closed Details panel");
+                logSession("✅ Closed Details panel");
+
+            } catch (closeError) {
+                console.log(`⚠️ Could not close Details panel: ${closeError.message}`);
+                logSession(`⚠️ Could not close Details panel: ${closeError.message}`);
+            }
+
+            return numericValue;
 
         } catch (error) {
             const msg = `⚠️ Attempt ${attempt} failed: ${error.message}`;
@@ -1948,7 +2012,7 @@ async function MatchRateFetch(page, reportName, maxRetries = 3, retryDelayMs = 2
             } else {
                 console.error(`❌ All ${maxRetries} attempts failed. Could not fetch Match Rate.`);
                 logSession(`❌ All ${maxRetries} attempts failed. Could not fetch Match Rate.`);
-                return null; // ✅ explicit failure
+                return null;
             }
         }
     }
@@ -2347,7 +2411,7 @@ module.exports = {
     selectBehaviors,
     selectAgeRanges,
     selectOccasion,
-    selectExploreReportInPersona,
+    selectReportInPersona,
     PersonaReportName,
     selectCountry,
     uploadCSVFile,
