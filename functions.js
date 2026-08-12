@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require("path");
 const { logSession } = require('./Logger');
 const { authenticator } = require('otplib');
+const { expect } = require("@playwright/test");
 
 // Function to perform login and navigate to the home page
 async function loginAndNavigate(page, baseUrl, email, password, secret) {
@@ -1731,66 +1732,184 @@ async function uploadCSVFile(page, filePathFromInputData, reportName) {
 // Function to search and click on a report by name on 3 dots menu
 async function searchAndClickReport(page, reportName) {
     const MAX_RETRIES = 3;
-    const RETRY_DELAY = 2000; // ms delay between retries
+    const RETRY_DELAY = 2000;
 
     if (!reportName || reportName.trim() === "") {
         const msg = "⚠️ Report name is required for search.";
         console.log(msg);
         logSession(msg);
-        return false; // ❌ invalid input
+        return false;
     }
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
         try {
-            // 1️⃣ Go to Explore
-            const exploreBtn = page.locator("//a[@href='/explore' and @data-sidebar='menu-button']");
-            await exploreBtn.waitFor({ state: 'visible', timeout: 10000 });
-            await exploreBtn.click();
-            await page.waitForURL('**/explore', { waitUntil: 'networkidle', timeout: 15000 });
+            console.log(
+                `🔎 Searching report "${reportName}" - Attempt ${attempt}/${MAX_RETRIES}`
+            );
 
-            // 2️⃣ Search for the report
-            const searchInput = page.locator("//input[@placeholder='Search for a file']");
-            await searchInput.waitFor({ state: 'visible', timeout: 10000 });
+            logSession(
+                `🔎 Searching report "${reportName}" - Attempt ${attempt}/${MAX_RETRIES}`
+            );
+
+            // ==========================================
+            // 1. Ensure we are on Explore
+            // ==========================================
+
+            const currentUrl = page.url();
+
+            if (!currentUrl.endsWith("/explore")) {
+                await page.goto(
+                    `${new URL(currentUrl).origin}/explore`,
+                    {
+                        waitUntil: "domcontentloaded",
+                        timeout: 60000
+                    }
+                );
+            }
+
+            await page.waitForURL("**/explore", {
+                timeout: 30000
+            });
+
+            // ==========================================
+            // 2. Wait for Explore sidebar
+            // ==========================================
+
+            const exploreBtn = page.locator(
+                "//a[@href='/explore' and @data-sidebar='menu-button']"
+            );
+
+            try {
+                await exploreBtn.waitFor({
+                    state: "visible",
+                    timeout: 10000
+                });
+            } catch {
+                console.log(
+                    `⚠️ Explore sidebar not ready on attempt ${attempt}. Reloading...`
+                );
+
+                logSession(
+                    `⚠️ Explore sidebar not ready on attempt ${attempt}. Reloading...`
+                );
+
+                await page.reload({
+                    waitUntil: "domcontentloaded",
+                    timeout: 60000
+                });
+
+                await page.waitForURL("**/explore", {
+                    timeout: 30000
+                });
+
+                await exploreBtn.waitFor({
+                    state: "visible",
+                    timeout: 20000
+                });
+            }
+
+            // ==========================================
+            // 3. Make sure Explore page is active
+            // ==========================================
+
+            if (!page.url().endsWith("/explore")) {
+                await exploreBtn.click();
+
+                await page.waitForURL("**/explore", {
+                    timeout: 30000
+                });
+            }
+
+            // ==========================================
+            // 4. Search report
+            // ==========================================
+
+            const searchInput = page.locator(
+                "//input[@placeholder='Search for a file']"
+            );
+
+            await searchInput.waitFor({
+                state: "visible",
+                timeout: 30000
+            });
+
+            await searchInput.fill("");
+
             await searchInput.fill(reportName);
-            await searchInput.press('Enter');
 
-            // Wait for report result
-            const reportLink = page.locator(`//a[normalize-space(text())='${reportName}']`);
-            await reportLink.waitFor({ state: 'visible', timeout: 10000 });
+            await page.waitForTimeout(2000);
 
-            // 3️⃣ Click the 3-dot menu for the report
-            const threeDotButton = page.locator(`//a[normalize-space(text())='${reportName}']
-                /ancestor::div[contains(@class,'mt-2 w-full')]
-                //button[@aria-haspopup='menu']`);
-            await threeDotButton.waitFor({ state: 'visible', timeout: 10000 });
+            // ==========================================
+            // 5. Find report
+            // ==========================================
+
+            const reportLink = page.locator(
+                `//a[normalize-space(text())='${reportName}']`
+            );
+
+            await reportLink.waitFor({
+                state: "visible",
+                timeout: 30000
+            });
+
+            // ==========================================
+            // 6. Open three-dot menu
+            // ==========================================
+
+            const threeDotButton = reportLink.locator(
+                "xpath=ancestor::div[contains(@class,'mt-2 w-full')]//button[@aria-haspopup='menu']"
+            );
+
+            await threeDotButton.waitFor({
+                state: "visible",
+                timeout: 30000
+            });
+
             await threeDotButton.click();
 
-            const msg = `✅ Report "${reportName}" found and 3-dot menu clicked (Attempt ${attempt}/${MAX_RETRIES}).`;
-            console.log(msg);
-            logSession(msg);
+            console.log(
+                `✅ Report "${reportName}" found and 3-dot menu clicked (Attempt ${attempt}/${MAX_RETRIES}).`
+            );
 
-            return true; // ✅ FOUND
+            logSession(
+                `✅ Report "${reportName}" found and 3-dot menu clicked (Attempt ${attempt}/${MAX_RETRIES}).`
+            );
+
+            return true;
+
         } catch (err) {
-            const msg = `⚠️ Attempt ${attempt}/${MAX_RETRIES} failed for report "${reportName}": ${err.message}`;
-            console.log(msg);
-            logSession(msg);
+
+            console.log(
+                `⚠️ Attempt ${attempt}/${MAX_RETRIES} failed for report "${reportName}": ${err.message}`
+            );
+
+            logSession(
+                `⚠️ Attempt ${attempt}/${MAX_RETRIES} failed for report "${reportName}": ${err.message}`
+            );
 
             if (attempt < MAX_RETRIES) {
-                const waitMsg = `🔁 Retrying in ${RETRY_DELAY / 1000}s...`;
-                console.log(waitMsg);
-                logSession(waitMsg);
+
+                console.log(
+                    `🔁 Retrying report search in ${RETRY_DELAY / 1000}s...`
+                );
+
+                logSession(
+                    `🔁 Retrying report search in ${RETRY_DELAY / 1000}s...`
+                );
+
                 await page.waitForTimeout(RETRY_DELAY);
             }
         }
     }
 
-    const errMsg = `❌ Report "${reportName}" not found after ${MAX_RETRIES} attempts — continuing script.`;
+    const errMsg =
+        `❌ Report "${reportName}" not found after ${MAX_RETRIES} attempts — continuing script.`;
+
     console.log(errMsg);
     logSession(errMsg);
 
-    return false; // ❌ NOT FOUND after all retries
+    return false;
 }
-
 // Function to clear the search bar after using it
 async function clearSearchBar(page) {
     try {
@@ -2380,6 +2499,1401 @@ async function monitorMultilayerReport(page, reportName) {
         };
     }
 }
+// Function to verify default Bento charts for a given report type and name
+
+
+// const { logSession } = require("./Logger");
+
+async function verifyDefaultBentoCharts(page, reportType, reportName) {
+
+    const defaultCharts = {
+        "place level visits": {
+            heading: "Observed Visits",
+            count: 8
+        },
+
+        "device level visits": {
+            heading: "Total Unique Audiences",
+            count: 7
+        },
+
+        "places": {
+            heading: "Total Places",
+            count: 4
+        },
+
+        "quality of life index": {
+            heading: "Average Quality Of Life Index",
+            count: 2
+        },
+
+        "population": {
+            heading: "Total Population",
+            count: 2
+        },
+
+        "home locations": {
+            heading: "Total IFA Count",
+            count: 2
+        },
+
+        "places internal": {
+            heading: "Total Places",
+            count: 4
+        }
+    };
+
+    const config = defaultCharts[reportType.toLowerCase()];
+
+    if (!config) {
+        console.log(
+            `ℹ️ No Bento validation configured for ${reportType}`
+        );
+
+        logSession(
+            `ℹ️ No Bento validation configured for ${reportType}`
+        );
+
+        return;
+    }
+
+    // =========================================================
+    // Expected Bento chart loading text
+    // =========================================================
+
+    const expectedChartsText =
+        `${config.count} charts loaded out of ${config.count}`;
+
+    const chartsLoadedText = page
+        .locator("p")
+        .filter({
+            hasText: expectedChartsText
+        })
+        .first();
+
+    // =========================================================
+    // Verify Charts Loaded Count
+    // =========================================================
+
+    try {
+
+        await expect(chartsLoadedText).toBeVisible({
+            timeout: 60000
+        });
+
+    } catch (err) {
+
+        const currentUrl = page.url();
+
+        console.error(
+            `❌ Bento charts did not load for '${reportName}'.`
+        );
+
+        logSession(
+            `❌ Bento charts did not load for '${reportName}'.`
+        );
+
+        console.error(
+            `🔗 Current URL: ${currentUrl}`
+        );
+
+        logSession(
+            `🔗 Current URL: ${currentUrl}`
+        );
+
+        // Do not continue with Bento card validation
+        return;
+    }
+
+    // =========================================================
+    // Verify exact loaded text
+    // =========================================================
+
+    const loadedText =
+        (await chartsLoadedText.textContent())?.trim();
+
+    expect(loadedText).toBe(expectedChartsText);
+
+    console.log(
+        `✅ Bento charts loaded verified for '${reportName}' | ${loadedText}`
+    );
+
+    logSession(
+        `✅ Bento charts loaded verified for '${reportName}' | ${loadedText}`
+    );
+
+    // =========================================================
+    // Verify First Bento Card
+    // =========================================================
+
+    const heading = page.getByText(
+        config.heading,
+        {
+            exact: true
+        }
+    );
+
+    await expect(heading).toBeVisible({
+        timeout: 60000
+    });
+
+    // Keep existing logic for first card value
+    const value = heading.locator(
+        "xpath=following::p[1]"
+    );
+
+    await expect(value).toBeVisible();
+
+    const cardValue =
+        (await value.textContent())?.trim();
+
+    expect(cardValue).toBeTruthy();
+
+    console.log(
+        `✅ Default Bento verified for '${reportName}' | ${config.heading}: ${cardValue}`
+    );
+
+    logSession(
+        `✅ Default Bento verified for '${reportName}' | ${config.heading}: ${cardValue}`
+    );
+}
+
+// const { expect } = require("@playwright/test");
+
+
+
+async function verifyAggregatedCount(page, reportName) {
+
+    // Navigate to Explore
+    await page.goto(`${new URL(page.url()).origin}/explore`);
+
+    await page.waitForURL("**/explore", {
+        timeout: 30000
+    });
+
+    // Search report
+    const searchBox = page.getByPlaceholder("Search for a file");
+
+    await searchBox.fill(reportName);
+
+    // Find created report
+    const reportText = page
+        .getByText(reportName, { exact: true })
+        .last();
+
+    await expect(reportText).toBeVisible({
+        timeout: 30000
+    });
+
+    // Find report row
+    const reportRow = reportText.locator(
+        "xpath=ancestor::div[.//button[@aria-haspopup='menu']][1]"
+    );
+
+    await expect(reportRow).toBeVisible({
+        timeout: 10000
+    });
+
+    // Click 3-dot menu
+    const menuButton = reportRow.locator(
+        'button[aria-haspopup="menu"]'
+    );
+
+    await menuButton.click();
+
+    // Click Aggregated Count
+    await page.getByText("Aggregated Count", {
+        exact: true
+    }).click();
+
+    // Wait for summary page
+    await page.waitForURL(
+        "**/explore/summary?id=*",
+        {
+            timeout: 30000
+        }
+    );
+
+    console.log("✅ Aggregated Count summary page loaded");
+
+    // ==========================================
+    // Wait for Total value to render
+    // ==========================================
+
+    const totalValueLocator = page.locator(
+        'div.truncate.text-left.font-medium.leading-tight.false:visible'
+    );
+
+    try {
+
+        await expect(totalValueLocator.first()).toBeVisible({
+            timeout: 60000
+        });
+
+    } catch (err) {
+
+        const currentUrl = page.url();
+
+        console.error(
+            `❌ Aggregated Count Total value did not render for '${reportName}'.`
+        );
+
+        logSession(
+            `❌ Aggregated Count Total value did not render for '${reportName}'.`
+        );
+
+        console.error(
+            `🔗 Current URL: ${currentUrl}`
+        );
+
+        logSession(
+            `🔗 Current URL: ${currentUrl}`
+        );
+
+        // ------------------------------------------
+        // Check whether we are still on summary page
+        // ------------------------------------------
+
+        if (currentUrl.includes("/explore/summary")) {
+
+            console.error(
+                `⚠️ Aggregated Count summary page opened, but the Total value is missing/not loaded.`
+            );
+
+            logSession(
+                `⚠️ Aggregated Count summary page opened, but the Total value is missing/not loaded.`
+            );
+
+        } else {
+
+            console.error(
+                `⚠️ Unexpected page while verifying Aggregated Count.`
+            );
+
+            logSession(
+                `⚠️ Unexpected page while verifying Aggregated Count.`
+            );
+        }
+
+        return null;
+    }
+
+    // ==========================================
+    // Get value
+    // ==========================================
+
+    const totalValue = (
+        await totalValueLocator.first().getAttribute("title")
+    )?.trim();
+
+    if (!totalValue) {
+
+        console.error(
+            `⚠️ Aggregated Count Total value is empty for '${reportName}'.`
+        );
+
+        logSession(
+            `⚠️ Aggregated Count Total value is empty for '${reportName}'.`
+        );
+
+        return null;
+    }
+
+    // ==========================================
+    // Convert value to number
+    // ==========================================
+
+    const numericValue = Number(
+        totalValue.replace(/,/g, "")
+    );
+
+    expect(numericValue).not.toBeNaN();
+
+    expect(numericValue).toBeGreaterThan(0);
+
+    console.log(
+        `✅ Aggregated Count verified for '${reportName}' | Total: ${totalValue}`
+    );
+
+    logSession(
+        `✅ Aggregated Count verified for '${reportName}' | Total: ${totalValue}`
+    );
+
+    return totalValue;
+}
+
+async function verifyAudienceUploadStatus(
+    page,
+    reportName,
+    platform,
+    maxWaitMinutes = 30
+) {
+    const startTime = Date.now();
+    const MAX_WAIT_MS = maxWaitMinutes * 60 * 1000;
+    const CHECK_INTERVAL = 60 * 1000; // 1 minute
+
+    try {
+        // ==========================================
+        // 1. Open Profile Menu
+        // ==========================================
+
+        const profileIcon = page.locator(
+            "//div[@type='button']//*[name()='svg']"
+        );
+
+        await expect(profileIcon).toBeVisible({
+            timeout: 30000
+        });
+
+        await profileIcon.click();
+
+        console.log("✅ Profile menu clicked");
+        logSession("✅ Profile menu clicked");
+
+        // ==========================================
+        // 2. Open Settings
+        // ==========================================
+
+        const settingsOption = page.getByRole("button", {
+            name: "Settings",
+            exact: true
+        });
+
+        await expect(settingsOption).toBeVisible({
+            timeout: 15000
+        });
+
+        await settingsOption.click();
+
+        console.log("✅ Settings opened");
+        logSession("✅ Settings opened");
+
+        // ==========================================
+        // 3. Open Uploaded Audience
+        // ==========================================
+
+        const uploadedAudienceTab = page.getByText(
+            "Uploaded Audience",
+            {
+                exact: true
+            }
+        );
+
+        await expect(uploadedAudienceTab).toBeVisible({
+            timeout: 30000
+        });
+
+        await uploadedAudienceTab.click();
+
+        // ==========================================
+        // 4. Wait for Status column
+        // ==========================================
+
+        const statusHeader = page.getByText("Status", {
+            exact: true
+        });
+
+        await expect(statusHeader).toBeVisible({
+            timeout: 30000
+        });
+
+        console.log("✅ Uploaded Audience page loaded");
+        logSession("✅ Uploaded Audience page loaded");
+
+        // ==========================================
+        // 5. Find Status column dynamically
+        // ==========================================
+
+        const headers = page
+            .locator("thead tr")
+            .first()
+            .locator("th");
+
+        const headerCount = await headers.count();
+
+        let statusColumnIndex = -1;
+
+        for (let i = 0; i < headerCount; i++) {
+            const headerText = (
+                await headers.nth(i).innerText()
+            ).trim();
+
+            if (headerText.toLowerCase() === "status") {
+                statusColumnIndex = i;
+                break;
+            }
+        }
+
+        expect(statusColumnIndex).toBeGreaterThanOrEqual(0);
+
+        console.log(
+            `🔎 Status column index: ${statusColumnIndex}`
+        );
+
+        // ==========================================
+        // Find Audience Count column dynamically
+        // ==========================================
+
+        let audienceCountColumnIndex = -1;
+
+        for (let i = 0; i < headerCount; i++) {
+            const headerText = (
+                await headers.nth(i).innerText()
+            ).trim();
+
+            if (headerText.toLowerCase() === "audience count") {
+                audienceCountColumnIndex = i;
+                break;
+            }
+        }
+
+        expect(audienceCountColumnIndex).toBeGreaterThanOrEqual(0);
+
+        console.log(
+            `🔎 Audience Count column index: ${audienceCountColumnIndex}`
+        );
+
+        logSession(
+            `🔎 Audience Count column index: ${audienceCountColumnIndex}`
+        );
+
+        // ==========================================
+        // Function to find current report row
+        // ==========================================
+
+        const findReportRow = async () => {
+            const rows = page.locator("tbody tr");
+
+            await expect(rows.first()).toBeVisible({
+                timeout: 30000
+            });
+
+            const rowCount = await rows.count();
+
+            for (let i = 0; i < rowCount; i++) {
+                const row = rows.nth(i);
+
+                const rowText = (await row.innerText()).trim();
+
+                if (
+                    rowText.includes(reportName) &&
+                    rowText.toLowerCase().includes(platform.toLowerCase())
+                ) {
+                    return row;
+                }
+            }
+
+            return null;
+        };
+        // ==========================================
+        // 6. Check status
+        // ==========================================
+
+        while (Date.now() - startTime < MAX_WAIT_MS) {
+
+            const elapsedMinutes = (
+                (Date.now() - startTime) / 60000
+            ).toFixed(1);
+
+            const reportRow = await findReportRow();
+
+            if (!reportRow) {
+                throw new Error(
+                    `Audience report '${reportName}' not found in Uploaded Audience table.`
+                );
+            }
+
+            const statusCell = reportRow
+                .locator("td")
+                .nth(statusColumnIndex);
+
+            const status = (
+                await statusCell.innerText()
+            ).trim();
+
+            console.log(
+                `🔄 Audience upload status for '${reportName}': ${status} | Elapsed: ${elapsedMinutes} min`
+            );
+
+            logSession(
+                `🔄 Audience upload status for '${reportName}': ${status} | Elapsed: ${elapsedMinutes} min`
+            );
+
+            // ==========================================
+            // Read Audience Count
+            // ==========================================
+
+            const audienceCountCell = reportRow
+                .locator("td")
+                .nth(audienceCountColumnIndex);
+
+            const audienceCount = (
+                await audienceCountCell.innerText()
+            ).trim();
+
+            console.log(
+                `🔢 Audience Count for '${reportName}' [${platform}]: ${audienceCount}`
+            );
+
+            logSession(
+                `🔢 Audience Count for '${reportName}' [${platform}]: ${audienceCount}`
+            );
+
+            // ==========================================
+            // SUCCESS
+            // ==========================================
+
+            if (
+                status.toLowerCase() === "successful" ||
+                status.toLowerCase() === "completed"
+            ) {
+                const cleanAudienceCount = audienceCount
+                    .replace(/,/g, "")
+                    .trim();
+
+                const numericAudienceCount = Number(
+                    cleanAudienceCount
+                );
+
+                if (Number.isNaN(numericAudienceCount)) {
+                    throw new Error(
+                        `Unable to parse Audience Count '${audienceCount}' for '${reportName}'.`
+                    );
+                }
+
+                console.log(
+                    `✅ Audience upload successful for '${reportName}' | Status: ${status}`
+                );
+
+                console.log(
+                    `🔢 Final Audience Count for '${reportName}' [${platform}]: ${numericAudienceCount}`
+                );
+
+                logSession(
+                    `✅ Audience upload successful for '${reportName}' | Status: ${status}`
+                );
+
+                logSession(
+                    `🔢 Final Audience Count for '${reportName}' [${platform}]: ${numericAudienceCount}`
+                );
+
+                return {
+                    status,
+                    audienceCount: numericAudienceCount
+                };
+            }
+
+            // ==========================================
+            // FAILURE
+            // ==========================================
+
+            if (
+                status.toLowerCase() === "unsuccessful" ||
+                status.toLowerCase() === "error"
+            ) {
+                throw new Error(
+                    `Audience upload failed for '${reportName}' | Status: ${status}`
+                );
+            }
+
+            // ==========================================
+            // PENDING
+            // ==========================================
+
+            if (status.toLowerCase() === "pending") {
+
+                const remainingMinutes = (
+                    (MAX_WAIT_MS - (Date.now() - startTime)) /
+                    60000
+                ).toFixed(1);
+
+                console.log(
+                    `⏳ Audience upload still Pending. Waiting 1 minute before checking again. Remaining: ${remainingMinutes} min`
+                );
+
+                logSession(
+                    `⏳ Audience upload still Pending. Waiting 1 minute before checking again. Remaining: ${remainingMinutes} min`
+                );
+
+                // ==========================================
+                // Wait exactly 1 minute
+                // ==========================================
+
+                await page.waitForTimeout(CHECK_INTERVAL);
+
+                // ==========================================
+                // Go to Personal tab
+                // ==========================================
+
+                const personalTab = page.getByText("Personal", {
+                    exact: true
+                });
+
+                await expect(personalTab).toBeVisible({
+                    timeout: 30000
+                });
+
+                await personalTab.click();
+
+                console.log("🔄 Navigated to Personal tab");
+                logSession("🔄 Navigated to Personal tab");
+
+                // ==========================================
+                // Go back to Uploaded Audience
+                // ==========================================
+
+                const uploadedAudienceTab = page.getByText(
+                    "Uploaded Audience",
+                    {
+                        exact: true
+                    }
+                );
+
+                await expect(uploadedAudienceTab).toBeVisible({
+                    timeout: 30000
+                });
+
+                await uploadedAudienceTab.click();
+
+                console.log(
+                    "🔄 Navigated back to Uploaded Audience tab - fetching latest status..."
+                );
+
+                logSession(
+                    "🔄 Navigated back to Uploaded Audience tab - fetching latest status..."
+                );
+
+                // ==========================================
+                // Wait for Status column to render
+                // ==========================================
+
+                await expect(
+                    page.getByText("Status", {
+                        exact: true
+                    })
+                ).toBeVisible({
+                    timeout: 30000
+                });
+
+                console.log(
+                    "✅ Uploaded Audience data refreshed"
+                );
+
+                logSession(
+                    "✅ Uploaded Audience data refreshed"
+                );
+
+                continue;
+            }
+
+            // ==========================================
+            // UNKNOWN STATUS
+            // ==========================================
+
+            console.log(
+                `⚠️ Unknown audience status: ${status}`
+            );
+
+            logSession(
+                `⚠️ Unknown audience status: ${status}`
+            );
+
+            await page.waitForTimeout(CHECK_INTERVAL);
+        }
+
+        // ==========================================
+        // 7. 30 MINUTE TIMEOUT
+        // ==========================================
+
+        throw new Error(
+            `Audience upload verification timed out for '${reportName}' after ${maxWaitMinutes} minutes.`
+        );
+
+    } catch (err) {
+
+        console.error(
+            `❌ Audience upload verification failed for '${reportName}': ${err.message}`
+        );
+
+        logSession(
+            `❌ Audience upload verification failed for '${reportName}': ${err.message}`
+        );
+
+        throw err;
+    }
+}
+
+async function verifyAppendAudience(
+    page,
+    reportName,
+    platform,
+    previousAudienceCount,
+    maxWaitMinutes = 30
+) {
+    try {
+        // =========================================================
+        // VALIDATE PREVIOUS AUDIENCE COUNT
+        // =========================================================
+
+        const previousCount = Number(previousAudienceCount);
+
+        if (Number.isNaN(previousCount)) {
+            throw new Error(
+                `Invalid previous audience count: '${previousAudienceCount}'`
+            );
+        }
+
+        console.log(
+            `🔢 Previous Audience Count before Append: ${previousCount}`
+        );
+
+        logSession(
+            `🔢 Previous Audience Count before Append: ${previousCount}`
+        );
+
+        // =========================================================
+        // 1. GO TO EXPLORE
+        // =========================================================
+
+        console.log(
+            `🔄 Starting Append Audience flow for '${reportName}'`
+        );
+
+        logSession(
+            `🔄 Starting Append Audience flow for '${reportName}'`
+        );
+
+        await page.goto(
+            `${new URL(page.url()).origin}/explore`,
+            {
+                waitUntil: "networkidle",
+                timeout: 60000
+            }
+        );
+
+        await page.waitForURL("**/explore", {
+            timeout: 30000
+        });
+
+        await page.locator(
+            "//a[@href='/explore' and @data-sidebar='menu-button']"
+        ).waitFor({
+            state: "visible",
+            timeout: 30000
+        });
+
+        // =========================================================
+        // 2. FIND ORIGINAL REPORT
+        // =========================================================
+
+        console.log(
+            `🔎 Searching original report '${reportName}' for Append Audience...`
+        );
+
+        logSession(
+            `🔎 Searching original report '${reportName}' for Append Audience...`
+        );
+
+        const reportFound = await searchAndClickReport(
+            page,
+            reportName
+        );
+
+        if (!reportFound) {
+            throw new Error(
+                `Report '${reportName}' could not be found in Explore.`
+            );
+        }
+
+        console.log(
+            `✅ Report '${reportName}' found and 3-dot menu opened`
+        );
+
+        logSession(
+            `✅ Report '${reportName}' found and 3-dot menu opened`
+        );
+
+        // =========================================================
+        // 3. CLICK EDIT
+        // =========================================================
+
+        const editOption = page.getByText("Edit", {
+            exact: true
+        }).last();
+
+        await expect(editOption).toBeVisible({
+            timeout: 15000
+        });
+
+        await editOption.click();
+
+        console.log(
+            `✅ Edit option clicked for '${reportName}'`
+        );
+
+        logSession(
+            `✅ Edit option clicked for '${reportName}'`
+        );
+
+        // =========================================================
+        // 4. OPEN DATE RANGE
+        // =========================================================
+
+        const dateRangeButton = page.locator("#date");
+
+        await expect(dateRangeButton).toBeVisible({
+            timeout: 30000
+        });
+
+        const currentDateRange = (
+            await dateRangeButton.innerText()
+        ).trim();
+
+        console.log(
+            `📅 Existing Date Range: ${currentDateRange}`
+        );
+
+        logSession(
+            `📅 Existing Date Range: ${currentDateRange}`
+        );
+
+        // =========================================================
+        // 5. PARSE EXISTING DATE RANGE
+        // =========================================================
+
+        const dateParts = currentDateRange.split("-");
+
+        if (dateParts.length !== 2) {
+            throw new Error(
+                `Unable to parse date range: '${currentDateRange}'`
+            );
+        }
+
+        const endDateText = dateParts[1].trim();
+
+        const existingEndDate = new Date(endDateText);
+
+        if (Number.isNaN(existingEndDate.getTime())) {
+            throw new Error(
+                `Invalid end date: '${endDateText}'`
+            );
+        }
+
+        // =========================================================
+        // 6. INCREASE END DATE BY ONE DAY
+        // =========================================================
+
+        const newEndDate = new Date(existingEndDate);
+
+        newEndDate.setDate(
+            newEndDate.getDate() + 1
+        );
+
+        const formatDate = date => {
+            return date.toLocaleDateString(
+                "en-US",
+                {
+                    month: "short",
+                    day: "2-digit",
+                    year: "numeric"
+                }
+            );
+        };
+
+        const oldEndDateFormatted =
+            formatDate(existingEndDate);
+
+        const newEndDateFormatted =
+            formatDate(newEndDate);
+
+        console.log(
+            `📅 Increasing date range: ${oldEndDateFormatted} → ${newEndDateFormatted}`
+        );
+
+        logSession(
+            `📅 Increasing date range: ${oldEndDateFormatted} → ${newEndDateFormatted}`
+        );
+
+        // =========================================================
+        // 7. OPEN CALENDAR
+        // =========================================================
+
+        await dateRangeButton.click();
+
+        const calendarDays = page.locator(
+            'button[name="day"]'
+        );
+
+        await expect(calendarDays.first()).toBeVisible({
+            timeout: 10000
+        });
+
+        // =========================================================
+        // 8. BUILD TARGET DATE ARIA LABEL
+        // =========================================================
+
+        const monthName = newEndDate.toLocaleString(
+            "en-US",
+            {
+                month: "long"
+            }
+        );
+
+        const dayNumber =
+            newEndDate.getDate();
+
+        const year =
+            newEndDate.getFullYear();
+
+        const getOrdinal = number => {
+            if (
+                number >= 11 &&
+                number <= 13
+            ) {
+                return `${number}th`;
+            }
+
+            switch (number % 10) {
+                case 1:
+                    return `${number}st`;
+
+                case 2:
+                    return `${number}nd`;
+
+                case 3:
+                    return `${number}rd`;
+
+                default:
+                    return `${number}th`;
+            }
+        };
+
+        const targetDateText =
+            `${monthName} ${getOrdinal(dayNumber)}, ${year}`;
+
+        console.log(
+            `🎯 Selecting new end date: ${targetDateText}`
+        );
+
+        // =========================================================
+        // 9. SELECT NEW END DATE
+        // =========================================================
+
+        let targetDay = page.locator(
+            `button[name="day"][aria-label*="${targetDateText}"]`
+        );
+
+        let targetCount =
+            await targetDay.count();
+
+        // Fallback
+        if (targetCount === 0) {
+            targetDay = page
+                .locator('button[name="day"]')
+                .filter({
+                    hasText: String(dayNumber)
+                });
+
+            targetCount =
+                await targetDay.count();
+        }
+
+        if (targetCount === 0) {
+            throw new Error(
+                `Could not find date '${targetDateText}' in calendar.`
+            );
+        }
+
+        let selectedDay = null;
+
+        for (
+            let i = 0;
+            i < targetCount;
+            i++
+        ) {
+            const candidate =
+                targetDay.nth(i);
+
+            if (
+                await candidate.isVisible()
+            ) {
+                selectedDay = candidate;
+                break;
+            }
+        }
+
+        if (!selectedDay) {
+            throw new Error(
+                `Target date '${targetDateText}' was found but is not visible.`
+            );
+        }
+
+        await selectedDay.click();
+
+        console.log(
+            `✅ New end date '${newEndDateFormatted}' selected`
+        );
+
+        logSession(
+            `✅ New end date '${newEndDateFormatted}' selected`
+        );
+
+        // =========================================================
+        // 10. CLOSE CALENDAR
+        // =========================================================
+
+        await page.keyboard.press("Escape");
+
+        await page.waitForTimeout(500);
+
+        // =========================================================
+        // 11. VERIFY UPDATED DATE RANGE
+        // =========================================================
+
+        const updatedDateRange = (
+            await dateRangeButton.innerText()
+        ).trim();
+
+        console.log(
+            `📅 Updated Date Range: ${updatedDateRange}`
+        );
+
+        logSession(
+            `📅 Updated Date Range: ${updatedDateRange}`
+        );
+
+        if (
+            !updatedDateRange.includes(
+                newEndDateFormatted
+            )
+        ) {
+            throw new Error(
+                `Date range was not updated correctly. Expected end date '${newEndDateFormatted}', received '${updatedDateRange}'.`
+            );
+        }
+
+        console.log(
+            `✅ Date range successfully increased by 1 day`
+        );
+
+        logSession(
+            `✅ Date range successfully increased by 1 day`
+        );
+
+        // =========================================================
+        // 12. CLICK EDIT REPORT
+        // =========================================================
+
+        const editReportButton =
+            page.getByRole("button", {
+                name: "Edit Report"
+            });
+
+        await expect(editReportButton).toBeVisible({
+            timeout: 15000
+        });
+
+        await editReportButton.click();
+
+        console.log(
+            `✅ Edit Report clicked`
+        );
+
+        logSession(
+            `✅ Edit Report clicked`
+        );
+
+        // =========================================================
+        // 13. WAIT FOR EXPLORE PAGE
+        // =========================================================
+
+        await page.waitForTimeout(3000);
+
+        await expect
+            .poll(
+                async () => page.url(),
+                {
+                    timeout: 30000,
+                    intervals: [1000, 2000, 3000]
+                }
+            )
+            .toMatch(/\/explore$/);
+
+        console.log(
+            `✅ Returned to Explore after editing report`
+        );
+
+        logSession(
+            `✅ Returned to Explore after editing report`
+        );
+
+        await page.waitForTimeout(3000);
+
+        // =========================================================
+        // 14. FIND EDITED REPORT
+        // =========================================================
+
+        console.log(
+            `🔎 Searching for edited report '${reportName}'...`
+        );
+
+        logSession(
+            `🔎 Searching for edited report '${reportName}'...`
+        );
+
+        const searchInput =
+            page.getByPlaceholder("Search for a file");
+
+        await expect(searchInput).toBeVisible({
+            timeout: 30000
+        });
+
+        await searchInput.fill(reportName);
+
+        await page.waitForTimeout(2000);
+
+        const reportLink = page.locator(
+            `//a[normalize-space(text())='${reportName}']`
+        );
+
+        await expect(reportLink).toBeVisible({
+            timeout: 60000
+        });
+
+        console.log(
+            `✅ Edited report '${reportName}' found in Explore`
+        );
+
+        logSession(
+            `✅ Edited report '${reportName}' found in Explore`
+        );
+
+        // =========================================================
+        // 15. OPEN THREE-DOT MENU
+        // =========================================================
+
+        const threeDotButton =
+            reportLink.locator(
+                "xpath=ancestor::div[contains(@class,'mt-2 w-full')]//button[@aria-haspopup='menu']"
+            );
+
+        await expect(threeDotButton).toBeVisible({
+            timeout: 30000
+        });
+
+        await threeDotButton.click();
+
+        console.log(
+            `✅ Three-dot menu opened for edited report '${reportName}'`
+        );
+
+        logSession(
+            `✅ Three-dot menu opened for edited report '${reportName}'`
+        );
+
+        // =========================================================
+        // 16. CLICK UPLOAD AUDIENCE
+        // =========================================================
+
+        const uploadAudienceOption =
+            page.getByText(
+                "Upload Audience",
+                {
+                    exact: true
+                }
+            ).last();
+
+        await expect(
+            uploadAudienceOption
+        ).toBeVisible({
+            timeout: 15000
+        });
+
+        await uploadAudienceOption.click();
+
+        console.log(
+            `✅ Upload Audience selected for '${reportName}'`
+        );
+
+        logSession(
+            `✅ Upload Audience selected for '${reportName}'`
+        );
+
+        // =========================================================
+        // 17. WAIT FOR UPLOAD DIALOG
+        // =========================================================
+
+        await page.waitForTimeout(2000);
+
+        console.log(
+            `⏳ Upload Audience dialog opened for '${reportName}'`
+        );
+
+        logSession(
+            `⏳ Upload Audience dialog opened for '${reportName}'`
+        );
+
+        // =========================================================
+        // 18. UPLOAD AUDIENCE
+        // =========================================================
+        //
+        // IMPORTANT:
+        //
+        // Your existing uploadAudiences() function is responsible
+        // for performing the actual Google/Meta audience upload.
+        //
+        // Call it here.
+        // =========================================================
+
+        const uploadResult = await uploadAudiences(
+            page,
+            [platform]
+        );
+
+        console.log(
+            `✅ Append Audience upload action completed for '${reportName}'`
+        );
+
+        logSession(
+            `✅ Append Audience upload action completed for '${reportName}'`
+        );
+
+        // =========================================================
+        // 19. VERIFY UPLOAD RESULT IF AVAILABLE
+        // =========================================================
+
+        if (
+            uploadResult &&
+            Array.isArray(uploadResult)
+        ) {
+            console.log(
+                `📦 Upload result received for '${reportName}':`,
+                uploadResult
+            );
+
+            logSession(
+                `📦 Upload result received for '${reportName}'`
+            );
+        }
+
+        // =========================================================
+        // 20. WAIT FOR APPEND AUDIENCE PROCESSING
+        // =========================================================
+
+        console.log(
+            `⏳ Waiting for Append Audience operation to complete...`
+        );
+
+        logSession(
+            `⏳ Waiting for Append Audience operation to complete...`
+        );
+
+        // =========================================================
+        // 21. VERIFY NEW AUDIENCE STATUS + COUNT
+        // =========================================================
+
+        const appendResult =
+            await verifyAudienceUploadStatus(
+                page,
+                reportName,
+                platform,
+                maxWaitMinutes
+            );
+
+        if (
+            !appendResult ||
+            typeof appendResult.audienceCount !== "number"
+        ) {
+            throw new Error(
+                `Append Audience verification did not return a valid audience count for '${reportName}'.`
+            );
+        }
+
+        const newAudienceCount =
+            appendResult.audienceCount;
+
+        // =========================================================
+        // 22. LOG COUNTS
+        // =========================================================
+
+        console.log(
+            `🔢 Previous Audience Count: ${previousCount}`
+        );
+
+        console.log(
+            `🔢 New Audience Count after Append: ${newAudienceCount}`
+        );
+
+        logSession(
+            `🔢 Previous Audience Count: ${previousCount}`
+        );
+
+        logSession(
+            `🔢 New Audience Count after Append: ${newAudienceCount}`
+        );
+
+        // =========================================================
+        // 24. CALCULATE APPEND RESULT
+        // =========================================================
+
+        const isGreater =
+            newAudienceCount > previousCount;
+
+        console.log(
+            `📊 Append comparison: ${newAudienceCount} > ${previousCount} = ${isGreater}`
+        );
+
+        logSession(
+            `📊 Append comparison: ${newAudienceCount} > ${previousCount} = ${isGreater}`
+        );
+
+        // =========================================================
+        // 25. VERIFY APPEND
+        // =========================================================
+
+        if (!isGreater) {
+            throw new Error(
+                `APPEND AUDIENCE FAILED: ${newAudienceCount} is NOT greater than ${previousCount}`
+            );
+        }
+
+        console.log(
+            `✅ APPEND AUDIENCE PASSED: ${newAudienceCount} > ${previousCount}`
+        );
+
+        logSession(
+            `✅ APPEND AUDIENCE PASSED: ${newAudienceCount} > ${previousCount}`
+        );
+
+        // =========================================================
+        // 26. RETURN RESULT
+        // =========================================================
+
+        return {
+            success: true,
+            isGreater: true,
+            reportName,
+            platform,
+            previousAudienceCount: previousCount,
+            newAudienceCount,
+            audienceIncrease:
+                newAudienceCount - previousCount
+        };
+
+    } catch (err) {
+
+        console.error(
+            `❌ Append Audience verification failed for '${reportName}': ${err.message}`
+        );
+
+        logSession(
+            `❌ Append Audience verification failed for '${reportName}': ${err.message}`
+        );
+
+        throw err;
+    }
+}
+
 
 module.exports = {
     searchAndClickInRepository,
@@ -2419,5 +3933,9 @@ module.exports = {
     searchAndClickReport,
     clearSearchBar,
     uploadAudiences,
-    monitorMultilayerReport
+    monitorMultilayerReport,
+    verifyDefaultBentoCharts,
+    verifyAggregatedCount,
+    verifyAudienceUploadStatus,
+    verifyAppendAudience
 }

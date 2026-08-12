@@ -7,7 +7,7 @@ const {
     selectSubCategory, selectBrands, SelectRating, SelectReviewCount,
     SelectVisitDuration, SelectAverageDailyVisits, SelectAverageMonthlyVisits,
     SelectAverageDailyDevices, SelectAverageMonthlyDevices,
-    selectAvailableAttributes, SelectQualityLifeScore, safeWait
+    selectAvailableAttributes, SelectQualityLifeScore, safeWait, verifyDefaultBentoCharts, verifyAggregatedCount, verifyAudienceUploadStatus, verifyAppendAudience
 } = require('./functions');
 
 
@@ -84,26 +84,168 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                         logSession(`[${inputData.reportName}] ⛔ Skipping further flows due to Kepler status: ${result.status}`);
                         return; // 🚨 THIS is what stops execution
                     }
+
+                    await verifyDefaultBentoCharts(
+                        page,
+                        inputData.reportType,
+                        inputData.reportName,
+                    );
+
+                    const total = await verifyAggregatedCount(
+                        page,
+                        inputData.reportName,
+                    );
+
+                    console.log(total);
+
                     if (inputData.Persona?.toUpperCase() === "YES") {
                         await Report_To_Persona_Flow(page, inputData.reportName);
                     }
 
-                    if (Array.isArray(inputData.UploadAudience) && inputData.UploadAudience.length > 0) {
+                    if (
+                        Array.isArray(inputData.UploadAudience) &&
+                        inputData.UploadAudience.length > 0
+                    ) {
                         for (const platform of inputData.UploadAudience) {
                             try {
-                                console.log(`--- Starting upload process for platform: ${platform} ---`);
-                                logSession(`--- Starting upload process for platform: ${platform} ---`);
-                                await searchAndClickReport(page, reportName);
+                                console.log(
+                                    `--- Starting upload process for platform: ${platform} ---`
+                                );
+
+                                logSession(
+                                    `--- Starting upload process for platform: ${platform} ---`
+                                );
+
+                                // ==========================================
+                                // 1. Select original report
+                                // ==========================================
+
+                                await searchAndClickReport(
+                                    page,
+                                    reportName
+                                );
+
                                 await safeWait(page, 2000);
 
-                                await uploadAudiences(page, [platform]);
+                                // ==========================================
+                                // 2. Upload Audience - FIRST UPLOAD
+                                // ==========================================
+
+                                await uploadAudiences(
+                                    page,
+                                    [platform]
+                                );
+
                                 await safeWait(page, 2000);
+
+                                // ==========================================
+                                // 3. Verify FIRST upload
+                                // ==========================================
+
+                                const firstUploadResult =
+                                    await verifyAudienceUploadStatus(
+                                        page,
+                                        inputData.reportName,
+                                        platform
+                                    );
+
+                                console.log(
+                                    `✅ First upload completed for '${inputData.reportName}'`
+                                );
+
+                                console.log(
+                                    `📊 Previous Audience Count: ${firstUploadResult.audienceCount}`
+                                );
+
+                                logSession(
+                                    `✅ First upload completed for '${inputData.reportName}'`
+                                );
+
+                                logSession(
+                                    `📊 Previous Audience Count: ${firstUploadResult.audienceCount}`
+                                );
+
+                                // ==========================================
+                                // 4. APPEND AUDIENCE - ONLY IF REQUESTED
+                                // ==========================================
+
+                                if (
+                                    inputData.AppendAudience &&
+                                    inputData.AppendAudience.toLowerCase() === "yes"
+                                ) {
+                                    console.log(
+                                        `🔄 AppendAudience = Yes. Starting Append Audience flow for '${inputData.reportName}'`
+                                    );
+
+                                    logSession(
+                                        `🔄 AppendAudience = Yes. Starting Append Audience flow for '${inputData.reportName}'`
+                                    );
+
+                                    const previousAudienceCount =
+                                        firstUploadResult.audienceCount;
+
+                                    const appendResult =
+                                        await verifyAppendAudience(
+                                            page,
+                                            inputData.reportName,
+                                            platform,
+                                            previousAudienceCount
+                                        );
+
+                                    // ==========================================
+                                    // 5. LOG APPEND RESULT
+                                    // ==========================================
+
+                                    console.log(
+                                        `📈 Append Audience Count: ${appendResult.previousAudienceCount} → ${appendResult.newAudienceCount}`
+                                    );
+
+                                    logSession(
+                                        `📈 Append Audience Count: ${appendResult.previousAudienceCount} → ${appendResult.newAudienceCount}`
+                                    );
+
+                                    if (appendResult.isGreater) {
+                                        console.log(
+                                            `✅ APPEND AUDIENCE PASSED: ${appendResult.newAudienceCount} > ${appendResult.previousAudienceCount}`
+                                        );
+
+                                        logSession(
+                                            `✅ APPEND AUDIENCE PASSED: ${appendResult.newAudienceCount} > ${appendResult.previousAudienceCount}`
+                                        );
+                                    } else {
+                                        throw new Error(
+                                            `APPEND AUDIENCE FAILED: ${appendResult.newAudienceCount} is not greater than ${appendResult.previousAudienceCount}`
+                                        );
+                                    }
+
+                                } else {
+
+                                    console.log(
+                                        `ℹ️ AppendAudience is not enabled for '${inputData.reportName}'. Skipping Append Audience flow.`
+                                    );
+
+                                    logSession(
+                                        `ℹ️ AppendAudience is not enabled for '${inputData.reportName}'. Skipping Append Audience flow.`
+                                    );
+                                }
+
+                                // ==========================================
+                                // 5. Clear search
+                                // ==========================================
 
                                 await clearSearchBar(page);
+
                                 await safeWait(page, 2000);
+
                             } catch (err) {
-                                console.error(`❌ Upload process failed for platform ${platform}: ${err.message}`);
-                                logSession(`❌ Upload process failed for platform ${platform}: ${err.message}`);
+
+                                console.error(
+                                    `❌ Upload/Append process failed for platform ${platform}: ${err.message}`
+                                );
+
+                                logSession(
+                                    `❌ Upload/Append process failed for platform ${platform}: ${err.message}`
+                                );
                             }
                         }
                     }
@@ -166,7 +308,6 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                     await safeWait(page, 2000);
 
                     await clickCreateReportButton(page, inputData.reportName);
-
                     const result = await keplerDatasetsFetch(page, inputData.reportName);
                     await safeWait(page, 2000);
 
@@ -176,39 +317,177 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                         return; // 🚨 THIS is what stops execution
                     }
 
+                    await verifyDefaultBentoCharts(
+                        page,
+                        inputData.reportType,
+                        inputData.reportName,
+                    );
+
+                    const total = await verifyAggregatedCount(
+                        page,
+                        inputData.reportName,
+                    );
+
+                    console.log(total);
+
+
                     if (inputData.Persona?.toUpperCase() === "YES") {
                         await Report_To_Persona_Flow(page, inputData.reportName);
                     }
 
-                    if (Array.isArray(inputData.UploadAudience) && inputData.UploadAudience.length > 0) {
+                    if (
+                        Array.isArray(inputData.UploadAudience) &&
+                        inputData.UploadAudience.length > 0
+                    ) {
                         for (const platform of inputData.UploadAudience) {
                             try {
-                                console.log(`--- Starting upload process for platform: ${platform} ---`);
-                                logSession(`--- Starting upload process for platform: ${platform} ---`);
+                                console.log(
+                                    `--- Starting upload process for platform: ${platform} ---`
+                                );
 
-                                // SPA-safe, retry-enabled report selection
+                                logSession(
+                                    `--- Starting upload process for platform: ${platform} ---`
+                                );
+
+                                // ==========================================
+                                // 1. Select Device Level Visit report
+                                // ==========================================
                                 try {
-                                    await searchAndClickReport(page, DeviceReportName, 1); // retry once if fails
+                                    await searchAndClickReport(
+                                        page,
+                                        DeviceReportName,
+                                        1
+                                    );
+
                                     await safeWait(page, 2000);
+
                                 } catch (err) {
-                                    console.warn(`⚠️ Could not select report "${DeviceReportName}" for upload: ${err.message}`);
-                                    logSession(`⚠️ Could not select report "${DeviceReportName}" for upload: ${err.message}`);
-                                    // Skip this platform if report cannot be selected
+                                    console.warn(
+                                        `⚠️ Could not select report "${DeviceReportName}" for upload: ${err.message}`
+                                    );
+
+                                    logSession(
+                                        `⚠️ Could not select report "${DeviceReportName}" for upload: ${err.message}`
+                                    );
+
                                     continue;
                                 }
 
-                                await uploadAudiences(page, [platform]);
+                                // ==========================================
+                                // 2. FIRST AUDIENCE UPLOAD
+                                // ==========================================
+                                await uploadAudiences(
+                                    page,
+                                    [platform]
+                                );
+
                                 await safeWait(page, 2000);
 
+                                // ==========================================
+                                // 3. VERIFY FIRST UPLOAD
+                                //    Get the FIRST Audience Count
+                                // ==========================================
+                                const firstUploadResult =
+                                    await verifyAudienceUploadStatus(
+                                        page,
+                                        inputData.reportName,
+                                        platform
+                                    );
+
+                                const previousAudienceCount =
+                                    firstUploadResult.audienceCount;
+
+                                console.log(
+                                    `📊 Previous Audience Count for '${inputData.reportName}' [${platform}]: ${previousAudienceCount}`
+                                );
+
+                                logSession(
+                                    `📊 Previous Audience Count for '${inputData.reportName}' [${platform}]: ${previousAudienceCount}`
+                                );
+
+                                // ==========================================
+                                // 4. APPEND AUDIENCE - ONLY IF REQUESTED
+                                // ==========================================
+
+                                if (
+                                    inputData.AppendAudience &&
+                                    inputData.AppendAudience.toLowerCase() === "yes"
+                                ) {
+
+                                    console.log(
+                                        `🔄 AppendAudience = Yes. Starting Append Audience flow for '${inputData.reportName}'`
+                                    );
+
+                                    logSession(
+                                        `🔄 AppendAudience = Yes. Starting Append Audience flow for '${inputData.reportName}'`
+                                    );
+
+                                    const appendResult =
+                                        await verifyAppendAudience(
+                                            page,
+                                            inputData.reportName,
+                                            platform,
+                                            previousAudienceCount
+                                        );
+
+                                    // ==========================================
+                                    // 5. LOG APPEND RESULT
+                                    // ==========================================
+
+                                    console.log(
+                                        `📈 Append Audience Count: ${appendResult.previousAudienceCount} → ${appendResult.newAudienceCount}`
+                                    );
+
+                                    logSession(
+                                        `📈 Append Audience Count: ${appendResult.previousAudienceCount} → ${appendResult.newAudienceCount}`
+                                    );
+
+                                    if (appendResult.isGreater) {
+
+                                        console.log(
+                                            `✅ APPEND AUDIENCE PASSED: ${appendResult.newAudienceCount} > ${appendResult.previousAudienceCount}`
+                                        );
+
+                                        logSession(
+                                            `✅ APPEND AUDIENCE PASSED: ${appendResult.newAudienceCount} > ${appendResult.previousAudienceCount}`
+                                        );
+
+                                    } else {
+
+                                        throw new Error(
+                                            `APPEND AUDIENCE FAILED: ${appendResult.newAudienceCount} is NOT greater than ${appendResult.previousAudienceCount}`
+                                        );
+                                    }
+
+                                } else {
+
+                                    console.log(
+                                        `ℹ️ AppendAudience is not enabled for '${inputData.reportName}'. Skipping Append Audience flow.`
+                                    );
+
+                                    logSession(
+                                        `ℹ️ AppendAudience is not enabled for '${inputData.reportName}'. Skipping Append Audience flow.`
+                                    );
+                                }
+
+                                // ==========================================
+                                // 6. Clear search bar
+                                // ==========================================
                                 await clearSearchBar(page);
                                 await safeWait(page, 2000);
+
                             } catch (err) {
-                                console.error(`❌ Upload process failed for platform ${platform}: ${err.message}`);
-                                logSession(`❌ Upload process failed for platform ${platform}: ${err.message}`);
+
+                                console.error(
+                                    `❌ Upload/Append process failed for platform ${platform}: ${err.message}`
+                                );
+
+                                logSession(
+                                    `❌ Upload/Append process failed for platform ${platform}: ${err.message}`
+                                );
                             }
                         }
                     }
-
                 } catch (err) {
                     console.error(`❌ Error in 'device level visits' flow: ${err.message}`);
                     logSession(`❌ Error in 'device level visits' flow: ${err.message}`);
@@ -255,7 +534,6 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                     await safeWait(page, 2000);
 
                     await clickCreateReportButton(page, inputData.reportName);
-
                     const result = await keplerDatasetsFetch(page, inputData.reportName);
                     await safeWait(page, 2000);
 
@@ -264,6 +542,19 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                         logSession(`[${inputData.reportName}] ⛔ Skipping further flows due to Kepler status: ${result.status}`);
                         return; // 🚨 THIS is what stops execution
                     }
+
+                    await verifyDefaultBentoCharts(
+                        page,
+                        inputData.reportType,
+                        inputData.reportName,
+                    );
+
+                    const total = await verifyAggregatedCount(
+                        page,
+                        inputData.reportName
+                    );
+
+                    console.log(total);
 
                     // Handling Places -> Places Level Visit Report
                     if (inputData.PLACES_TO_Place_Level_Visit_Report?.toUpperCase() === "YES") {
@@ -399,10 +690,15 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                     await SelectQualityLifeScore(page, inputData.QualityLifeScore, inputData.reportName);
                     await safeWait(page, 1000);
 
-                    clickCreateReportButton(page, inputData.reportName);
-
+                    await clickCreateReportButton(page, inputData.reportName);
                     await keplerDatasetsFetch(page, inputData.reportName);
                     await safeWait(page, 2000);
+
+                    await verifyDefaultBentoCharts(
+                        page,
+                        inputData.reportType,
+                        inputData.reportName,
+                    );
 
 
                 } catch (err) {
@@ -420,11 +716,16 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                     await selectLocations(page, inputData.location, inputData.reportName);
                     await safeWait(page, 1000);
 
-                    clickCreateReportButton(page, inputData.reportName);
+                    await clickCreateReportButton(page, inputData.reportName);
 
                     await keplerDatasetsFetch(page, inputData.reportName);
                     await safeWait(page, 2000);
 
+                    await verifyDefaultBentoCharts(
+                        page,
+                        inputData.reportType,
+                        inputData.reportName,
+                    );
                 } catch (err) {
                     console.error(`❌ Error in 'population' flow: ${err.message}`);
                     logSession(`❌ Error in 'population' flow: ${err.message}`);
@@ -440,16 +741,22 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                     await selectLocations(page, inputData.location, inputData.reportName);
                     await safeWait(page, 1000);
 
-                    clickCreateReportButton(page, inputData.reportName);
+                    await clickCreateReportButton(page, inputData.reportName);
 
                     await keplerDatasetsFetch(page, inputData.reportName);
                     await safeWait(page, 2000);
+
+                    await verifyDefaultBentoCharts(
+                        page,
+                        inputData.reportType,
+                        inputData.reportName,
+                    );
 
                 } catch (err) {
                     console.error(`❌ Error in 'home locations' flow: ${err.message}`);
                     logSession(`❌ Error in 'home locations' flow: ${err.message}`);
                 }
-            }  
+            }
 
             // --------- H9 MASTER ---------
             else if (type === 'h9 master') {
@@ -460,7 +767,7 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                     await selectLocations(page, inputData.location, inputData.reportName);
                     await safeWait(page, 1000);
 
-                    clickCreateReportButton(page, inputData.reportName);
+                    await clickCreateReportButton(page, inputData.reportName);
 
                     await keplerDatasetsFetch(page, inputData.reportName);
                     await safeWait(page, 2000);
@@ -503,10 +810,23 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                     await selectPlaces(page, inputData.place, inputData.reportName);
                     await safeWait(page, 1000);
 
-                    clickCreateReportButton(page, inputData.reportName);
+                    await clickCreateReportButton(page, inputData.reportName);
 
                     await keplerDatasetsFetch(page, inputData.reportName);
                     await safeWait(page, 2000);
+
+                    await verifyDefaultBentoCharts(
+                        page,
+                        inputData.reportType,
+                        inputData.reportName,
+                    );
+
+                    const total = await verifyAggregatedCount(
+                        page,
+                        inputData.reportName,
+                    );
+
+                    console.log(total);
 
                 } catch (err) {
                     console.error(`❌ Error in 'places internal' flow: ${err.message}`);
