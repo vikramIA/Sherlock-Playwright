@@ -5,40 +5,95 @@ const { authenticator } = require('otplib');
 const { expect } = require("@playwright/test");
 
 // Function to perform login and navigate to the home page
-async function loginAndNavigate(page, baseUrl, email, password, secret) {
+
+async function loginAndNavigate(
+    page,
+    baseUrl,
+    email,
+    password,
+    secret
+) {
+
     const maxRetries = 3;
 
     for (let retry = 1; retry <= maxRetries; retry++) {
+
         try {
-            console.log(`\n🔄 Login Attempt ${retry}/${maxRetries}`);
-            logSession(`🔄 Login Attempt ${retry}/${maxRetries}`);
+
+            console.log(
+                `\n🔄 Login Attempt ${retry}/${maxRetries}`
+            );
+
+            logSession(
+                `🔄 Login Attempt ${retry}/${maxRetries}`
+            );
+
 
             await page.goto(baseUrl, {
                 waitUntil: "networkidle",
                 timeout: 60000
             });
 
-            // ==========================
-            // STEP 1 : Click Login (if on Home page)
-            // ==========================
-            const loginButton = page.locator("//button[normalize-space()='Login']");
 
-            if (await loginButton.isVisible({ timeout: 5000 }).catch(() => false)) {
+            // =====================================================
+            // CHECK IF ALREADY LOGGED IN
+            // =====================================================
+
+            if (
+                page.url().includes("/home") ||
+                await page.locator("//div[normalize-space()='Articles']")
+                    .isVisible({ timeout: 3000 })
+                    .catch(() => false)
+            ) {
+                console.log("✅ User is already authenticated.");
+                logSession("✅ User is already authenticated.");
+                return;
+            }
+
+
+            // ==========================
+            // STEP 1 : Click Login
+            // ==========================
+
+            const loginButton = page.locator(
+                "//button[normalize-space()='Login']"
+            );
+
+            if (
+                await loginButton.isVisible({
+                    timeout: 5000
+                }).catch(() => false)
+            ) {
+
                 console.log("➡ Login button found.");
                 logSession("➡ Login button found.");
 
                 await loginButton.click();
+
                 await page.waitForTimeout(1500);
             }
 
-            // ==========================
-            // STEP 2 : Email Screen (if shown)
-            // ==========================
-            const emailInput = page.locator("#username");
 
-            if (await emailInput.isVisible({ timeout: 3000 }).catch(() => false)) {
-                console.log("➡ Email screen detected.");
-                logSession("➡ Email screen detected.");
+            // ==========================
+            // STEP 2 : Email Screen
+            // ==========================
+
+            const emailInput =
+                page.locator("#username");
+
+            if (
+                await emailInput.isVisible({
+                    timeout: 3000
+                }).catch(() => false)
+            ) {
+
+                console.log(
+                    "➡ Email screen detected."
+                );
+
+                logSession(
+                    "➡ Email screen detected."
+                );
 
                 await emailInput.fill(email);
 
@@ -49,14 +104,27 @@ async function loginAndNavigate(page, baseUrl, email, password, secret) {
                 await page.waitForTimeout(1500);
             }
 
-            // ==========================
-            // STEP 3 : Password Screen (if shown)
-            // ==========================
-            const passwordInput = page.locator("#password");
 
-            if (await passwordInput.isVisible({ timeout: 3000 }).catch(() => false)) {
-                console.log("➡ Password screen detected.");
-                logSession("➡ Password screen detected.");
+            // ==========================
+            // STEP 3 : Password Screen
+            // ==========================
+
+            const passwordInput =
+                page.locator("#password");
+
+            if (
+                await passwordInput.isVisible({
+                    timeout: 3000
+                }).catch(() => false)
+            ) {
+
+                console.log(
+                    "➡ Password screen detected."
+                );
+
+                logSession(
+                    "➡ Password screen detected."
+                );
 
                 await passwordInput.fill(password);
 
@@ -67,109 +135,209 @@ async function loginAndNavigate(page, baseUrl, email, password, secret) {
                 await page.waitForTimeout(2000);
             }
 
-            // ==========================
-            // STEP 4 : Optional "Not on this device"
-            // ==========================
-            try {
-                const notOnDevice = page.locator("//button[normalize-space()='Not on this device']");
 
-                if (await notOnDevice.isVisible({ timeout: 3000 })) {
+            // ==========================
+            // STEP 4 : Optional Device
+            // ==========================
+
+            try {
+
+                const notOnDevice =
+                    page.locator(
+                        "//button[normalize-space()='Not on this device']"
+                    );
+
+                if (
+                    await notOnDevice.isVisible({
+                        timeout: 3000
+                    })
+                ) {
+
                     await notOnDevice.click();
 
-                    console.log("➡ Clicked 'Not on this device'.");
-                    logSession("➡ Clicked 'Not on this device'.");
+                    console.log(
+                        "➡ Clicked 'Not on this device'."
+                    );
+
+                    logSession(
+                        "➡ Clicked 'Not on this device'."
+                    );
                 }
+
             } catch { }
 
+
             // ==========================
-            // STEP 5 : Wait for MFA Screen
+            // STEP 5 : MFA
             // ==========================
-            const otpInput = page.locator("//input[@autocomplete='one-time-code']");
+
+            const otpInput =
+                page.locator(
+                    "//input[@autocomplete='one-time-code']"
+                );
 
             await otpInput.waitFor({
                 state: "visible",
                 timeout: 20000
             });
 
-            console.log("➡ MFA screen detected.");
-            logSession("➡ MFA screen detected.");
+            console.log(
+                "➡ MFA screen detected."
+            );
+
+            logSession(
+                "➡ MFA screen detected."
+            );
+
 
             // ==========================
             // STEP 6 : OTP Retry
             // ==========================
+
             let otpSuccess = false;
-            let currentOtp = authenticator.generate(secret);
+
+            let currentOtp =
+                authenticator.generate(secret);
+
             let otpTime = Date.now();
 
-            for (let otpRetry = 1; otpRetry <= 5; otpRetry++) {
 
-                if (Date.now() - otpTime > 25000) {
-                    currentOtp = authenticator.generate(secret);
+            for (
+                let otpRetry = 1;
+                otpRetry <= 5;
+                otpRetry++
+            ) {
+
+                if (
+                    Date.now() - otpTime > 25000
+                ) {
+
+                    currentOtp =
+                        authenticator.generate(secret);
+
                     otpTime = Date.now();
 
-                    console.log("🔄 Generated new OTP.");
-                    logSession("🔄 Generated new OTP.");
+                    console.log(
+                        "🔄 Generated new OTP."
+                    );
+
+                    logSession(
+                        "🔄 Generated new OTP."
+                    );
                 }
 
+
                 try {
+
                     await otpInput.fill("");
 
-                    await otpInput.fill(currentOtp);
+                    await otpInput.fill(
+                        currentOtp
+                    );
 
-                    await otpInput.press("Enter");
+                    await otpInput.press(
+                        "Enter"
+                    );
 
-                    await page.waitForURL("**/home", {
-                        timeout: 10000
-                    });
+                    await page.waitForURL(
+                        "**/home",
+                        {
+                            timeout: 10000
+                        }
+                    );
 
                     otpSuccess = true;
+
                     break;
 
                 } catch (err) {
 
-                    console.log(`⏳ OTP attempt ${otpRetry}/5 failed.`);
-                    logSession(`⏳ OTP attempt ${otpRetry}/5 failed.`);
+                    console.log(
+                        `⏳ OTP attempt ${otpRetry}/5 failed.`
+                    );
 
-                    await page.waitForTimeout(3000);
+                    logSession(
+                        `⏳ OTP attempt ${otpRetry}/5 failed.`
+                    );
+
+                    await page.waitForTimeout(
+                        3000
+                    );
                 }
             }
 
+
             if (!otpSuccess) {
-                throw new Error("OTP verification failed.");
+
+                throw new Error(
+                    "OTP verification failed."
+                );
             }
 
-            // ==========================
-            // STEP 7 : Verify Dashboard
-            // ==========================
-            await page.locator("//div[normalize-space()='Articles']")
-                .waitFor({
-                    state: "visible",
-                    timeout: 15000
-                });
 
-            console.log("✅ Login Successful.");
-            logSession("✅ Login Successful.");
+            // ==========================
+            // STEP 7 : Verify Home
+            // ==========================
+
+            if (
+                !page.url().includes("/home")
+            ) {
+
+                throw new Error(
+                    `Login completed but home page was not reached. Current URL: ${page.url()}`
+                );
+            }
+
+
+            console.log(
+                "✅ Login Successful."
+            );
+
+            logSession(
+                "✅ Login Successful."
+            );
 
             return;
 
+
         } catch (err) {
 
-            console.log(`❌ Login attempt ${retry} failed.`);
-            console.log(err.message);
+            console.log(
+                `❌ Login attempt ${retry} failed.`
+            );
 
-            logSession(`❌ Login attempt ${retry} failed.`);
-            logSession(err.message);
+            console.log(
+                err.message
+            );
+
+            logSession(
+                `❌ Login attempt ${retry} failed.`
+            );
+
+            logSession(
+                err.message
+            );
+
 
             if (retry === maxRetries) {
+
                 throw new Error(
                     `Login failed after ${maxRetries} attempts.\n${err.message}`
                 );
             }
 
-            console.log("🔄 Restarting login flow...");
-            logSession("🔄 Restarting login flow...");
 
-            await page.waitForTimeout(5000);
+            console.log(
+                "🔄 Restarting login flow..."
+            );
+
+            logSession(
+                "🔄 Restarting login flow..."
+            );
+
+            await page.waitForTimeout(
+                5000
+            );
         }
     }
 }
@@ -2501,12 +2669,14 @@ async function monitorMultilayerReport(page, reportName) {
 }
 // Function to verify default Bento charts for a given report type and name
 
-
-// const { logSession } = require("./Logger");
-
-async function verifyDefaultBentoCharts(page, reportType, reportName) {
+async function verifyDefaultBentoCharts(
+    page,
+    reportType,
+    reportName
+) {
 
     const defaultCharts = {
+
         "place level visits": {
             heading: "Observed Visits",
             count: 8
@@ -2543,9 +2713,13 @@ async function verifyDefaultBentoCharts(page, reportType, reportName) {
         }
     };
 
-    const config = defaultCharts[reportType.toLowerCase()];
+
+    const config =
+        defaultCharts[reportType.trim().toLowerCase()];
+
 
     if (!config) {
+
         console.log(
             `ℹ️ No Bento validation configured for ${reportType}`
         );
@@ -2557,74 +2731,19 @@ async function verifyDefaultBentoCharts(page, reportType, reportName) {
         return;
     }
 
-    // =========================================================
-    // Expected Bento chart loading text
-    // =========================================================
-
-    const expectedChartsText =
-        `${config.count} charts loaded out of ${config.count}`;
-
-    const chartsLoadedText = page
-        .locator("p")
-        .filter({
-            hasText: expectedChartsText
-        })
-        .first();
-
-    // =========================================================
-    // Verify Charts Loaded Count
-    // =========================================================
-
-    try {
-
-        await expect(chartsLoadedText).toBeVisible({
-            timeout: 60000
-        });
-
-    } catch (err) {
-
-        const currentUrl = page.url();
-
-        console.error(
-            `❌ Bento charts did not load for '${reportName}'.`
-        );
-
-        logSession(
-            `❌ Bento charts did not load for '${reportName}'.`
-        );
-
-        console.error(
-            `🔗 Current URL: ${currentUrl}`
-        );
-
-        logSession(
-            `🔗 Current URL: ${currentUrl}`
-        );
-
-        // Do not continue with Bento card validation
-        return;
-    }
-
-    // =========================================================
-    // Verify exact loaded text
-    // =========================================================
-
-    const loadedText =
-        (await chartsLoadedText.textContent())?.trim();
-
-    expect(loadedText).toBe(expectedChartsText);
 
     console.log(
-        `✅ Bento charts loaded verified for '${reportName}' | ${loadedText}`
+        `🔍 Starting Bento validation for '${reportName}'...`
     );
 
     logSession(
-        `✅ Bento charts loaded verified for '${reportName}' | ${loadedText}`
+        `🔍 Starting Bento validation for '${reportName}'...`
     );
 
-    // =========================================================
-    // Verify First Bento Card
-    // =========================================================
+
+    // =====================================================
+    // 1. WAIT FOR DEFAULT BENTO CARD
+    // =====================================================
 
     const heading = page.getByText(
         config.heading,
@@ -2633,32 +2752,189 @@ async function verifyDefaultBentoCharts(page, reportType, reportName) {
         }
     );
 
-    await expect(heading).toBeVisible({
-        timeout: 60000
-    });
+    try {
 
-    // Keep existing logic for first card value
+        await heading.waitFor({
+            state: "visible",
+            timeout: 120000
+        });
+
+    } catch (err) {
+
+        const currentUrl = page.url();
+
+        console.error(
+            `❌ Bento report content did not load for '${reportName}'.`
+        );
+
+        console.error(
+            `❌ Expected Bento heading: '${config.heading}'`
+        );
+
+        console.error(
+            `🔗 Current URL: ${currentUrl}`
+        );
+
+        logSession(
+            `❌ Bento report content did not load for '${reportName}'.`
+        );
+
+        logSession(
+            `❌ Expected Bento heading: '${config.heading}'`
+        );
+
+        logSession(
+            `🔗 Current URL: ${currentUrl}`
+        );
+
+        throw new Error(
+            `Bento report content did not load for '${reportName}'. ` +
+            `Expected heading '${config.heading}' was not visible.`
+        );
+    }
+
+
+    console.log(
+        `✅ Bento report content loaded for '${reportName}'.`
+    );
+
+    logSession(
+        `✅ Bento report content loaded for '${reportName}'.`
+    );
+
+
+    // =====================================================
+    // 2. VERIFY CHART COUNT
+    // =====================================================
+
+    const expectedChartsText =
+        `${config.count} charts loaded out of ${config.count}`;
+
+
+    /*
+     * This text can be transient.
+     * Therefore we DO NOT use it as the primary
+     * indication that the Bento report has loaded.
+     */
+
+    const chartsLoadedText = page.getByText(
+        expectedChartsText,
+        {
+            exact: true
+        }
+    );
+
+
+    if (
+        await chartsLoadedText
+            .waitFor({
+                state: "visible",
+                timeout: 30000
+            })
+            .then(() => true)
+            .catch(() => false)
+    ) {
+
+        const loadedText =
+            (
+                await chartsLoadedText
+                    .textContent()
+            )?.trim();
+
+
+        if (loadedText !== expectedChartsText) {
+
+            throw new Error(
+                `Bento chart count mismatch for '${reportName}'.\n` +
+                `Expected: '${expectedChartsText}'\n` +
+                `Actual: '${loadedText}'`
+            );
+        }
+
+
+        console.log(
+            `✅ Bento charts loaded verified for '${reportName}' | ${loadedText}`
+        );
+
+        logSession(
+            `✅ Bento charts loaded verified for '${reportName}' | ${loadedText}`
+        );
+
+    } else {
+
+        /*
+         * The chart count message may disappear after
+         * the charts finish rendering.
+         *
+         * Since the actual Bento heading is already
+         * visible, we don't fail here.
+         */
+
+        console.log(
+            `ℹ️ Chart loading count '${expectedChartsText}' is no longer visible. ` +
+            `Bento content itself is already loaded.`
+        );
+
+        logSession(
+            `ℹ️ Chart loading count '${expectedChartsText}' is no longer visible. ` +
+            `Bento content itself is already loaded.`
+        );
+    }
+
+
+    // =====================================================
+    // 3. VERIFY FIRST BENTO CARD
+    // =====================================================
+
     const value = heading.locator(
         "xpath=following::p[1]"
     );
 
-    await expect(value).toBeVisible();
+
+    await value.waitFor({
+        state: "visible",
+        timeout: 60000
+    });
+
 
     const cardValue =
-        (await value.textContent())?.trim();
+        (
+            await value.textContent()
+        )?.trim();
 
-    expect(cardValue).toBeTruthy();
+
+    if (!cardValue) {
+
+        throw new Error(
+            `Default Bento card '${config.heading}' ` +
+            `does not contain a value for '${reportName}'.`
+        );
+    }
+
 
     console.log(
-        `✅ Default Bento verified for '${reportName}' | ${config.heading}: ${cardValue}`
+        `✅ Default Bento verified for '${reportName}' | ` +
+        `${config.heading}: ${cardValue}`
     );
 
     logSession(
-        `✅ Default Bento verified for '${reportName}' | ${config.heading}: ${cardValue}`
+        `✅ Default Bento verified for '${reportName}' | ` +
+        `${config.heading}: ${cardValue}`
+    );
+
+
+    // =====================================================
+    // 4. FINAL SUCCESS
+    // =====================================================
+
+    console.log(
+        `🎉 Bento validation completed successfully for '${reportName}'.`
+    );
+
+    logSession(
+        `🎉 Bento validation completed successfully for '${reportName}'.`
     );
 }
-
-// const { expect } = require("@playwright/test");
 
 
 

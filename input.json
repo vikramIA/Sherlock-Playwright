@@ -460,7 +460,7 @@
         {
           "Persona": "YES",
           "reportName": "Persona Report Using Phone Numbers as Audience",
-           "behaviors": "Live Music & Concert Attendees; Movie & Cinema Goers",
+          "behaviors": "Live Music & Concert Attendees; Movie & Cinema Goers",
           "age": "18-25; 65+; 26-35; 36-45"
         }
       ]
@@ -585,82 +585,82 @@
         }
       ]
     },
-   {
-  "reportType": "Occasion and Behavior Based Audiences",
-  "reportName": "CDP_Occasion_Trigger_CDP",
-   "location": "Harris, Texas, USA",
-  "occasion": "Late-Night Eats"
-},
-{
-  "reportType": "Occasion and Behavior Based Audiences",
-  "reportName": "CDP_Offline_Behaviors",
-  "location": "Harris, Texas, USA",
-  "occasion": "Socializing & Nightlife",
-  "behaviors": "Live Music & Concert Attendees; Movie & Cinema Goers; Nightclub & Late-Night Venue Visitors"
-},
-{
-  "reportType": "Occasion and Behavior Based Audiences",
-  "reportName": "CDP_Online_Behaviors",
-  "location": "Harris, Texas, USA",
-  "occasion": "Socializing & Nightlife",
-  "behaviors": "Content/Contextual Interests Taxonomy"
-},
-{
-  "reportType": "Occasion and Behavior Based Audiences",
-  "reportName": "CDP_Age_Range",
-  "location": "Harris, Texas, USA",
-  "occasion": "Socializing & Nightlife",
-  "age": "18-25; 26-35"
-},
-{
-  "reportType": "Occasion and Behavior Based Audiences",
-  "reportName": "CDP_Age_Range",
-  "location": "Harris, Texas, USA",
-  "occasion": "Socializing & Nightlife",
-  "age": "18-25; 26-35"
-},
-{
-  "reportType": "Occasion and Behavior Based Audiences",
-  "reportName": "CDP_Occasion_Offline_Behaviors_Age",
-  "location": "Harris, Texas, USA",
-  "occasion": "Socializing & Nightlife",
-  "behaviors": "Live Music & Concert Attendees; Movie & Cinema Goers; Nightclub & Late-Night Venue Visitors",
-  "age": "18-25; 26-35"
-},
-{
-  "reportType": "Occasion and Behavior Based Audiences",
-  "reportName": "CDP_Occasion_OnlineBehavior_Age",
-  "location": "Harris, Texas, USA",
-  "occasion": "Socializing & Nightlife",
-  "behaviors": "Content/Contextual Interests Taxonomy",
-  "age": "18-25; 26-35"
-},
-{
-  "reportType": "Occasion and Behavior Based Audiences",
-  "reportName": "CDP_Select_Report",
-  "SelectReport": "YES"
-},
-{
-  "reportType": "Occasion and Behavior Based Audiences",
-  "reportName": "CDP_Normal_Report",
-  "SelectReport": "",
-  "location": "Harris, Texas, USA",
-  "occasion": "",
-  "place": "food.restaurant.american",
-  "attributes": "",
-  "behaviors": "",
-  "age": "",
-  "Brands": "",
-  "SubCategory": "",
-  "VisitDuration": "",
-  "ReviewCount": "",
-  "Rating": "",
-  "AverageDailyVisits": "",
-  "AverageMonthlyVisits": "",
-  "AverageDailyDevices": "",
-  "AverageMonthlyDevices": "",
-  "QualityLifeScore": ""
-}
+    {
+      "reportType": "Occasion and Behavior Based Audiences",
+      "reportName": "CDP_Occasion_Trigger_CDP",
+      "location": "Harris, Texas, USA",
+      "occasion": "Late-Night Eats"
+    },
+    {
+      "reportType": "Occasion and Behavior Based Audiences",
+      "reportName": "CDP_Offline_Behaviors",
+      "location": "Harris, Texas, USA",
+      "occasion": "Socializing & Nightlife",
+      "behaviors": "Live Music & Concert Attendees; Movie & Cinema Goers; Nightclub & Late-Night Venue Visitors"
+    },
+    {
+      "reportType": "Occasion and Behavior Based Audiences",
+      "reportName": "CDP_Online_Behaviors",
+      "location": "Harris, Texas, USA",
+      "occasion": "Socializing & Nightlife",
+      "behaviors": "Content/Contextual Interests Taxonomy"
+    },
+    {
+      "reportType": "Occasion and Behavior Based Audiences",
+      "reportName": "CDP_Age_Range",
+      "location": "Harris, Texas, USA",
+      "occasion": "Socializing & Nightlife",
+      "age": "18-25; 26-35"
+    },
+    {
+      "reportType": "Occasion and Behavior Based Audiences",
+      "reportName": "CDP_Age_Range",
+      "location": "Harris, Texas, USA",
+      "occasion": "Socializing & Nightlife",
+      "age": "18-25; 26-35"
+    },
+    {
+      "reportType": "Occasion and Behavior Based Audiences",
+      "reportName": "CDP_Occasion_Offline_Behaviors_Age",
+      "location": "Harris, Texas, USA",
+      "occasion": "Socializing & Nightlife",
+      "behaviors": "Live Music & Concert Attendees; Movie & Cinema Goers; Nightclub & Late-Night Venue Visitors",
+      "age": "18-25; 26-35"
+    },
+    {
+      "reportType": "Occasion and Behavior Based Audiences",
+      "reportName": "CDP_Occasion_OnlineBehavior_Age",
+      "location": "Harris, Texas, USA",
+      "occasion": "Socializing & Nightlife",
+      "behaviors": "Content/Contextual Interests Taxonomy",
+      "age": "18-25; 26-35"
+    },
+    {
+      "reportType": "Occasion and Behavior Based Audiences",
+      "reportName": "CDP_Select_Report",
+      "SelectReport": "YES"
+    },
+    {
+      "reportType": "Occasion and Behavior Based Audiences",
+      "reportName": "CDP_Normal_Report",
+      "SelectReport": "",
+      "location": "Harris, Texas, USA",
+      "occasion": "",
+      "place": "food.restaurant.american",
+      "attributes": "",
+      "behaviors": "",
+      "age": "",
+      "Brands": "",
+      "SubCategory": "",
+      "VisitDuration": "",
+      "ReviewCount": "",
+      "Rating": "",
+      "AverageDailyVisits": "",
+      "AverageMonthlyVisits": "",
+      "AverageDailyDevices": "",
+      "AverageMonthlyDevices": "",
+      "QualityLifeScore": ""
+    }
   ],
   "ReportForMultilayer": [
     {
@@ -3424,6 +3424,151 @@
         17,
         19
       ]
+    }
+  ],
+  "WatsonAI": [
+    {
+      "reportType": "Quality of Life Index",
+      "query": "Analyze QLI distribution across Maharashtra",
+      "verification": {
+        "location": "[State] Maharashtra, India"
+      },
+      "expectedMessage": "Report created successfully"
+    },
+    {
+      "reportType": "Place Level Visits",
+      "query": "Create a PLV report for McDonalds in Pune for the period from June 1, 2026 to June 5, 2026",
+      "verification": {
+        "reportName": "Visitation by POI Report for McDonalds in Pune City",
+        "location": "[City] Pune, Maharashtra, India",
+        "dateRange": "Jun 01, 2026 - Jun 05, 2026",
+        "places": [
+          "Fast Food Restaurant",
+          "Restaurant"
+        ],
+        "brands": [
+          "Mcdonalds"
+        ]
+      },
+      "expectedMessage": "Report created successfully"
+    },
+    {
+      "reportType": "Place Level Visits",
+      "query": "Generate a PLV report for Nike stores in Mumbai from May 10, 2026 to May 15, 2026",
+      "verification": {
+        "reportName": "Visitation by POI Report for Nike in Mumbai City",
+        "location": "[City] Mumbai, Maharashtra, India",
+        "dateRange": "May 10, 2026 - May 15, 2026",
+        "places": [
+          "Shoe Store",
+          "Sportswear Store"
+        ],
+        "brands": [
+          "Nike"
+        ]
+      },
+      "expectedMessage": "Report created successfully"
+    },
+    {
+      "reportType": "Device Level Visits",
+      "query": "Create a DLV report for McDonalds in Mumbai from June 10, 2026 to June 12, 2026",
+      "verification": {
+        "reportName": "Device Level Visit Report for McDonalds in Mumbai City",
+        "location": "[City] Mumbai, Maharashtra, India",
+        "dateRange": "Jun 10, 2026 - Jun 12, 2026"
+      },
+      "expectedMessage": "Report created successfully"
+    },
+    {
+      "reportType": "Place Level Visits",
+      "query": "Create a PLV report for Starbucks in Mumbai for the period from July 1, 2026 to July 3, 2026",
+      "verification": {
+        "reportName": "Visitation by POI Report for Starbucks in Mumbai City",
+        "location": "[District] Mumbai City, Maharashtra, India",
+        "dateRange": "Jul 01, 2026 - Jul 03, 2026",
+        "places": [
+          "Cafe",
+          "Tea and Coffee Store"
+        ],
+        "brands": [
+          "Starbucks"
+        ]
+      },
+      "expectedMessage": "Report created successfully"
+    },
+    {
+      "reportType": "Device Level Visits",
+      "query": "Create a DLV report for Starbucks in Mumbai for the period from July 1, 2026 to July 3, 2026",
+      "verification": {
+        "reportName": "Device Level Visit Report for Starbucks in Mumbai City",
+        "location": "[City] Mumbai, Maharashtra, India",
+        "dateRange": "Jul 01, 2026 - Jul 03, 2026"
+      },
+      "expectedMessage": "Report created successfully"
+    },
+    {
+      "reportType": "Place Level Visits",
+      "query": "Create a PLV report for restaurants in Mumbai from April 1, 2026 to April 7, 2026",
+      "verification": {
+        "reportName": "Visitation by POI Report for Restaurants in Mumbai",
+        "location": "[City] Mumbai, Maharashtra, India",
+        "dateRange": "Apr 01, 2026 - Apr 07, 2026",
+        "places": [
+          "Restaurant"
+        ]
+      },
+      "expectedMessage": "Report created successfully"
+    },
+    {
+      "reportType": "Device Level Visits",
+      "query": "Generate a DLV report for shopping malls in mumbai from March 15, 2026 to March 20, 2026",
+      "verification": {
+        "reportName": "Device Level Visit Report for Shopping Malls in Mumbai",
+        "location": "[City] Mumbai, Maharashtra, India",
+        "dateRange": "Mar 15, 2026 - Mar 20, 2026"
+      },
+      "expectedMessage": "Report created successfully"
+    },
+    {
+      "reportType": "Device Level Visits",
+      "query": "Create a DLV report for Apple stores in Mumbai from July 5, 2026 to July 10, 2026",
+      "verification": {
+        "reportName": "Device Level Visit Report for Apple in Mumbai City",
+        "location": "[City] Mumbai, Maharashtra, India",
+        "dateRange": "Jul 05, 2026 - Jul 10, 2026"
+      },
+      "expectedMessage": "Report created successfully"
+    },
+    {
+      "reportType": "Quality of Life Index",
+      "query": "Generate a QLI analysis for cities in Maharashtra",
+      "verification": {
+        "location": "[State] Maharashtra, India"
+      },
+      "expectedMessage": "Report created successfully"
+    },
+    {
+      "reportType": "Place Level Visits",
+      "query": "Create a PLV report for hospitals in Chennai from February 1, 2026 to February 10, 2026",
+      "verification": {
+        "reportName": "Visitation by POI Report for Hospitals in Chennai",
+        "location": "[City] Chennai, Tamil Nadu, India",
+        "dateRange": "Feb 01, 2026 - Feb 10, 2026",
+        "places": [
+          "Hospital"
+        ]
+      },
+      "expectedMessage": "Report created successfully"
+    },
+    {
+      "reportType": "Device Level Visits",
+      "query": "Create a DLV report for airports in Maharashtra from January 1, 2026 to January 3, 2026",
+      "verification": {
+        "reportName": "Device Level Visit Report for Airports in Maharashtra",
+        "location": "[State] Maharashtra, India",
+        "dateRange": "Jan 01, 2026 - Jan 03, 2026"
+      },
+      "expectedMessage": "Report created successfully"
     }
   ]
 }

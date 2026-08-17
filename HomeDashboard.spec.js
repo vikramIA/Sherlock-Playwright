@@ -2,6 +2,7 @@ const { chromium } = require("@playwright/test");
 const exploreFlow = require("./ExploreReport.js");
 const PersonaFlow = require("./PersonaReport.js");
 const Multilayerflow = require("./MultilayerReport.js");
+const watsonAIReportFlow = require("./WatsonAIFlow.js");
 const input = require("./input.json");
 const fs = require("fs");
 const path = require("path");
@@ -9,7 +10,7 @@ const { loginAndNavigate, safeWait } = require("./functions");
 const envConfig = require("./Environments.json");
 const { initLogger, getSessionHeader, getLastSessionNumber, logSession } = require("./Logger");
 const NetworkLogger = require("./networkLogger.js");
-const RecordingManager = require("./Recording.js"); 
+const RecordingManager = require("./Recording.js");
 
 const { exec } = require("child_process");
 
@@ -47,13 +48,13 @@ function cleanupOldSessions(baseDir, keepLast = 5, foldersList = null) {
 
   const folders = foldersList
     ? foldersList.map(name => ({
-        name,
-        time: fs.statSync(path.join(baseDir, name)).birthtimeMs
-      }))
+      name,
+      time: fs.statSync(path.join(baseDir, name)).birthtimeMs
+    }))
     : fs.readdirSync(baseDir).map(name => ({
-        name,
-        time: fs.statSync(path.join(baseDir, name)).birthtimeMs
-      }));
+      name,
+      time: fs.statSync(path.join(baseDir, name)).birthtimeMs
+    }));
 
   const sorted = folders.sort((a, b) => b.time - a.time);
   const oldFolders = sorted.slice(keepLast);
@@ -80,8 +81,8 @@ async function main() {
   const envFolders = fs.existsSync(sessionBaseDir)
     ? fs.readdirSync(sessionBaseDir).filter(f => f.startsWith(env))
     : [];
-  
-  cleanupOldSessions(sessionBaseDir, 5, envFolders);  
+
+  cleanupOldSessions(sessionBaseDir, 5, envFolders);
 
   const newSession = getLastSessionNumber() + 1;
   logSession(getSessionHeader(newSession), true);
@@ -119,25 +120,25 @@ async function main() {
 
     new NetworkLogger(page, sessionDir);
 
-   try {
-    await loginAndNavigate(
+    try {
+      await loginAndNavigate(
         page,
         baseUrl,
         email,
         password,
         secret
-    );
+      );
 
-    console.log("✅ Login completed.");
-    logSession("✅ Login completed.");
+      console.log("✅ Login completed.");
+      logSession("✅ Login completed.");
 
-} catch (err) {
-    console.error("❌ Login failed:", err);
-    logSession(`❌ Login failed: ${err.message}`);
-    throw err;
-}
+    } catch (err) {
+      console.error("❌ Login failed:", err);
+      logSession(`❌ Login failed: ${err.message}`);
+      throw err;
+    }
 
-    
+
 
     // Explore Flow
     for (const report of input.explore || []) await exploreFlow(page, report);
@@ -165,6 +166,11 @@ async function main() {
         await Multilayerflow(page, report.reportName, report.Report_TO_Merge, report.MergeType, multilayerReportsMap);
       }
     }
+    //watsonAI Flow
+    await watsonAIReportFlow(
+      page,
+      input.WatsonAI || []
+    );
     await safeWait(page, 10000);
 
   } catch (err) {
