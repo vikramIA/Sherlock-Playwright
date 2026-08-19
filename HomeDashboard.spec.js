@@ -141,11 +141,11 @@ async function main() {
 
 
     // Explore Flow
-    for (const report of input.explore || []) await exploreFlow(page, report);
+    for (const report of input.explore || []) await exploreFlow(page, report, false, false, env);
     await safeWait(page, 10000);
 
     // Persona Flow
-    for (const report of input.Persona || []) await PersonaFlow(page, report);
+    for (const report of input.Persona || []) await PersonaFlow(page, report, env);
     await safeWait(page, 10000);
 
     // Multilayer Flow
@@ -155,7 +155,7 @@ async function main() {
 
       for (const report of input.ReportForMultilayer || []) {
         if (requiredReports.has(report.ReportNumber)) {
-          await exploreFlow(page, report, true, multilayerReportsMap);
+          await exploreFlow(page, report, true, multilayerReportsMap, env);
         }
       }
 
@@ -166,7 +166,7 @@ async function main() {
         await Multilayerflow(page, report.reportName, report.Report_TO_Merge, report.MergeType, multilayerReportsMap);
       }
     }
-    //watsonAI Flow
+    // watsonAI Flow
     await watsonAIReportFlow(
       page,
       input.WatsonAI || []

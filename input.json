@@ -80,7 +80,11 @@
         "reportName": "Test Places Level Visit Report From Places Report and also trigger CDP",
         "StartDateRange": "2026-06-01",
         "EndDateRange": "2026-06-07",
-        "Persona": "YES"
+        "Persona": "YES",
+        "uploadAudience": [
+          "META",
+          "GOOGLE"
+        ]
       },
       "DLVReportDetails": {
         "reportName": "Test Device Level Visit Report From Places Report and also trigger CDP",
@@ -217,7 +221,10 @@
       "location": "Pune, Maharashtra, India",
       "StartDateRange": "2026-06-01",
       "EndDateRange": "2026-06-07",
-      "Persona": "YES"
+      "Persona": "YES",
+      "uploadAudience": [
+        "GOOGLE"
+      ]
     },
     {
       "reportType": "Device Level Visits",
@@ -377,7 +384,10 @@
       "location": "Pune, Maharashtra, India",
       "StartDateRange": "2026-06-01",
       "EndDateRange": "2026-06-07",
-      "Persona": "YES"
+      "Persona": "YES",
+      "uploadAudience": [
+        "META"
+      ]
     },
     {
       "reportType": "Device Level Visits",
@@ -447,7 +457,10 @@
           "Persona": "YES",
           "reportName": "Persona Report Using Email as Audience",
           "behaviors": "Live Music & Concert Attendees; Movie & Cinema Goers",
-          "age": "18-25; 65+; 26-35; 36-45"
+          "age": "18-25; 65+; 26-35; 36-45",
+          "uploadAudience": [
+            "GOOGLE"
+          ]
         }
       ]
     },

@@ -553,69 +553,101 @@ async function selectDateRange(page, startDate, endDate) {
 
     if (!startDate || !endDate) return;
 
-    const dateRangePickerButton = page.getByRole('button', { name: 'Pick a date' });
-    const prevBtn = page.locator('button[name="previous-month"]');
-    const nextBtn = page.locator('button[name="next-month"]');
+    const dateRangePickerButton = page.locator('button[name="dateRange"]');
 
+    const prevBtn = page.getByRole('button', {
+        name: 'Go to the Previous Month'
+    });
+
+    const nextBtn = page.getByRole('button', {
+        name: 'Go to the Next Month'
+    });
+
+    await dateRangePickerButton.waitFor({ state: "visible" });
     await dateRangePickerButton.click();
 
-    const [startYear, startMonth, startDay] = startDate.split('-').map(Number);
-    const [endYear, endMonth, endDay] = endDate.split('-').map(Number);
+    await page.waitForTimeout(500);
 
-    // Convert month name to number
-    const monthToNumber = (monthName) => {
-        return new Date(`${monthName} 1, 2000`).getMonth() + 1;
-    };
+    const [startYear, startMonth, startDay] = startDate.split("-").map(Number);
+    const [endYear, endMonth, endDay] = endDate.split("-").map(Number);
 
-    const navigateToMonth = async (targetYear, targetMonth) => {
+    const monthToNumber = (monthName) =>
+        new Date(`${monthName} 1, 2000`).getMonth() + 1;
 
-        while (true) {
+    async function navigateToMonth(targetYear, targetMonth) {
 
-            const visibleMonthName = await page.locator('.rdp-caption_start span').first().textContent();
-            const visibleYearText = await page.locator('.rdp-caption_start span').nth(1).textContent();
+        let attempts = 0;
 
-            const visibleMonth = monthToNumber(visibleMonthName.trim());
-            const visibleYear = parseInt(visibleYearText.trim());
+        while (attempts < 36) {
 
-            if (visibleMonth === targetMonth && visibleYear === targetYear) {
-                break;
+            attempts++;
+
+            const monthSpans = page.locator('button[role="combobox"] span');
+
+            const leftMonth = (await monthSpans.nth(0).textContent()).trim();
+            const leftYear = parseInt((await monthSpans.nth(1).textContent()).trim());
+
+            const rightMonth = (await monthSpans.nth(2).textContent()).trim();
+            const rightYear = parseInt((await monthSpans.nth(3).textContent()).trim());
+
+            // If target month is already visible, stop navigating
+            if (
+                (monthToNumber(leftMonth) === targetMonth && leftYear === targetYear) ||
+                (monthToNumber(rightMonth) === targetMonth && rightYear === targetYear)
+            ) {
+                return;
             }
 
-            const visibleDate = new Date(visibleYear, visibleMonth - 1);
+            const leftDate = new Date(leftYear, monthToNumber(leftMonth) - 1);
             const targetDate = new Date(targetYear, targetMonth - 1);
 
-            if (visibleDate < targetDate) {
+            if (leftDate < targetDate) {
                 await nextBtn.click();
             } else {
                 await prevBtn.click();
             }
 
-            await page.waitForTimeout(150);
+            await page.waitForTimeout(250);
         }
-    };
+
+        throw new Error(`Unable to navigate to ${targetMonth}/${targetYear}`);
+    }
+
+    async function selectDay(year, month, day) {
+
+        const target = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+
+        const dayButton = page.locator(
+            `td[data-day="${target}"] button:not([disabled])`
+        );
+
+        await dayButton.waitFor({ state: "visible", timeout: 5000 });
+        await dayButton.click();
+    }
 
     try {
 
-        // Navigate to start month
         await navigateToMonth(startYear, startMonth);
+        await selectDay(startYear, startMonth, startDay);
 
-        // Click start date (XPath unchanged)
-        await page.locator(`//button[normalize-space()='${startDay}' and not(@disabled)]`).first().click();
+        await page.waitForTimeout(300);
 
-        // Navigate to end month
         await navigateToMonth(endYear, endMonth);
+        await selectDay(endYear, endMonth, endDay);
 
-        // Click end date (XPath unchanged)
-        await page.locator(`//button[normalize-space()='${endDay}' and not(@disabled)]`).first().click();
+        await page.waitForTimeout(300);
 
-        await page.keyboard.press('Escape');
+        // Close picker if still open
+        if (await page.locator(".rdp-root").isVisible()) {
+            await page.keyboard.press("Escape");
+        }
 
         console.log(`✅ Date range ${startDate} → ${endDate} selected successfully`);
 
     } catch (error) {
 
-        console.error("❌ Error selecting the date range:", error);
-
+        console.error("❌ Error selecting date range:", error);
+        throw error;
     }
 }
 
@@ -1450,9 +1482,12 @@ async function Report_To_Persona_Flow(page, reportName) {
             logSession(`❌ Report_To_Persona_Flow failed — report "${reportName}" not found in Explore.`);
         }
 
+        return reportExists;
+
     } catch (error) {
         console.error(`❌ Error in Report_To_Persona_Flow: ${error.message}`);
         logSession(`❌ Error in Report_To_Persona_Flow: ${error.message}`);
+        return false;
     }
 }
 
@@ -2010,12 +2045,16 @@ async function searchAndClickReport(page, reportName) {
             // ==========================================
             // 5. Find report
             // ==========================================
+            // A Persona-derived report keeps the exact same display name as its source report
+            // (e.g. once Report_To_Persona_Flow has run for this report, it shows up twice -
+            // once as its own type, once as "Insight type: Persona") so matching on name alone
+            // is ambiguous; excluding the Persona row disambiguates it.
 
-            const reportLink = page.locator(
-                `//a[normalize-space(text())='${reportName}']`
-            );
+            const reportRow = page.locator(
+                `xpath=//div[contains(@class,'mt-2 w-full')][.//a[normalize-space(text())='${reportName}']][not(.//p[contains(.,'Insight type:') and contains(.,'Persona')])]`
+            ).first();
 
-            await reportLink.waitFor({
+            await reportRow.waitFor({
                 state: "visible",
                 timeout: 30000
             });
@@ -2024,8 +2063,8 @@ async function searchAndClickReport(page, reportName) {
             // 6. Open three-dot menu
             // ==========================================
 
-            const threeDotButton = reportLink.locator(
-                "xpath=ancestor::div[contains(@class,'mt-2 w-full')]//button[@aria-haspopup='menu']"
+            const threeDotButton = reportRow.locator(
+                "button[aria-haspopup='menu']"
             );
 
             await threeDotButton.waitFor({
@@ -2961,19 +3000,14 @@ async function verifyAggregatedCount(page, reportName) {
         timeout: 30000
     });
 
-    // Find report row
-    const reportRow = reportText.locator(
-        "xpath=ancestor::div[.//button[@aria-haspopup='menu']][1]"
+    // Find report row and click its 3-dot menu (same reliable pattern as searchAndClickReport)
+    const menuButton = reportText.locator(
+        "xpath=ancestor::div[contains(@class,'mt-2 w-full')]//button[@aria-haspopup='menu']"
     );
 
-    await expect(reportRow).toBeVisible({
+    await expect(menuButton).toBeVisible({
         timeout: 10000
     });
-
-    // Click 3-dot menu
-    const menuButton = reportRow.locator(
-        'button[aria-haspopup="menu"]'
-    );
 
     await menuButton.click();
 
@@ -4209,6 +4243,7 @@ module.exports = {
     searchAndClickReport,
     clearSearchBar,
     uploadAudiences,
+    searchReportWithRetry,
     monitorMultilayerReport,
     verifyDefaultBentoCharts,
     verifyAggregatedCount,

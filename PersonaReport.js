@@ -10,8 +10,9 @@ const {
     selectCountry, uploadCSVFile, safeWait, searchAndClickInRepository
 } = require('./functions'); // Assumes functions.js is converted
 const postUploadExploreReportFlow = require("./PostUploadExploreReport.js");
+const { addPersonaReportToTracking } = require("./PersonaStatusFunctions.js");
 
-async function PersonaFlow(page, inputData) {
+async function PersonaFlow(page, inputData, env) {
 
     console.log("✅ Persona Flow started");
     logSession("✅ Persona Flow started");
@@ -130,6 +131,10 @@ async function PersonaFlow(page, inputData) {
                     logSession(`✅ Report found in Explore for ${inputData.reportName}`);
                     console.log(`✅ Occasion and Behavior Based Audiences flow completed successfully! Report: ${inputData.reportName}`);
                     logSession(`✅ Occasion and Behavior Based Audiences flow completed successfully! Report: ${inputData.reportName}`);
+
+                    addPersonaReportToTracking(env, inputData.reportName, {
+                        uploadAudience: inputData.UploadAudience
+                    });
                 } else {
                     console.log(`❌ Report not found in Explore for ${inputData.reportName}`);
                     logSession(`❌ Report not found in Explore for ${inputData.reportName}`);
@@ -458,6 +463,10 @@ async function PersonaFlow(page, inputData) {
                 logSession(`✅ Report found in Explore for ${newReportName}`);
                 console.log(`✅ CDP TRIGGER AFTER UPLOAD flow completed successfully! Report: ${newReportName}`);
                 logSession(`✅ CDP TRIGGER AFTER UPLOAD flow completed successfully! Report: ${newReportName}`);
+
+                addPersonaReportToTracking(env, newReportName, {
+                    uploadAudience: report.UploadAudience
+                });
             } else {
                 console.log(`❌ Report not found in Explore for ${newReportName}`);
                 logSession(`❌ Report not found in Explore for ${newReportName}`);

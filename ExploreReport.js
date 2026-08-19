@@ -9,9 +9,10 @@ const {
     SelectAverageDailyDevices, SelectAverageMonthlyDevices,
     selectAvailableAttributes, SelectQualityLifeScore, safeWait, verifyDefaultBentoCharts, verifyAggregatedCount, verifyAudienceUploadStatus, verifyAppendAudience
 } = require('./functions');
+const { addPersonaReportToTracking } = require('./PersonaStatusFunctions.js');
 
 
-async function exploreFlow(page, inputData, isForMultilayer = false, multilayerReportsMap = false) {
+async function exploreFlow(page, inputData, isForMultilayer = false, multilayerReportsMap = false, env) {
     const randomSuffix = () => Math.random().toString(36).substring(2, 7);
     inputData.reportName = `${inputData.reportName}: ${randomSuffix()}`;
 
@@ -91,16 +92,19 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                         inputData.reportName,
                     );
 
+                    if (inputData.Persona?.toUpperCase() === "YES") {
+                        const personaCreated = await Report_To_Persona_Flow(page, inputData.reportName);
+                        if (personaCreated) addPersonaReportToTracking(env, inputData.reportName, {
+                            uploadAudience: inputData.UploadAudience
+                        });
+                    }
+
                     const total = await verifyAggregatedCount(
                         page,
                         inputData.reportName,
                     );
 
                     console.log(total);
-
-                    if (inputData.Persona?.toUpperCase() === "YES") {
-                        await Report_To_Persona_Flow(page, inputData.reportName);
-                    }
 
                     if (
                         Array.isArray(inputData.UploadAudience) &&
@@ -323,6 +327,13 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                         inputData.reportName,
                     );
 
+                    if (inputData.Persona?.toUpperCase() === "YES") {
+                        const personaCreated = await Report_To_Persona_Flow(page, inputData.reportName);
+                        if (personaCreated) addPersonaReportToTracking(env, inputData.reportName, {
+                            uploadAudience: inputData.UploadAudience
+                        });
+                    }
+
                     const total = await verifyAggregatedCount(
                         page,
                         inputData.reportName,
@@ -330,10 +341,6 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
 
                     console.log(total);
 
-
-                    if (inputData.Persona?.toUpperCase() === "YES") {
-                        await Report_To_Persona_Flow(page, inputData.reportName);
-                    }
 
                     if (
                         Array.isArray(inputData.UploadAudience) &&
@@ -549,12 +556,12 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                         inputData.reportName,
                     );
 
-                    const total = await verifyAggregatedCount(
-                        page,
-                        inputData.reportName
-                    );
+                    // const total = await verifyAggregatedCount(
+                    //     page,
+                    //     inputData.reportName
+                    // );
 
-                    console.log(total);
+                    // console.log(total);
 
                     // Handling Places -> Places Level Visit Report
                     if (inputData.PLACES_TO_Place_Level_Visit_Report?.toUpperCase() === "YES") {
@@ -598,7 +605,10 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                             }
                             else {
                                 if (PLVReportInputs.Persona?.toUpperCase() === "YES") {
-                                    await Report_To_Persona_Flow(page, PLVReportInputs.reportName);
+                                    const personaCreated = await Report_To_Persona_Flow(page, PLVReportInputs.reportName);
+                                    if (personaCreated) addPersonaReportToTracking(env, PLVReportInputs.reportName, {
+                                        uploadAudience: PLVReportInputs.UploadAudience
+                                    });
                                 }
                             }
 
@@ -656,7 +666,10 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                             }
                             else {
                                 if (DLVReportInputs.Persona?.toUpperCase() === "YES") {
-                                    await Report_To_Persona_Flow(page, DLVReportInputs.reportName);
+                                    const personaCreated = await Report_To_Persona_Flow(page, DLVReportInputs.reportName);
+                                    if (personaCreated) addPersonaReportToTracking(env, DLVReportInputs.reportName, {
+                                        uploadAudience: DLVReportInputs.UploadAudience
+                                    });
                                 }
                             }
 
@@ -670,6 +683,13 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                             await safeWait(page, 2000);
                         }
                     }
+
+                    const total = await verifyAggregatedCount(
+                        page,
+                        inputData.reportName
+                    );
+
+                    console.log(total);
 
 
                 } catch (err) {
