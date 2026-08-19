@@ -8,7 +8,7 @@ const fs = require("fs");
 const path = require("path");
 const { loginAndNavigate, safeWait } = require("./functions");
 const envConfig = require("./Environments.json");
-const { initLogger, getSessionHeader, getLastSessionNumber, logSession } = require("./Logger");
+const { initLogger, getSessionHeader, getLastSessionNumber, logSession, getRunSummary } = require("./Logger");
 const NetworkLogger = require("./networkLogger.js");
 const RecordingManager = require("./Recording.js");
 
@@ -96,7 +96,15 @@ async function main() {
 
     browser = await chromium.launch({
       headless: isHeadless,
-      args: ['--start-maximized', '--force-device-scale-factor=1', '--high-dpi-support=1'],
+      args: [
+        '--start-maximized',
+        '--force-device-scale-factor=1',
+        '--high-dpi-support=1',
+        '--use-gl=angle',
+        '--use-angle=swiftshader',
+        '--enable-unsafe-swiftshader',
+        '--ignore-gpu-blocklist',
+      ],
     });
 
     context = await browser.newContext({
@@ -160,7 +168,9 @@ async function main() {
       }
 
       console.log("📂 multilayerReportsMap before multilayer:", Array.from(multilayerReportsMap.entries()));
-      logSession("📂 multilayerReportsMap before multilayer:", Array.from(multilayerReportsMap.entries()));
+      logSession("multilayerReportsMap before multilayer", false, {
+        multilayerReportsMap: JSON.stringify(Array.from(multilayerReportsMap.entries())),
+      });
 
       for (const report of input.Multilayer) {
         await Multilayerflow(page, report.reportName, report.Report_TO_Merge, report.MergeType, multilayerReportsMap);
@@ -197,6 +207,10 @@ async function main() {
     if (browser) await browser.close();
     console.log("✅ Browser closed, session complete.");
     logSession("✅ Browser closed, session complete.");
+
+    const summary = getRunSummary();
+    console.log("🏁 Run Summary:", summary);
+    logSession("Run Summary", false, { flow: "run_summary", ...summary });
   }
 }
 

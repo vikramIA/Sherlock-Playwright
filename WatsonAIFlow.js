@@ -10,7 +10,7 @@ const {
 } = require("./WatsonAIFunctions.js");
 
 const { verifyDefaultBentoCharts } = require("./functions.js");
-const { logSession } = require("./Logger");
+const { logSession, beginFlow } = require("./Logger");
 
 
 async function watsonAIFlow(page, reports) {
@@ -30,6 +30,7 @@ async function watsonAIFlow(page, reports) {
 
         let actualReportName = "Unknown";
         let reportOpened = false;
+        beginFlow("watson_ai");
 
         try {
 
@@ -121,7 +122,9 @@ async function watsonAIFlow(page, reports) {
                 );
 
                 logSession(
-                    `❌ ${inputData.reportType} report type validation failed.`
+                    `❌ ${inputData.reportType} report type validation failed.`,
+                    false,
+                    { flow: "watson_ai", report: actualReportName, report_type: inputData.reportType, outcome: "failure", reason: "report_type_mismatch" }
                 );
 
                 console.error(
@@ -364,7 +367,9 @@ async function watsonAIFlow(page, reports) {
             );
 
             logSession(
-                `🎉 WatsonAI ${inputData.reportType} completed successfully.`
+                `🎉 WatsonAI ${inputData.reportType} completed successfully.`,
+                false,
+                { flow: "watson_ai", report: actualReportName, report_type: inputData.reportType, outcome: "success" }
             );
 
 
@@ -384,7 +389,9 @@ async function watsonAIFlow(page, reports) {
             );
 
             logSession(
-                `❌ WatsonAI ${inputData.reportType} failed.`
+                `❌ WatsonAI ${inputData.reportType} failed.`,
+                false,
+                { flow: "watson_ai", report: actualReportName, report_type: inputData.reportType, outcome: "failure", reason: error.message }
             );
 
             logSession(

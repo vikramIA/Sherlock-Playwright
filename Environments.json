@@ -16,5 +16,11 @@
     "email": "selenium@ia.com",
     "password": "^Gar4&P@.ifCMu7",
     "secret": "NQXIORMD3SHMO75BBCGCNXU6GKDFHFAF"
+  },
+  "qa_automation": {
+    "baseUrl": "https://qa.thesherlock.ai/",
+    "email": "sherlockautomation@ia.com",
+    "password": "8DzME0oCN$FnIoHkX71taR5@EZaIAuFO#Wx",
+    "secret": "KRUGS4ZANFZSAU3IMVZGY33DNNAXK5DP"
   }
 }

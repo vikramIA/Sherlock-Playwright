@@ -1,4 +1,4 @@
-const { logSession } = require('./Logger');
+const { logSession, beginFlow } = require('./Logger');
 const {
     MatchRateFetch, VerifyItemExist, PersonaReportName, navigateAndCreatePersonaFlow,
     selectPersonaReportType, selectReportInPersona, selectLocations,
@@ -19,6 +19,7 @@ async function PersonaFlow(page, inputData) {
 
     const randomSuffix = () => Math.random().toString(36).substring(2, 7);
     inputData.reportName = `${inputData.reportName} - ${randomSuffix()}`;
+    beginFlow("persona");
 
     // Step 1: Navigate to Explore and Click on Persona
     await navigateAndCreatePersonaFlow(page, inputData);
@@ -129,16 +130,16 @@ async function PersonaFlow(page, inputData) {
                     console.log(`✅ Report found in Explore for ${inputData.reportName}`);
                     logSession(`✅ Report found in Explore for ${inputData.reportName}`);
                     console.log(`✅ Occasion and Behavior Based Audiences flow completed successfully! Report: ${inputData.reportName}`);
-                    logSession(`✅ Occasion and Behavior Based Audiences flow completed successfully! Report: ${inputData.reportName}`);
+                    logSession(`✅ Occasion and Behavior Based Audiences flow completed successfully! Report: ${inputData.reportName}`, false, { flow: "persona", report: inputData.reportName, report_type: type, outcome: "success" });
                 } else {
                     console.log(`❌ Report not found in Explore for ${inputData.reportName}`);
                     logSession(`❌ Report not found in Explore for ${inputData.reportName}`);
                     console.log(`❌ Occasion and Behavior Based Audiences flow failed! Report: ${inputData.reportName}`);
-                    logSession(`❌ Occasion and Behavior Based Audiences flow failed! Report: ${inputData.reportName}`);
+                    logSession(`❌ Occasion and Behavior Based Audiences flow failed! Report: ${inputData.reportName}`, false, { flow: "persona", report: inputData.reportName, report_type: type, outcome: "failure", reason: "report_not_found_in_explore" });
                 }
             } catch (error) {
                 console.error(`❌ Error in Occasion and Behavior Based Audiences flow: ${error.message}`);
-                logSession(`❌ Error in Occasion and Behavior Based Audiences flow: ${error.message}`);
+                logSession(`❌ Error in Occasion and Behavior Based Audiences flow: ${error.message}`, false, { flow: "persona", report: inputData.reportName, outcome: "failure", reason: error.message });
                 return;
             }
         }
@@ -200,7 +201,7 @@ async function PersonaFlow(page, inputData) {
                                 if (!repoClicked) {
                                     const msg = `❌ Skipping report "${inputData.reportName}" because searchAndClickInRepository returned false.`;
                                     console.error(msg);
-                                    logSession(msg);
+                                    logSession(msg, false, { flow: "persona", report: inputData.reportName, outcome: "skipped", reason: "repository_click_failed" });
                                     skipCurrentReport = true;
                                 }
 
@@ -210,14 +211,14 @@ async function PersonaFlow(page, inputData) {
                                 if (matchRateValue === null) {
                                     const msg = `⛔ Match Rate fetch failed for "${inputData.reportName}". Skipping this report.`;
                                     console.error(msg);
-                                    logSession(msg);
+                                    logSession(msg, false, { flow: "persona", report: inputData.reportName, outcome: "skipped", reason: "match_rate_fetch_failed" });
                                     skipCurrentReport = true;
                                 }
 
                                 if (matchRateValue === 0) {
                                     const msg = `⛔ Match Rate is 0 for "${inputData.reportName}". Skipping further actions.`;
                                     console.log(msg);
-                                    logSession(msg);
+                                    logSession(msg, false, { flow: "persona", report: inputData.reportName, outcome: "skipped", reason: "match_rate_zero", match_rate: matchRateValue });
                                     skipCurrentReport = true;
                                 }
 
@@ -226,19 +227,19 @@ async function PersonaFlow(page, inputData) {
 
                         } catch (err) {
                             console.error(`❌ Match Rate extraction failed: ${err.message}`);
-                            logSession(`❌ Match Rate extraction failed: ${err.message}`);
+                            logSession(`❌ Match Rate extraction failed: ${err.message}`, false, { flow: "persona", report: inputData.reportName, outcome: "failure", reason: err.message });
                             skipCurrentReport = true;
                         }
 
                     } else {
                         console.log(`❌ Report NOT found in repository: ${inputData.reportName}`);
-                        logSession(`❌ Report NOT found in repository: ${inputData.reportName}`);
+                        logSession(`❌ Report NOT found in repository: ${inputData.reportName}`, false, { flow: "persona", report: inputData.reportName, outcome: "skipped", reason: "not_found_in_repository" });
                         skipCurrentReport = true;
                     }
 
                 } catch (err) {
                     console.error(`❌ Repository check failed: ${err.message}`);
-                    logSession(`❌ Repository check failed: ${err.message}`);
+                    logSession(`❌ Repository check failed: ${err.message}`, false, { flow: "persona", report: inputData.reportName, outcome: "failure", reason: err.message });
                     skipCurrentReport = true;
                 }
 
@@ -256,7 +257,7 @@ async function PersonaFlow(page, inputData) {
                         if (!repoClicked) {
                             const msg = `❌ Skipping report "${inputData.reportName}" because searchAndClickInRepository returned false.`;
                             console.error(msg);
-                            logSession(msg);
+                            logSession(msg, false, { flow: "persona", report: inputData.reportName, outcome: "skipped", reason: "repository_click_failed" });
                             return;
                         }
 
@@ -273,7 +274,7 @@ async function PersonaFlow(page, inputData) {
                         if (!repoClicked) {
                             const msg = `❌ Skipping report "${inputData.reportName}" because searchAndClickInRepository returned false.`;
                             console.error(msg);
-                            logSession(msg);
+                            logSession(msg, false, { flow: "persona", report: inputData.reportName, outcome: "skipped", reason: "repository_click_failed" });
                             skipCurrentReport = true;
                         }
                         if (!skipCurrentReport) {
@@ -300,6 +301,7 @@ async function PersonaFlow(page, inputData) {
                         for (const report of inputData.postUploadReports) {
 
                             try {
+                                beginFlow("persona_post_upload");
                                 console.log(`📌 Starting Explore Report: ${report.reportType} - ${report.reportName}`);
                                 logSession(`📌 Starting Explore Report: ${report.reportType} - ${report.reportName}`);
 
@@ -308,19 +310,19 @@ async function PersonaFlow(page, inputData) {
                                 if (!repoClicked) {
                                     const msg = `❌ Cannot open main report in repository for "${inputData.reportName}". Skipping this Explore report.`;
                                     console.error(msg);
-                                    logSession(msg);
+                                    logSession(msg, false, { flow: "persona_post_upload", report: report.reportName, outcome: "skipped", reason: "repository_click_failed" });
                                     skipCurrentReport = true;
                                 }
 
                                 await postUploadExploreReportFlow(page, report);
 
                                 console.log(`✅ Completed Explore Report: ${report.reportType} - ${report.reportName}`);
-                                logSession(`✅ Completed Explore Report: ${report.reportType} - ${report.reportName}`);
+                                logSession(`✅ Completed Explore Report: ${report.reportType} - ${report.reportName}`, false, { flow: "persona_post_upload", report: report.reportName, report_type: report.reportType, outcome: "success" });
 
                             } catch (err) {
 
                                 console.error(`❌ Failed Explore Report: ${report.reportName} → ${err.message}`);
-                                logSession(`❌ Failed Explore Report: ${report.reportName} → ${err.message}`);
+                                logSession(`❌ Failed Explore Report: ${report.reportName} → ${err.message}`, false, { flow: "persona_post_upload", report: report.reportName, report_type: report.reportType, outcome: "failure", reason: err.message });
                                 skipCurrentReport = true;
                             }
                         }
@@ -330,9 +332,17 @@ async function PersonaFlow(page, inputData) {
                     }
                 }
 
+                if (skipCurrentReport) {
+                    console.log(`⏭️ ${type} flow ended without completing downstream steps for '${inputData.reportName}'.`);
+                    logSession(`⏭️ ${type} flow ended without completing downstream steps for '${inputData.reportName}'.`, false, { flow: "persona", report: inputData.reportName, report_type: type, outcome: "skipped" });
+                } else {
+                    console.log(`✅ ${type} flow completed successfully for '${inputData.reportName}'.`);
+                    logSession(`✅ ${type} flow completed successfully for '${inputData.reportName}'.`, false, { flow: "persona", report: inputData.reportName, report_type: type, outcome: "success" });
+                }
+
             } catch (err) {
                 console.error(`❌ Error in PostUploadExploreReport Creation flow: ${err.message}`);
-                logSession(`❌ Error in PostUploadExploreReport Creation flow: ${err.message}`);
+                logSession(`❌ Error in PostUploadExploreReport Creation flow: ${err.message}`, false, { flow: "persona", report: inputData.reportName, report_type: type, outcome: "failure", reason: err.message });
                 return;
             }
         }
@@ -345,7 +355,7 @@ async function PersonaFlow(page, inputData) {
 
     } catch (error) {
         console.error(`❌ Error in PersonaFlow: ${error.message}`);
-        logSession(`❌ Error in PersonaFlow: ${error.message}`);
+        logSession(`❌ Error in PersonaFlow: ${error.message}`, false, { flow: "persona", report: inputData.reportName, outcome: "failure", reason: error.message });
         return;
     }
 
@@ -387,6 +397,7 @@ async function PersonaFlow(page, inputData) {
             const randomSuffix = () => Math.random().toString(36).substring(2, 7);
             const newReportName = `${report.reportName} - ${randomSuffix()}`;
             report.reportName = newReportName;
+            beginFlow("persona_cdp");
 
             console.log(`🆕 Persona Report Name Updated: ${newReportName}`);
             logSession(`🆕 Persona Report Name Updated: ${newReportName}`);
@@ -457,19 +468,19 @@ async function PersonaFlow(page, inputData) {
                 console.log(`✅ Report found in Explore for ${newReportName}`);
                 logSession(`✅ Report found in Explore for ${newReportName}`);
                 console.log(`✅ CDP TRIGGER AFTER UPLOAD flow completed successfully! Report: ${newReportName}`);
-                logSession(`✅ CDP TRIGGER AFTER UPLOAD flow completed successfully! Report: ${newReportName}`);
+                logSession(`✅ CDP TRIGGER AFTER UPLOAD flow completed successfully! Report: ${newReportName}`, false, { flow: "persona_cdp", report: newReportName, outcome: "success" });
             } else {
                 console.log(`❌ Report not found in Explore for ${newReportName}`);
                 logSession(`❌ Report not found in Explore for ${newReportName}`);
                 console.log(`❌ CDP TRIGGER AFTER UPLOAD flow failed! Report: ${newReportName}`);
-                logSession(`❌ CDP TRIGGER AFTER UPLOAD flow failed! Report: ${newReportName}`);
+                logSession(`❌ CDP TRIGGER AFTER UPLOAD flow failed! Report: ${newReportName}`, false, { flow: "persona_cdp", report: newReportName, outcome: "failure", reason: "report_not_found_in_explore" });
             }
 
 
 
         } catch (error) {
             console.error(`❌ Unexpected failure inside CDPTriggerAfterUpload: ${error.message}`);
-            logSession(`❌ Unexpected failure inside CDPTriggerAfterUpload: ${error.message}`);
+            logSession(`❌ Unexpected failure inside CDPTriggerAfterUpload: ${error.message}`, false, { flow: "persona_cdp", report: inputData.postUploadReports?.[0]?.reportName, outcome: "failure", reason: error.message });
         }
     }
 }
