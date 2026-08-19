@@ -3583,5 +3583,53 @@
       },
       "expectedMessage": "Report created successfully"
     }
+  ],
+  "CSAgent": [
+    {
+      "mode": "fresh",
+      "companyName": "Isha Life",
+      "problemStatement": "Isha Life needs to scale new customer acquisition beyond its existing ecosystem by introducing hero wellness products to high-intent, health-oriented audiences, while quickly improving visibility and doubling ROAS with zero customer overlap.",
+      "questionnaire": [
+        "To acquire new-to-brand customers for Isha Life by driving discovery, consideration, and scalable acquisition of three hero products (Neem & Turmeric veg capsules, A2 Ghee, and Raw Himalayan Honey), while doubling ROAS and ensuring zero overlap with existing customers.",
+        "August 19, 2026 – November 19, 2026",
+        "Pan-India, with a strategic focus on wellness-forward places such as Bangalore and Coimbatore.",
+        "Meta and Google Ads.",
+        "Yes, the campaign must exclude existing Isha Life customers entirely, maintain zero audience overlap with the current ecosystem, focus on acquisition quality while supporting higher ROAS goals, and scale without compromising CAC efficiency.",
+        "Month-on-month increase in new orders for hero products, rising ROAS against baseline benchmarks, improved CAC efficiency while scaling spend, and consistent uplift in conversion signals indicating product fit.",
+        "Health-oriented, conscious living consumers who prioritise natural, wellness-focused products, are curious about holistic wellbeing, and have not yet engaged with the Isha Life brand.",
+        "Yes - consumers of premium natural foods and Ayurvedic products, wellness shoppers interested in immunity, detox, and traditional nutrition, and buyers of organic, authentic food and lifestyle products who display conscious consumption behaviour."
+      ],
+      "continueToPhase2": false,
+      "continueToPhase3": false
+    },
+    {
+      "mode": "resume",
+      "phase": "Phase2",
+      "savedRun": "Isha_life_2026-08-19",
+      "continueToNextPhase": false
+    },
+    {
+      "mode": "resume",
+      "phase": "Phase3",
+      "savedRun": "Isha_life_2026-08-19",
+      "continueToNextPhase": false
+    },
+    {
+      "mode": "fresh",
+      "companyName": "Old World Hospitality",
+      "problemStatement": "A premium dining concept by Old World Hospitality is facing low discoverability within its corporate park location in Lower Parel, resulting in limited weekday footfall despite a strong product offering. Additionally, a format mismatch with local dining preferences and strong competition from established brands like The Bombay Canteen and O Pedro are impacting trial and repeat visits. The challenge is to increase brand awareness, drive weekday lunch covers, and build repeat behaviour among corporate professionals and premium diners over an 8-12 week period.",
+      "questionnaire": [
+        "Increase brand awareness and weekday footfall, especially within the corporate audience in Lower Parel.",
+        "May 1, 2026 – July 31, 2026",
+        "Lower Parel (primary), Worli / Prabhadevi (secondary), and BKC spillover.",
+        "Digital discovery (maps, search, social), corporate outreach, CRM / database marketing, and influencer-led discovery (selective).",
+        "Low discoverability within a corporate park, a format mismatch (large plates vs Mumbai preference), and limited organic walk-ins.",
+        "Increase in weekday lunch covers, growth in first-time visits, and improvement in repeat visit rate.",
+        "Working professionals (28-45), couples / social diners, and corporate executives.",
+        "Bombay Canteen and O Pedro diners, and the premium casual dining audience in Mumbai."
+      ],
+      "continueToPhase2": true,
+      "continueToPhase3": true
+    }
   ]
 }

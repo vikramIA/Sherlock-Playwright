@@ -3,6 +3,7 @@ const exploreFlow = require("./ExploreReport.js");
 const PersonaFlow = require("./PersonaReport.js");
 const Multilayerflow = require("./MultilayerReport.js");
 const watsonAIReportFlow = require("./WatsonAIFlow.js");
+const csAgentFlow = require("./CSAgentFlow.js");
 const input = require("./input.json");
 const fs = require("fs");
 const path = require("path");
@@ -172,6 +173,12 @@ async function main() {
       input.WatsonAI || []
     );
     await safeWait(page, 10000);
+
+    // CS Agent Flow
+    if (input.CSAgent?.length > 0) {
+      await csAgentFlow(page, input.CSAgent);
+      await safeWait(page, 10000);
+    }
 
   } catch (err) {
     console.error(`❌ Script failed: ${err.message}`);
