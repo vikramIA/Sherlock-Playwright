@@ -253,6 +253,7 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                         }
                     }
 
+                    logSession(`✅ 'place level visits' flow completed successfully: ${inputData.reportName}`, false, { flow: "explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
                 } catch (err) {
                     console.error(`❌ Error in 'place level visits' flow: ${err.message}`);
                     logSession(`❌ Error in 'place level visits' flow: ${err.message}`, false, { flow: "explore", report: inputData.reportName, outcome: "failure", reason: err.message });
@@ -495,6 +496,7 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                             }
                         }
                     }
+                    logSession(`✅ 'device level visits' flow completed successfully: ${inputData.reportName}`, false, { flow: "explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
                 } catch (err) {
                     console.error(`❌ Error in 'device level visits' flow: ${err.message}`);
                     logSession(`❌ Error in 'device level visits' flow: ${err.message}`, false, { flow: "explore", report: inputData.reportName, outcome: "failure", reason: err.message });
@@ -679,6 +681,7 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                     }
 
 
+                    logSession(`✅ 'places' flow completed successfully: ${inputData.reportName}`, false, { flow: "explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
                 } catch (err) {
                     console.error(`❌ Error in 'places' flow: ${err.message}`);
                     logSession(`❌ Error in 'places' flow: ${err.message}`, false, { flow: "explore", report: inputData.reportName, outcome: "failure", reason: err.message });
@@ -708,6 +711,7 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                     );
 
 
+                    logSession(`✅ 'quality of life index' flow completed successfully: ${inputData.reportName}`, false, { flow: "explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
                 } catch (err) {
                     console.error(`❌ Error in 'quality of life index' flow: ${err.message}`);
                     logSession(`❌ Error in 'quality of life index' flow: ${err.message}`, false, { flow: "explore", report: inputData.reportName, outcome: "failure", reason: err.message });
@@ -733,6 +737,7 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                         inputData.reportType,
                         inputData.reportName,
                     );
+                    logSession(`✅ 'population' flow completed successfully: ${inputData.reportName}`, false, { flow: "explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
                 } catch (err) {
                     console.error(`❌ Error in 'population' flow: ${err.message}`);
                     logSession(`❌ Error in 'population' flow: ${err.message}`, false, { flow: "explore", report: inputData.reportName, outcome: "failure", reason: err.message });
@@ -759,6 +764,7 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                         inputData.reportName,
                     );
 
+                    logSession(`✅ 'home locations' flow completed successfully: ${inputData.reportName}`, false, { flow: "explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
                 } catch (err) {
                     console.error(`❌ Error in 'home locations' flow: ${err.message}`);
                     logSession(`❌ Error in 'home locations' flow: ${err.message}`, false, { flow: "explore", report: inputData.reportName, outcome: "failure", reason: err.message });
@@ -779,6 +785,7 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                     await keplerDatasetsFetch(page, inputData.reportName);
                     await safeWait(page, 2000);
 
+                    logSession(`✅ 'h9 master' flow completed successfully: ${inputData.reportName}`, false, { flow: "explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
                 } catch (err) {
                     console.error(`❌ Error in 'h9 master' flow: ${err.message}`);
                     logSession(`❌ Error in 'h9 master' flow: ${err.message}`, false, { flow: "explore", report: inputData.reportName, outcome: "failure", reason: err.message });
@@ -799,6 +806,7 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                     await keplerDatasetsFetch(page, inputData.reportName);
                     await safeWait(page, 2000);
 
+                    logSession(`✅ 'quality of life index raw' flow completed successfully: ${inputData.reportName}`, false, { flow: "explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
                 } catch (err) {
                     console.error(`❌ Error in 'quality of life index raw' flow: ${err.message}`);
                     logSession(`❌ Error in 'quality of life index raw' flow: ${err.message}`, false, { flow: "explore", report: inputData.reportName, outcome: "failure", reason: err.message });
@@ -835,6 +843,7 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
 
                     console.log(total);
 
+                    logSession(`✅ 'places internal' flow completed successfully: ${inputData.reportName}`, false, { flow: "explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
                 } catch (err) {
                     console.error(`❌ Error in 'places internal' flow: ${err.message}`);
                     logSession(`❌ Error in 'places internal' flow: ${err.message}`, false, { flow: "explore", report: inputData.reportName, outcome: "failure", reason: err.message });

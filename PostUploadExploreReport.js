@@ -102,6 +102,7 @@ async function postUploadExploreReportFlow(page, inputData, isForMultilayer = fa
                         }
                     }
 
+                    logSession(`✅ 'place level visits' flow completed successfully: ${inputData.reportName}`, false, { flow: "post_upload_explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
                 } catch (err) {
                     console.error(`❌ Error in 'place level visits' flow: ${err.message}`);
                     logSession(`❌ Error in 'place level visits' flow: ${err.message}`, false, { flow: "post_upload_explore", report: inputData.reportName, outcome: "failure", reason: err.message });
@@ -197,6 +198,7 @@ async function postUploadExploreReportFlow(page, inputData, isForMultilayer = fa
                         }
                     }
 
+                    logSession(`✅ 'device level visits' flow completed successfully: ${inputData.reportName}`, false, { flow: "post_upload_explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
                 } catch (err) {
                     console.error(`❌ Error in 'device level visits' flow: ${err.message}`);
                     logSession(`❌ Error in 'device level visits' flow: ${err.message}`, false, { flow: "post_upload_explore", report: inputData.reportName, outcome: "failure", reason: err.message });
@@ -363,6 +365,7 @@ async function postUploadExploreReportFlow(page, inputData, isForMultilayer = fa
                     }
 
 
+                    logSession(`✅ 'places' flow completed successfully: ${inputData.reportName}`, false, { flow: "post_upload_explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
                 } catch (err) {
                     console.error(`❌ Error in 'places' flow: ${err.message}`);
                     logSession(`❌ Error in 'places' flow: ${err.message}`, false, { flow: "post_upload_explore", report: inputData.reportName, outcome: "failure", reason: err.message });

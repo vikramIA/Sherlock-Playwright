@@ -17,8 +17,8 @@ async function layeredMerge(page, reportName, Report_TO_Merge, multilayerReports
 
         if (!reportNameToSelect) {
             console.log(`⚠️ Report number ${reportNum} not found in multilayerReportsMap`);
-            logSession(`⚠️ Report number ${reportNum} not found in multilayerReportsMap`);
-            return; // stop process
+            logSession(`⚠️ Report number ${reportNum} not found in multilayerReportsMap`, false, { flow: "multilayer", report: reportName, merge_type: "layered", outcome: "skipped", reason: `report_number_${reportNum}_not_found` });
+            return false; // stop process
         }
 
         const reportSelectField = page.locator(`xpath=${reportSelectXPath}`);
@@ -43,8 +43,8 @@ async function layeredMerge(page, reportName, Report_TO_Merge, multilayerReports
         const count = await firstItem.count();
         if (count === 0) {
             console.log(`❌ No recommended options found for: ${reportNameToSelect}`);
-            logSession(`❌ No recommended options found for: ${reportNameToSelect}`);
-            return; // stop without error
+            logSession(`❌ No recommended options found for: ${reportNameToSelect}`, false, { flow: "multilayer", report: reportName, merge_type: "layered", outcome: "skipped", reason: "no_recommended_options" });
+            return false; // stop without error
         }
 
         // Get the text inside first item
@@ -56,8 +56,8 @@ async function layeredMerge(page, reportName, Report_TO_Merge, multilayerReports
         // Compare EXACT match
         if (firstItemText.toLowerCase() !== reportNameToSelect.toLowerCase()) {
             console.log(`❌ Mismatch! Expected "${reportNameToSelect}" but found "${firstItemText}". Stopping process.`);
-            logSession(`❌ Mismatch! Expected "${reportNameToSelect}" but found "${firstItemText}". Stopping process.`);
-            return; // stop quietly
+            logSession(`❌ Mismatch! Expected "${reportNameToSelect}" but found "${firstItemText}". Stopping process.`, false, { flow: "multilayer", report: reportName, merge_type: "layered", outcome: "skipped", reason: "report_name_mismatch" });
+            return false; // stop quietly
         }
 
         // Select first item
@@ -91,6 +91,7 @@ async function layeredMerge(page, reportName, Report_TO_Merge, multilayerReports
     const timeTakenMinutes = timeTakenSeconds / 60;
     console.log(`⏱️ Layered Merge completed for: ${reportName} | Reports: ${Report_TO_Merge} | Time: ${timeTakenMinutes.toFixed(2)} min (${timeTakenSeconds.toFixed(2)} sec)`);
     logSession(`⏱️ Layered Merge completed for: ${reportName} | Reports: ${Report_TO_Merge} | Time: ${timeTakenMinutes.toFixed(2)} min (${timeTakenSeconds.toFixed(2)} sec)`, false, { flow: "multilayer", report: reportName, merge_type: "layered", duration_sec: timeTakenSeconds });
+    return true;
 }
 
 // =============== Unified Merge Flow ===============
@@ -108,8 +109,8 @@ async function unifiedMerge(page, reportName, Report_TO_Merge, multilayerReports
 
         if (!reportNameToSelect) {
             console.log(`⚠️ Report number ${reportNum} not found in multilayerReportsMap`);
-            logSession(`⚠️ Report number ${reportNum} not found in multilayerReportsMap`);
-            return; // stop process
+            logSession(`⚠️ Report number ${reportNum} not found in multilayerReportsMap`, false, { flow: "multilayer", report: reportName, merge_type: "unified", outcome: "skipped", reason: `report_number_${reportNum}_not_found` });
+            return false; // stop process
         }
 
         const reportSelectField = page.locator(`xpath=${reportSelectXPath}`);
@@ -134,8 +135,8 @@ async function unifiedMerge(page, reportName, Report_TO_Merge, multilayerReports
         const count = await firstItem.count();
         if (count === 0) {
             console.log(`❌ No recommended options found for: ${reportNameToSelect}`);
-            logSession(`❌ No recommended options found for: ${reportNameToSelect}`);
-            return; // stop without error
+            logSession(`❌ No recommended options found for: ${reportNameToSelect}`, false, { flow: "multilayer", report: reportName, merge_type: "unified", outcome: "skipped", reason: "no_recommended_options" });
+            return false; // stop without error
         }
 
         // Get the text inside first item
@@ -147,8 +148,8 @@ async function unifiedMerge(page, reportName, Report_TO_Merge, multilayerReports
         // Compare EXACT match
         if (firstItemText.toLowerCase() !== reportNameToSelect.toLowerCase()) {
             console.log(`❌ Mismatch! Expected "${reportNameToSelect}" but found "${firstItemText}". Stopping process.`);
-            logSession(`❌ Mismatch! Expected "${reportNameToSelect}" but found "${firstItemText}". Stopping process.`);
-            return; // stop quietly
+            logSession(`❌ Mismatch! Expected "${reportNameToSelect}" but found "${firstItemText}". Stopping process.`, false, { flow: "multilayer", report: reportName, merge_type: "unified", outcome: "skipped", reason: "report_name_mismatch" });
+            return false; // stop quietly
         }
 
         // Select first item
@@ -218,6 +219,7 @@ async function unifiedMerge(page, reportName, Report_TO_Merge, multilayerReports
     const timeTakenMinutes = timeTakenSeconds / 60;
     console.log(`⏱️ Unified Merge completed for: ${reportName} | Reports: ${Report_TO_Merge} | Time: ${timeTakenMinutes.toFixed(2)} min (${timeTakenSeconds.toFixed(2)} sec)`);
     logSession(`⏱️ Unified Merge completed for: ${reportName} | Reports: ${Report_TO_Merge} | Time: ${timeTakenMinutes.toFixed(2)} min (${timeTakenSeconds.toFixed(2)} sec)`, false, { flow: "multilayer", report: reportName, merge_type: "unified", duration_sec: timeTakenSeconds });
+    return true;
 }
 
 // =============== Main Flow ===============
@@ -280,21 +282,27 @@ async function MultilayerFlow(page, reportName, Report_TO_Merge, MergeType, mult
 
             // ===== Execute Merge Type =====
             const type = MergeType.toLowerCase();
+            let mergeCompleted;
             if (type === "layered") {
                 console.log("📌 Executing Layered Datasets Merge");
                 logSession("📌 Executing Layered Datasets Merge");
                 const layeredBtnXPath = "//button[normalize-space(text())='Layered Datasets']";
                 await page.locator(`xpath=${layeredBtnXPath}`).click({ timeout: 15000 });
                 await safeWait(page, 2000);
-                await layeredMerge(page, reportName, Report_TO_Merge, multilayerReportsMap, startTime);
+                mergeCompleted = await layeredMerge(page, reportName, Report_TO_Merge, multilayerReportsMap, startTime);
             } else if (type === "unified") {
                 console.log("📌 Executing Unified Dataset Merge");
                 logSession("📌 Executing Unified Dataset Merge");
                 await safeWait(page, 2000);
-                await unifiedMerge(page, reportName, Report_TO_Merge, multilayerReportsMap, startTime);
+                mergeCompleted = await unifiedMerge(page, reportName, Report_TO_Merge, multilayerReportsMap, startTime);
             } else {
                 console.warn(`❌ Invalid MergeType: ${MergeType}`);
                 logSession(`❌ Invalid MergeType: ${MergeType}`, false, { flow: "multilayer", report: reportName, outcome: "failure", reason: "invalid_merge_type" });
+                return;
+            }
+
+            if (!mergeCompleted) {
+                // layeredMerge/unifiedMerge already logged the skip reason with an outcome tag.
                 return;
             }
 
