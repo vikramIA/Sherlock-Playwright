@@ -3,7 +3,13 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "daily:dev": "node HomeDashboard.spec.js dev daily",
+    "daily:qa": "node HomeDashboard.spec.js qa daily",
+    "daily:prod": "node HomeDashboard.spec.js prod daily",
+    "detail:dev": "node HomeDashboard.spec.js dev detail",
+    "detail:qa": "node HomeDashboard.spec.js qa detail",
+    "detail:prod": "node HomeDashboard.spec.js prod detail"
   },
   "keywords": [],
   "author": "",

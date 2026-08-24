@@ -1,0 +1,314 @@
+{
+  "explore": [
+    {
+      "reportType": "Place Level Visits",
+      "reportName": "Daily_PLV_Attributes_Report",
+      "place": "food.restaurant.american",
+      "location": "Pune, Maharashtra, India",
+      "StartDateRange": "2026-06-01",
+      "EndDateRange": "2026-06-07",
+      "attributes": "Lunch",
+      "Persona": "YES"
+    },
+    {
+      "reportType": "Device Level Visits",
+      "reportName": "Daily_DLV_Normal_Report_Upload_Audience",
+      "place": "auto.car.dealership",
+      "location": "Pune, Maharashtra, India",
+      "StartDateRange": "2026-06-01",
+      "EndDateRange": "2026-06-07",
+      "QualityLifeScore": "10-90",
+      "VisitDuration": "2-900",
+      "Persona": "NO",
+      "UploadAudience": [
+        "META",
+        "GOOGLE"
+      ]
+    },
+    {
+      "reportType": "Quality of Life Index",
+      "reportName": "Daily_QLI_Normal_Report",
+      "location": "Pune, Maharashtra, India",
+      "QualityLifeScore": "10-90"
+    },
+    {
+      "reportType": "Places",
+      "reportName": "Daily_POI_Attributes_Report",
+      "place": "food.restaurant.american",
+      "location": "Pune, Maharashtra, India",
+      "attributes": "Lunch"
+    },
+    {
+      "reportType": "Population",
+      "reportName": "Daily_Population_Normal_Report",
+      "location": "Pune, Maharashtra, India"
+    }
+  ],
+  "Persona": [
+    {
+      "reportType": "Custom Places",
+      "reportName": "Daily_Custom_Places_Using_LatLong",
+      "country": "India",
+      "UploadFilePath": "data/Upload_College_Lat_Long.csv",
+      "postUploadReports": [
+        {
+          "reportType": "Place Level Visits",
+          "reportName": "Daily Place Level Visits Using LatLong",
+          "StartDateRange": "2025-08-01",
+          "EndDateRange": "2025-08-03",
+          "Persona": "YES"
+        }
+      ]
+    },
+    {
+      "reportType": "Custom Places",
+      "reportName": "Daily_Custom_Places_Using_Address",
+      "country": "India",
+      "UploadFilePath": "data/Upload_College_Address_Test.csv",
+      "postUploadReports": [
+        {
+          "reportType": "Device Level Visits",
+          "reportName": "Daily Device Level Visits Using Address",
+          "StartDateRange": "2025-08-01",
+          "EndDateRange": "2025-08-03",
+          "Persona": "NO"
+        }
+      ]
+    },
+    {
+      "reportType": "Custom Place Codes",
+      "reportName": "Daily_Custom_Place_Codes_Using_Poicode",
+      "country": "India",
+      "UploadFilePath": "data/Upload_College_Poicode_Test.csv",
+      "postUploadReports": [
+        {
+          "reportType": "Places",
+          "reportName": "Daily Places Report Using Poicode",
+          "Persona": "NO"
+        }
+      ]
+    },
+    {
+      "reportType": "Custom Audience to IFAs",
+      "reportName": "Daily_Custom_Audience_to_IFAs_Using_IFAS",
+      "country": "India",
+      "DirectIFAS": "YES",
+      "UploadFilePath": "data/Custom_IFAS_India_Autohangar.csv",
+      "postUploadReports": [
+        {
+          "reportName": "Daily Persona Report Using IFAS as Audience",
+          "age": "26-35",
+          "Persona": "NO"
+        }
+      ]
+    },
+    {
+      "reportType": "Custom Audience to IFAs",
+      "reportName": "Daily_Custom_Audience_to_IFAs_Using_Emails",
+      "country": "India",
+      "UploadFilePath": "data/Custom_Email_To_IFA.csv",
+      "postUploadReports": [
+        {
+          "reportName": "Daily Persona Report Using Email as Audience",
+          "age": "26-35",
+          "Persona": "NO"
+        }
+      ]
+    },
+    {
+      "reportType": "Custom Audience to IFAs",
+      "reportName": "Daily_Custom_Audience_to_IFAs_Using_Phone_Numbers",
+      "country": "India",
+      "UploadFilePath": "data/Custom_Phones_To_IFAS.csv",
+      "postUploadReports": [
+        {
+          "reportName": "Daily Persona Report Using Phone Numbers as Audience",
+          "age": "26-35",
+          "Persona": "NO"
+        }
+      ]
+    }
+  ],
+  "ReportForMultilayer": [
+    {
+      "reportType": "Place Level Visits",
+      "reportName": "Daily_PLV_For_Multilayer",
+      "ReportNumber": 1,
+      "place": "food.restaurant.fast_food",
+      "location": "Pune, Maharashtra, India",
+      "StartDateRange": "2026-06-01",
+      "EndDateRange": "2026-06-07",
+      "SubCategory": "Fast food restaurant",
+      "Brands": "McDonald's",
+      "Rating": "2-5",
+      "ReviewCount": "10-500",
+      "AverageDailyVisits": "2-20000",
+      "AverageMonthlyVisits": "3-20000",
+      "AverageDailyDevices": "4-20000",
+      "AverageMonthlyDevices": "5-20000"
+    },
+    {
+      "reportType": "Device Level Visits",
+      "reportName": "Daily_DLV_For_Multilayer",
+      "ReportNumber": 2,
+      "place": "food.restaurant.fast_food",
+      "location": "Pune, Maharashtra, India",
+      "StartDateRange": "2026-06-01",
+      "EndDateRange": "2026-06-07",
+      "Brands": "McDonald's",
+      "SubCategory": "Fast food restaurant",
+      "Rating": "2-5",
+      "ReviewCount": "10-500",
+      "AverageDailyVisits": "2-20000",
+      "AverageMonthlyVisits": "3-20000",
+      "AverageDailyDevices": "4-20000",
+      "AverageMonthlyDevices": "5-20000",
+      "behaviors": "College Students",
+      "age": "18-25; 26-35"
+    },
+    {
+      "reportType": "Quality of Life Index",
+      "reportName": "Daily_QLI_For_Multilayer",
+      "ReportNumber": 3,
+      "location": "Pune, Maharashtra, India",
+      "QualityLifeScore": "10-90"
+    },
+    {
+      "reportType": "Population",
+      "reportName": "Daily_Population_For_Multilayer",
+      "ReportNumber": 4,
+      "location": "Pune, Maharashtra, India"
+    },
+    {
+      "reportType": "Places",
+      "reportName": "Daily_Places_For_Multilayer",
+      "ReportNumber": 5,
+      "place": "food.restaurant.fast_food",
+      "location": "Pune, Maharashtra, India",
+      "StartDateRange": "2026-06-01",
+      "EndDateRange": "2026-06-07",
+      "SubCategory": "Fast food restaurant",
+      "Brands": "McDonald's",
+      "Rating": "2-5",
+      "ReviewCount": "10-500",
+      "AverageDailyVisits": "2-20000",
+      "AverageMonthlyVisits": "3-20000",
+      "AverageDailyDevices": "4-20000",
+      "AverageMonthlyDevices": "5-20000"
+    }
+  ],
+  "Multilayer": [
+    {
+      "MergeType": "Unified",
+      "reportName": "Daily_PLV-QLI-Unified",
+      "Report_TO_Merge": [
+        1,
+        3
+      ]
+    },
+    {
+      "MergeType": "Unified",
+      "reportName": "Daily_PLV-Population-Unified",
+      "Report_TO_Merge": [
+        1,
+        4
+      ]
+    },
+    {
+      "MergeType": "Unified",
+      "reportName": "Daily_DLV-QLI-Unified",
+      "Report_TO_Merge": [
+        2,
+        3
+      ]
+    },
+    {
+      "MergeType": "Unified",
+      "reportName": "Daily_DLV-Population-Unified",
+      "Report_TO_Merge": [
+        2,
+        4
+      ]
+    },
+    {
+      "MergeType": "Unified",
+      "reportName": "Daily_Places-QLI-Unified",
+      "Report_TO_Merge": [
+        5,
+        3
+      ]
+    },
+    {
+      "MergeType": "Unified",
+      "reportName": "Daily_Places-Population-Unified",
+      "Report_TO_Merge": [
+        5,
+        4
+      ]
+    },
+    {
+      "MergeType": "Unified",
+      "reportName": "Daily_QLI-Population-Unified",
+      "Report_TO_Merge": [
+        3,
+        4
+      ]
+    },
+    {
+      "MergeType": "Layered",
+      "reportName": "Daily_PLV-QLI-Layered",
+      "Report_TO_Merge": [
+        1,
+        3
+      ]
+    },
+    {
+      "MergeType": "Layered",
+      "reportName": "Daily_PLV-Population-Layered",
+      "Report_TO_Merge": [
+        1,
+        4
+      ]
+    },
+    {
+      "MergeType": "Layered",
+      "reportName": "Daily_DLV-QLI-Layered",
+      "Report_TO_Merge": [
+        2,
+        3
+      ]
+    },
+    {
+      "MergeType": "Layered",
+      "reportName": "Daily_DLV-Population-Layered",
+      "Report_TO_Merge": [
+        2,
+        4
+      ]
+    },
+    {
+      "MergeType": "Layered",
+      "reportName": "Daily_Places-QLI-Layered",
+      "Report_TO_Merge": [
+        5,
+        3
+      ]
+    },
+    {
+      "MergeType": "Layered",
+      "reportName": "Daily_Places-Population-Layered",
+      "Report_TO_Merge": [
+        5,
+        4
+      ]
+    },
+    {
+      "MergeType": "Layered",
+      "reportName": "Daily_QLI-Population-Layered",
+      "Report_TO_Merge": [
+        3,
+        4
+      ]
+    }
+  ]
+}
