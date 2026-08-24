@@ -240,8 +240,8 @@
         3
       ]
     }
-  ]
-   "WatsonAI": [
+  ],
+  "WatsonAI": [
     {
       "reportType": "Quality of Life Index",
       "query": "Analyze QLI distribution across Maharashtra",
@@ -331,5 +331,5 @@
       },
       "expectedMessage": "Report created successfully"
     }
-  ],
+  ]
 }
