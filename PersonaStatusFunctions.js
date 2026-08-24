@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { logSession } = require('./Logger');
+const { logSession, beginFlow } = require('./Logger');
 
 const TRACKING_FILE = path.join(__dirname, 'personaTracking.json');
 
@@ -110,7 +110,7 @@ function addPersonaReportToTracking(env, reportName, options = {}) {
 
     if (alreadyTracked) {
         console.log(`ℹ️ Persona report '${reportName}' already tracked and pending for env '${env}'. Skipping duplicate entry.`);
-        logSession(`ℹ️ Persona report '${reportName}' already tracked and pending for env '${env}'. Skipping duplicate entry.`);
+        logSession(`ℹ️ Persona report '${reportName}' already tracked and pending for env '${env}'. Skipping duplicate entry.`, false, { report: reportName, env });
         return;
     }
 
@@ -125,17 +125,18 @@ function addPersonaReportToTracking(env, reportName, options = {}) {
     saveTracking(data);
 
     console.log(`📌 Persona report '${reportName}' added to tracking for status check (env: ${env}).`);
-    logSession(`📌 Persona report '${reportName}' added to tracking for status check (env: ${env}).`);
+    logSession(`📌 Persona report '${reportName}' added to tracking for status check (env: ${env}).`, false, { report: reportName, env });
 }
 
 // Single status check for one Persona report (no long polling - meant to be called once per run)
 async function checkSinglePersonaStatus(page, reportName) {
+    beginFlow("persona_status_check");
     try {
         const reportContainer = await locatePersonaReportRow(page, reportName);
 
         if (!reportContainer) {
             console.log(`❌ Persona report '${reportName}' not found in Explore.`);
-            logSession(`❌ Persona report '${reportName}' not found in Explore.`);
+            logSession(`❌ Persona report '${reportName}' not found in Explore.`, false, { flow: "persona_status_check", report: reportName, status: 'not_found', outcome: "failure", reason: "not_found_in_explore" });
             return { reportName, status: 'not_found' };
         }
 
@@ -143,8 +144,16 @@ async function checkSinglePersonaStatus(page, reportName) {
             .locator("xpath=.//p[contains(text(),'Status:')]//span")
             .textContent())?.trim();
 
+        const lowerStatus = statusText?.toLowerCase();
+        const terminal = isTerminalStatus(lowerStatus);
+
         console.log(`🔍 Persona report '${reportName}' status = ${statusText}`);
-        logSession(`🔍 Persona report '${reportName}' status = ${statusText}`);
+        logSession(`🔍 Persona report '${reportName}' status = ${statusText}`, false, {
+            flow: "persona_status_check",
+            report: reportName,
+            status: statusText,
+            ...(terminal ? { outcome: lowerStatus === 'complete' ? "success" : "failure" } : {}),
+        });
 
         // Return the app's exact status text (Queued / In Progress / Incomplete / Complete) as-is
         return statusText?.toLowerCase() === 'complete'
@@ -153,7 +162,7 @@ async function checkSinglePersonaStatus(page, reportName) {
 
     } catch (err) {
         console.error(`❌ Error checking status for Persona report '${reportName}': ${err.message}`);
-        logSession(`❌ Error checking status for Persona report '${reportName}': ${err.message}`);
+        logSession(`❌ Error checking status for Persona report '${reportName}': ${err.message}`, false, { flow: "persona_status_check", report: reportName, outcome: "failure", reason: err.message });
         return { reportName, status: 'error', error: err.message };
     }
 }
@@ -573,7 +582,7 @@ async function exportPersonaAudience(page, reportName, uploadAudience) {
 
     if (platforms.length === 0) {
         console.log(`ℹ️ No valid export platforms in UploadAudience for '${reportName}'. Skipping audience export.`);
-        logSession(`ℹ️ No valid export platforms in UploadAudience for '${reportName}'. Skipping audience export.`);
+        logSession(`ℹ️ No valid export platforms in UploadAudience for '${reportName}'. Skipping audience export.`, false, { report: reportName, outcome: "skipped", reason: "no_upload_platforms_configured" });
         return result;
     }
 
@@ -615,13 +624,13 @@ async function exportPersonaAudience(page, reportName, uploadAudience) {
                 const catIcon = success ? '✅' : '❌';
                 const catMsg = `${catIcon} [Audience Export/${platform}/${category}] ${success ? 'Upload audience triggered' : 'Upload audience NOT triggered'} for '${reportName}'.`;
                 console.log(catMsg);
-                logSession(catMsg);
+                logSession(catMsg, false, { report: reportName, platform, category, success });
             }
 
             const icon = platformResult.passed ? '✅' : '❌';
             const msg = `${icon} [Audience Export/${platform}] ${JSON.stringify(platformResult)}`;
             console.log(msg);
-            logSession(msg);
+            logSession(msg, false, { report: reportName, platform, outcome: platformResult.passed ? "success" : "failure" });
 
             result.platforms[platform] = platformResult;
             if (!platformResult.passed) result.passed = false;
@@ -635,7 +644,7 @@ async function exportPersonaAudience(page, reportName, uploadAudience) {
         result.passed = false;
         result.error = err.message;
         console.error(`❌ Failed to export Persona audience for '${reportName}': ${err.message}`);
-        logSession(`❌ Failed to export Persona audience for '${reportName}': ${err.message}`);
+        logSession(`❌ Failed to export Persona audience for '${reportName}': ${err.message}`, false, { report: reportName, outcome: "failure", reason: err.message });
     }
 
     return result;
@@ -714,7 +723,14 @@ async function checkPersonaAudienceUploadStatus(page, reportName, categoryNames,
         const icon = isSuccess ? '✅' : '❌';
         const msg = `${icon} [Uploaded Audience/${platform}/${category}] status=${status} audienceCount=${audienceCount ?? 'n/a'}`;
         console.log(msg);
-        logSession(msg);
+        logSession(msg, false, {
+            report: reportName,
+            platform,
+            category,
+            status,
+            audience_count: audienceCount,
+            outcome: isSuccess ? "success" : "failure",
+        });
     };
 
     while (pendingChecks.length > 0) {
@@ -750,7 +766,7 @@ async function checkPersonaAudienceUploadStatus(page, reportName, categoryNames,
                 resultsByKey[`${check.category}|${check.platform}`] = entry;
                 const msg = `❌ [Uploaded Audience/${check.platform}/${check.category}] Timed out waiting for a terminal status after ${maxWaitMinutes} min.`;
                 console.log(msg);
-                logSession(msg);
+                logSession(msg, false, { report: reportName, platform: check.platform, category: check.category, status: "timeout", outcome: "failure", reason: "audience_upload_status_timeout" });
             }
             break;
         }
@@ -823,11 +839,18 @@ async function validatePersonaReport(page, reportName, reportContainer) {
         // underlying data - it's logged on its own tab but doesn't block audience export as long
         // as every other tab genuinely passed.
         const blockingFailures = tabs.filter(t => !t.passed && t.reason !== 'table_rendered_instead_of_map');
+        const validation = tabs.length > 0 && blockingFailures.length === 0 ? 'passed' : 'failed';
 
-        return { reportName, validation: tabs.length > 0 && blockingFailures.length === 0 ? 'passed' : 'failed', tabs };
+        logSession(`Persona report validation ${validation} for '${reportName}'`, false, {
+            report: reportName,
+            outcome: validation === 'passed' ? "success" : "failure",
+            reason: validation === 'passed' ? undefined : "tab_validation_failed",
+        });
+
+        return { reportName, validation, tabs };
     } catch (err) {
         console.error(`❌ Failed to validate completed Persona report '${reportName}': ${err.message}`);
-        logSession(`❌ Failed to validate completed Persona report '${reportName}': ${err.message}`);
+        logSession(`❌ Failed to validate completed Persona report '${reportName}': ${err.message}`, false, { report: reportName, outcome: "failure", reason: err.message });
         return { reportName, validation: 'error_opening_report', error: err.message };
     }
 }

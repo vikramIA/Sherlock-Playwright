@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const { toLogfmt, collapseWhitespace, getContext } = require("./Logger");
 
 class NetworkLogger {
   constructor(page, sessionDir) {
@@ -8,6 +9,12 @@ class NetworkLogger {
     this.networkLogPath = path.join(sessionDir, "network.log");
     this.requestMap = new Map();
     this.setupListeners();
+  }
+
+  writeLine(fields) {
+    const { env, session } = getContext();
+    const line = toLogfmt({ ts: new Date().toISOString(), env, session, ...fields });
+    fs.appendFileSync(this.networkLogPath, line + '\n');
   }
 
   setupListeners() {
@@ -31,9 +38,6 @@ class NetworkLogger {
       if (this.requestMap.has(req)) {
         const { url, method, startTime, postData } = this.requestMap.get(req);
         const durationMs = Date.now() - startTime;
-        const minutes = Math.floor(durationMs / 60000);
-        const seconds = ((durationMs % 60000) / 1000).toFixed(2);
-        const durationStr = `${minutes}m:${seconds}s`;
 
         let responseText = "";
         try {
@@ -43,14 +47,17 @@ class NetworkLogger {
           responseText = "[Unable to read response body]";
         }
 
-        const logEntry = `
-➡️ ${method} ${url}
-   Payload: ${postData || "-"}
-⬅️ Status: ${res.status()}, Time: ${durationStr}
-   Response: ${responseText}
-----------------------------------------------------------
-`;
-        fs.appendFileSync(this.networkLogPath, logEntry);
+        this.writeLine({
+          level: res.status() >= 400 ? 'error' : 'info',
+          event: 'http_response',
+          method,
+          url,
+          status: res.status(),
+          duration_ms: durationMs,
+          payload: postData ? collapseWhitespace(postData) : undefined,
+          response: collapseWhitespace(responseText),
+        });
+
         this.requestMap.delete(req);
       }
     });
@@ -60,8 +67,15 @@ class NetworkLogger {
       if (this.requestMap.has(req)) {
         const { url, method } = this.requestMap.get(req);
         const failureText = req.failure()?.errorText || "Unknown";
-        const logEntry = `❌ Failed: ${method} ${url}, Reason: ${failureText}\n`;
-        fs.appendFileSync(this.networkLogPath, logEntry);
+
+        this.writeLine({
+          level: 'error',
+          event: 'http_request_failed',
+          method,
+          url,
+          reason: failureText,
+        });
+
         this.requestMap.delete(req);
       }
     });

@@ -1,4 +1,4 @@
-const { logSession } = require('./Logger');
+const { logSession, beginFlow } = require('./Logger');
 const {
     selectBehaviors, selectAgeRanges, clearSearchBar, uploadAudiences, searchAndClickReport, selectDateRange, clickCreateReportButton, enterReportName,
     selectExploreReportType, keplerDatasetsFetch, Report_To_Persona_Flow, selectSubCategory, selectBrands, SelectRating, SelectReviewCount,
@@ -9,6 +9,7 @@ const {
 async function postUploadExploreReportFlow(page, inputData, isForMultilayer = false, multilayerReportsMap = false) {
     const randomSuffix = () => Math.random().toString(36).substring(2, 7);
     inputData.reportName = `${inputData.reportName}: ${randomSuffix()}`;
+    beginFlow("post_upload_explore");
 
     try {
         // Step 1: Navigate to Explore and create a new report
@@ -16,10 +17,10 @@ async function postUploadExploreReportFlow(page, inputData, isForMultilayer = fa
             const createBtnXPath = "//button[@data-sidebar='menu-button' and .//span[text()='Create Report']]";
             await page.locator(createBtnXPath).click();
             console.log(`✅ Clicked 'Create Report' for ${inputData.reportName}`);
-            logSession(`✅ Clicked 'Create Report' for ${inputData.reportName}`)
+            logSession(`✅ Clicked 'Create Report' for ${inputData.reportName}`, false, { report: inputData.reportName })
         } catch (err) {
             console.error(`❌ Failed during navigation: ${err.message}`);
-            logSession(`❌ Failed during navigation: ${err.message}`);
+            logSession(`❌ Failed during navigation: ${err.message}`, false, { flow: "post_upload_explore", report: inputData.reportName, outcome: "failure", reason: err.message });
             return;
         }
 
@@ -73,7 +74,7 @@ async function postUploadExploreReportFlow(page, inputData, isForMultilayer = fa
 
                     if (result.status === 'no_data' || result.status === 'error' || result.status === 'timeout' || result.status === 'summary') {
                         console.log(`[${inputData.reportName}] ⛔ Skipping further flows due to Kepler status: ${result.status}`);
-                        logSession(`[${inputData.reportName}] ⛔ Skipping further flows due to Kepler status: ${result.status}`);
+                        logSession(`[${inputData.reportName}] ⛔ Skipping further flows due to Kepler status: ${result.status}`, false, { flow: "post_upload_explore", report: inputData.reportName, outcome: "skipped", reason: `kepler_status_${result.status}` });
                         return; // 🚨 THIS is what stops execution
                     }
 
@@ -96,14 +97,14 @@ async function postUploadExploreReportFlow(page, inputData, isForMultilayer = fa
                                 await safeWait(page, 2000);
                             } catch (err) {
                                 console.error(`❌ Upload process failed for platform ${platform}: ${err.message}`);
-                                logSession(`❌ Upload process failed for platform ${platform}: ${err.message}`);
+                                logSession(`❌ Upload process failed for platform ${platform}: ${err.message}`, false, { flow: "post_upload_explore", report: inputData.reportName, outcome: "failure", reason: err.message });
                             }
                         }
                     }
 
                 } catch (err) {
                     console.error(`❌ Error in 'place level visits' flow: ${err.message}`);
-                    logSession(`❌ Error in 'place level visits' flow: ${err.message}`);
+                    logSession(`❌ Error in 'place level visits' flow: ${err.message}`, false, { flow: "post_upload_explore", report: inputData.reportName, outcome: "failure", reason: err.message });
                 }
             }
 
@@ -159,7 +160,7 @@ async function postUploadExploreReportFlow(page, inputData, isForMultilayer = fa
 
                     if (result.status === 'no_data' || result.status === 'error' || result.status === 'timeout' || result.status === 'summary') {
                         console.log(`[${inputData.reportName}] ⛔ Skipping further flows due to Kepler status: ${result.status}`);
-                        logSession(`[${inputData.reportName}] ⛔ Skipping further flows due to Kepler status: ${result.status}`);
+                        logSession(`[${inputData.reportName}] ⛔ Skipping further flows due to Kepler status: ${result.status}`, false, { flow: "post_upload_explore", report: inputData.reportName, outcome: "skipped", reason: `kepler_status_${result.status}` });
                         return; // 🚨 THIS is what stops execution
                     }
 
@@ -179,7 +180,7 @@ async function postUploadExploreReportFlow(page, inputData, isForMultilayer = fa
                                     await safeWait(page, 2000);
                                 } catch (err) {
                                     console.warn(`⚠️ Could not select report "${DeviceReportName}" for upload: ${err.message}`);
-                                    logSession(`⚠️ Could not select report "${DeviceReportName}" for upload: ${err.message}`);
+                                    logSession(`⚠️ Could not select report "${DeviceReportName}" for upload: ${err.message}`, false, { flow: "post_upload_explore", report: DeviceReportName, outcome: "skipped", reason: err.message });
                                     // Skip this platform if report cannot be selected
                                     continue;
                                 }
@@ -191,14 +192,14 @@ async function postUploadExploreReportFlow(page, inputData, isForMultilayer = fa
                                 await safeWait(page, 2000);
                             } catch (err) {
                                 console.error(`❌ Upload process failed for platform ${platform}: ${err.message}`);
-                                logSession(`❌ Upload process failed for platform ${platform}: ${err.message}`);
+                                logSession(`❌ Upload process failed for platform ${platform}: ${err.message}`, false, { flow: "post_upload_explore", report: inputData.reportName, outcome: "failure", reason: err.message });
                             }
                         }
                     }
 
                 } catch (err) {
                     console.error(`❌ Error in 'device level visits' flow: ${err.message}`);
-                    logSession(`❌ Error in 'device level visits' flow: ${err.message}`);
+                    logSession(`❌ Error in 'device level visits' flow: ${err.message}`, false, { flow: "post_upload_explore", report: inputData.reportName, outcome: "failure", reason: err.message });
                 }
             }
 
@@ -242,7 +243,7 @@ async function postUploadExploreReportFlow(page, inputData, isForMultilayer = fa
 
                     if (result.status === 'no_data' || result.status === 'error' || result.status === 'timeout') {
                         console.log(`[${inputData.reportName}] ⛔ Skipping further flows due to Kepler status: ${result.status}`);
-                        logSession(`[${inputData.reportName}] ⛔ Skipping further flows due to Kepler status: ${result.status}`);
+                        logSession(`[${inputData.reportName}] ⛔ Skipping further flows due to Kepler status: ${result.status}`, false, { flow: "post_upload_explore", report: inputData.reportName, outcome: "skipped", reason: `kepler_status_${result.status}` });
                         return; // 🚨 THIS is what stops execution
                     }
 
@@ -262,7 +263,7 @@ async function postUploadExploreReportFlow(page, inputData, isForMultilayer = fa
                             if (!isReportFound) {
                                 const msg = `⚠️ Skipping visitation creation Using Places — report "${PlaceReportName}" not found.`;
                                 console.log(msg);
-                                logSession(msg);
+                                logSession(msg, false, { flow: "post_upload_explore", report: PlaceReportName, outcome: "skipped", reason: "linked_report_not_found" });
                                 return;
                             }
 
@@ -285,7 +286,7 @@ async function postUploadExploreReportFlow(page, inputData, isForMultilayer = fa
 
                             if (visitResult.status === 'no_data' || visitResult.status === 'error' || visitResult.status === 'timeout' || visitResult.status === 'summary') {
                                 console.log(`[${PLVReportInputs.reportName}] ⛔ Skipping further flows due to Kepler status: ${visitResult.status}`);
-                                logSession(`[${PLVReportInputs.reportName}] ⛔ Skipping further flows due to Kepler status: ${visitResult.status}`);
+                                logSession(`[${PLVReportInputs.reportName}] ⛔ Skipping further flows due to Kepler status: ${visitResult.status}`, false, { flow: "post_upload_explore", report: PLVReportInputs.reportName, outcome: "skipped", reason: `kepler_status_${visitResult.status}` });
                             }
                             else {
                                 if (PLVReportInputs.Persona?.toUpperCase() === "YES") {
@@ -295,7 +296,7 @@ async function postUploadExploreReportFlow(page, inputData, isForMultilayer = fa
 
                         } catch (err) {
                             console.error(`❌ Error in 'places' flow for ${PlaceReportName}: ${err.message}`);
-                            logSession(`❌ Error in 'places' flow for ${PlaceReportName}: ${err.message}`);
+                            logSession(`❌ Error in 'places' flow for ${PlaceReportName}: ${err.message}`, false, { flow: "post_upload_explore", report: PLVReportInputs.reportName, linked_report: PlaceReportName, outcome: "failure", reason: err.message });
                         } finally {
                             // Always clear search bar and continue safely
                             await safeWait(page, 2000);
@@ -320,7 +321,7 @@ async function postUploadExploreReportFlow(page, inputData, isForMultilayer = fa
                             if (!isReportFound) {
                                 const msg = `⚠️ Skipping visitation creation Using Places — report "${PlaceReportName}" not found.`;
                                 console.log(msg);
-                                logSession(msg);
+                                logSession(msg, false, { flow: "post_upload_explore", report: PlaceReportName, outcome: "skipped", reason: "linked_report_not_found" });
                                 return;
                             }
 
@@ -343,7 +344,7 @@ async function postUploadExploreReportFlow(page, inputData, isForMultilayer = fa
 
                             if (visitResult.status === 'no_data' || visitResult.status === 'error' || visitResult.status === 'timeout' || visitResult.status === 'summary') {
                                 console.log(`[${DLVReportInputs.reportName}] ⛔ Skipping further flows due to Kepler status: ${visitResult.status}`);
-                                logSession(`[${DLVReportInputs.reportName}] ⛔ Skipping further flows due to Kepler status: ${visitResult.status}`);
+                                logSession(`[${DLVReportInputs.reportName}] ⛔ Skipping further flows due to Kepler status: ${visitResult.status}`, false, { flow: "post_upload_explore", report: DLVReportInputs.reportName, outcome: "skipped", reason: `kepler_status_${visitResult.status}` });
                             }
                             else {
                                 if (DLVReportInputs.Persona?.toUpperCase() === "YES") {
@@ -352,7 +353,7 @@ async function postUploadExploreReportFlow(page, inputData, isForMultilayer = fa
                             }
                         } catch (err) {
                             console.error(`❌ Error in 'places' flow for ${PlaceReportName}: ${err.message}`);
-                            logSession(`❌ Error in 'places' flow for ${PlaceReportName}: ${err.message}`);
+                            logSession(`❌ Error in 'places' flow for ${PlaceReportName}: ${err.message}`, false, { flow: "post_upload_explore", report: DLVReportInputs.reportName, linked_report: PlaceReportName, outcome: "failure", reason: err.message });
                         } finally {
                             // Always clear search bar and continue safely
                             await safeWait(page, 2000);
@@ -364,20 +365,20 @@ async function postUploadExploreReportFlow(page, inputData, isForMultilayer = fa
 
                 } catch (err) {
                     console.error(`❌ Error in 'places' flow: ${err.message}`);
-                    logSession(`❌ Error in 'places' flow: ${err.message}`);
+                    logSession(`❌ Error in 'places' flow: ${err.message}`, false, { flow: "post_upload_explore", report: inputData.reportName, outcome: "failure", reason: err.message });
                 }
             }
         } catch (err) {
             const errMsg = `❌ Error while selecting report type '${inputData.reportType}': ${err.message}`;
             console.error(errMsg);
-            logSession(errMsg);
+            logSession(errMsg, false, { flow: "post_upload_explore", report: inputData.reportName, outcome: "failure", reason: err.message });
             return;
         }
 
     } catch (err) {
         const finalError = `❌ General Error in Explore flow for ${inputData.reportName}: ${err.message}`;
         console.error(finalError);
-        logSession(finalError);
+        logSession(finalError, false, { flow: "post_upload_explore", report: inputData.reportName, outcome: "failure", reason: err.message });
     }
 }
 

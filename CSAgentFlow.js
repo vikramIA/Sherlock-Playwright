@@ -16,7 +16,7 @@ const {
 } = require("./CSAgentFunctions.js");
 
 const { openWatsonAI } = require("./WatsonAIFunctions.js");
-const { logSession } = require("./Logger");
+const { logSession, beginFlow } = require("./Logger");
 
 
 // =========================================================
@@ -96,10 +96,13 @@ async function csAgentFlow(page, testCases = []) {
 
     for (const testCase of testCases) {
 
+        const caseId = testCase.companyName || testCase.savedRun || testCase.mode;
+        beginFlow("cs_agent");
+
         try {
 
             console.log(`\n🤖 Starting CS Agent test case: '${testCase.mode}'`);
-            logSession(`\n🤖 Starting CS Agent test case: '${testCase.mode}'`);
+            logSession(`\n🤖 Starting CS Agent test case: '${testCase.mode}'`, false, { flow: "cs_agent", report: caseId, mode: testCase.mode });
 
             // =================================================
             // RESET BEFORE EACH TEST CASE
@@ -146,7 +149,7 @@ async function csAgentFlow(page, testCases = []) {
             await waitForCSAgentDeactivated(page);
 
             console.log(`🎉 CS Agent test case '${testCase.mode}' completed successfully.`);
-            logSession(`🎉 CS Agent test case '${testCase.mode}' completed successfully.`);
+            logSession(`🎉 CS Agent test case '${testCase.mode}' completed successfully.`, false, { flow: "cs_agent", report: caseId, mode: testCase.mode, outcome: "success" });
 
         } catch (error) {
 
@@ -157,7 +160,7 @@ async function csAgentFlow(page, testCases = []) {
             console.error(`❌ CS Agent test case '${testCase.mode}' failed.`);
             console.error(`❌ Error: ${error.message}`);
 
-            logSession(`❌ CS Agent test case '${testCase.mode}' failed.`);
+            logSession(`❌ CS Agent test case '${testCase.mode}' failed.`, false, { flow: "cs_agent", report: caseId, mode: testCase.mode, outcome: "failure", reason: error.message });
             logSession(`❌ Error: ${error.message}`);
 
             console.log(`➡️ Continuing with next CS Agent test case...`);

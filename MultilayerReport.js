@@ -5,7 +5,7 @@ const {
     clearSearchBar, Report_To_Persona_Flow
 } = require('./functions');
 const { addPersonaReportToTracking } = require('./PersonaStatusFunctions.js');
-const { logSession } = require('./Logger');
+const { logSession, beginFlow } = require('./Logger');
 
 // =============== Upload Audience Flow ===============
 // Note: Append Audience is not supported for Multilayer reports — merged
@@ -49,7 +49,7 @@ async function uploadAudienceFlow(page, reportName, UploadAudience) {
 
         } catch (err) {
             console.error(`❌ Upload process failed for platform ${platform}: ${err.message}`);
-            logSession(`❌ Upload process failed for platform ${platform}: ${err.message}`);
+            logSession(`❌ Upload process failed for platform ${platform}: ${err.message}`, false, { flow: "multilayer_audience_upload", report: reportName, platform, outcome: "failure", reason: err.message });
         }
     }
 }
@@ -151,7 +151,7 @@ async function layeredMerge(page, reportName, Report_TO_Merge, multilayerReports
     const timeTakenSeconds = (endTime - startTime) / 1000;
     const timeTakenMinutes = timeTakenSeconds / 60;
     console.log(`⏱️ Layered Merge completed for: ${reportName} | Reports: ${Report_TO_Merge} | Time: ${timeTakenMinutes.toFixed(2)} min (${timeTakenSeconds.toFixed(2)} sec)`);
-    logSession(`⏱️ Layered Merge completed for: ${reportName} | Reports: ${Report_TO_Merge} | Time: ${timeTakenMinutes.toFixed(2)} min (${timeTakenSeconds.toFixed(2)} sec)`);
+    logSession(`⏱️ Layered Merge completed for: ${reportName} | Reports: ${Report_TO_Merge} | Time: ${timeTakenMinutes.toFixed(2)} min (${timeTakenSeconds.toFixed(2)} sec)`, false, { flow: "multilayer", report: reportName, merge_type: "layered", duration_sec: timeTakenSeconds });
 }
 
 // =============== Unified Merge Flow ===============
@@ -287,12 +287,13 @@ async function unifiedMerge(page, reportName, Report_TO_Merge, multilayerReports
     const timeTakenSeconds = (endTime - startTime) / 1000;
     const timeTakenMinutes = timeTakenSeconds / 60;
     console.log(`⏱️ Unified Merge completed for: ${reportName} | Reports: ${Report_TO_Merge} | Time: ${timeTakenMinutes.toFixed(2)} min (${timeTakenSeconds.toFixed(2)} sec)`);
-    logSession(`⏱️ Unified Merge completed for: ${reportName} | Reports: ${Report_TO_Merge} | Time: ${timeTakenMinutes.toFixed(2)} min (${timeTakenSeconds.toFixed(2)} sec)`);
+    logSession(`⏱️ Unified Merge completed for: ${reportName} | Reports: ${Report_TO_Merge} | Time: ${timeTakenMinutes.toFixed(2)} min (${timeTakenSeconds.toFixed(2)} sec)`, false, { flow: "multilayer", report: reportName, merge_type: "unified", duration_sec: timeTakenSeconds });
 }
 
 // =============== Main Flow ===============
 async function MultilayerFlow(page, reportName, Report_TO_Merge, MergeType, multilayerReportsMap, UploadAudience, Persona, env) {
     const MAX_GLOBAL_RETRIES = 5;
+    beginFlow("multilayer");
 
     for (let globalAttempt = 0; globalAttempt < MAX_GLOBAL_RETRIES; globalAttempt++) {
         console.log(`🌍 Starting Multilayer flow - Attempt ${globalAttempt + 1}/${MAX_GLOBAL_RETRIES}`);
@@ -303,7 +304,7 @@ async function MultilayerFlow(page, reportName, Report_TO_Merge, MergeType, mult
             for (const num of Report_TO_Merge) {
                 if (!multilayerReportsMap.has(Number(num))) {
                     console.warn(`⚠️ Report number ${num} not found. Skipping [${Report_TO_Merge.join(', ')}]`);
-                    logSession(`⚠️ Report number ${num} not found. Skipping [${Report_TO_Merge.join(', ')}]`);
+                    logSession(`⚠️ Report number ${num} not found. Skipping [${Report_TO_Merge.join(', ')}]`, false, { flow: "multilayer", report: reportName, outcome: "skipped", reason: `report_number_${num}_not_found` });
                     return;
                 }
             }
@@ -363,7 +364,7 @@ async function MultilayerFlow(page, reportName, Report_TO_Merge, MergeType, mult
                 await unifiedMerge(page, reportName, Report_TO_Merge, multilayerReportsMap, startTime, { Persona, env, UploadAudience });
             } else {
                 console.warn(`❌ Invalid MergeType: ${MergeType}`);
-                logSession(`❌ Invalid MergeType: ${MergeType}`);
+                logSession(`❌ Invalid MergeType: ${MergeType}`, false, { flow: "multilayer", report: reportName, outcome: "failure", reason: "invalid_merge_type" });
                 return;
             }
 
@@ -371,7 +372,7 @@ async function MultilayerFlow(page, reportName, Report_TO_Merge, MergeType, mult
             await uploadAudienceFlow(page, reportName, UploadAudience);
 
             console.log(`✅ Completed Multilayer flow successfully on attempt ${globalAttempt + 1}`);
-            logSession(`✅ Completed Multilayer flow successfully on attempt ${globalAttempt + 1}`);
+            logSession(`✅ Completed Multilayer flow successfully on attempt ${globalAttempt + 1}`, false, { flow: "multilayer", report: reportName, outcome: "success", attempt: globalAttempt + 1 });
             return; // success — exit loop
 
         } catch (err) {
@@ -385,7 +386,7 @@ async function MultilayerFlow(page, reportName, Report_TO_Merge, MergeType, mult
                 continue; // retry full flow
             } else {
                 console.error(`❌ All ${MAX_GLOBAL_RETRIES} attempts failed. Continuing script without abort.`);
-                logSession(`❌ All ${MAX_GLOBAL_RETRIES} attempts failed. Continuing script without abort.`);
+                logSession(`❌ All ${MAX_GLOBAL_RETRIES} attempts failed. Continuing script without abort.`, false, { flow: "multilayer", report: reportName, outcome: "failure", reason: err.message });
                 return; // never throw — continue rest of script
             }
         }

@@ -431,35 +431,35 @@ async function navigateAndCreateExploreReport(page, inputData, maxRetries = 5) {
     while (attempt < maxRetries) {
         attempt++;
         console.log(`🔁 Attempt ${attempt} to navigate to Explore and click 'Create Report' for ${inputData.reportName}`);
-        logSession(`🔁 Attempt ${attempt} to navigate to Explore and click 'Create Report' for ${inputData.reportName}`);
+        logSession(`🔁 Attempt ${attempt} to navigate to Explore and click 'Create Report' for ${inputData.reportName}`, false, { report: inputData.reportName, attempt });
 
         try {
             // Step 1: Click on Explore
             const exploreXPath = "//a[@href='/explore' and @data-sidebar='menu-button']";
             await page.locator(exploreXPath).click();
             console.log(`✅ Navigated to Explore for report: ${inputData.reportName}`);
-            logSession(`✅ Navigated to Explore for report: ${inputData.reportName}`);
+            logSession(`✅ Navigated to Explore for report: ${inputData.reportName}`, false, { report: inputData.reportName });
 
             // Step 2: Verify URL
             await page.waitForURL('**/explore', { timeout: 10000 });
             console.log(`✅ Explore URL verified for ${inputData.reportName}`);
-            logSession(`✅ Explore URL verified for ${inputData.reportName}`);
+            logSession(`✅ Explore URL verified for ${inputData.reportName}`, false, { report: inputData.reportName });
 
             // Step 3: Click Create Report
             const createBtnXPath = "//button[@data-sidebar='menu-button' and .//span[text()='Create Report']]";
             await page.locator(createBtnXPath).click();
             console.log(`✅ Clicked 'Create Report' for ${inputData.reportName}`);
-            logSession(`✅ Clicked 'Create Report' for ${inputData.reportName}`);
+            logSession(`✅ Clicked 'Create Report' for ${inputData.reportName}`, false, { report: inputData.reportName });
 
             // 🎯 Success - exit retry loop
             return;
 
         } catch (err) {
             console.error(`❌ Attempt ${attempt} failed: ${err.message}`);
-            logSession(`❌ Attempt ${attempt} failed: ${err.message}`);
+            logSession(`❌ Attempt ${attempt} failed: ${err.message}`, false, { report: inputData.reportName, attempt });
             if (attempt >= maxRetries) {
                 console.error(`❌ All ${maxRetries} attempts failed for report: ${inputData.reportName}`);
-                logSession(`❌ All ${maxRetries} attempts failed for report: ${inputData.reportName}`);
+                logSession(`❌ All ${maxRetries} attempts failed for report: ${inputData.reportName}`, false, { report: inputData.reportName });
                 return;
             } else {
                 console.log(`🔄 Retrying...`);
@@ -501,7 +501,7 @@ async function selectLocations(page, locationString, reportName) {
             await locationInput.press('Enter');
 
             console.log(`✅ Location '${loc}' selected successfully for report '${reportName}'.`);
-            logSession(`✅ Location '${loc}' selected successfully for report '${reportName}'.`);
+            logSession(`✅ Location '${loc}' selected successfully for report '${reportName}'.`, false, { report: reportName, location: loc });
             await page.waitForTimeout(500);
         }
 
@@ -512,7 +512,7 @@ async function selectLocations(page, locationString, reportName) {
     } catch (err) {
         const errMsg = `❌ Failed to add locations for report '${reportName}': ${err.message}`;
         console.error(errMsg);
-        logSession(errMsg);
+        logSession(errMsg, false, { report: reportName });
         throw err; // propagate error for upstream handling
     }
 }
@@ -795,7 +795,7 @@ async function SelectRating(page, Ratings, reportName) {
         const startInput = page.locator("//label[contains(text(), 'Ratings')]/following::input[1]");
         await startInput.fill(String(min));
         console.log(`[${reportName}] Applied Rating Start: ${min}`);
-        logSession(`[${reportName}] Applied Rating Start: ${min}`);
+        logSession(`[${reportName}] Applied Rating Start: ${min}`, false, { filter: "rating", bound: "start", value: min });
     } catch (e) {
         console.error(`[${reportName}] Failed to apply start rating:`, e.message);
         logSession(`[${reportName}] Failed to apply start rating: ${e.message}`);
@@ -805,7 +805,7 @@ async function SelectRating(page, Ratings, reportName) {
         const endInput = page.locator("//label[contains(text(), 'Ratings')]/following::input[2]");
         await endInput.fill(String(max));
         console.log(`[${reportName}] Applied Rating End: ${max}`);
-        logSession(`[${reportName}] Applied Rating End: ${max}`);
+        logSession(`[${reportName}] Applied Rating End: ${max}`, false, { filter: "rating", bound: "end", value: max });
         await endInput.press('Tab');
     } catch (e) {
         console.error(`[${reportName}] Failed to apply end rating:`, e.message);
@@ -839,7 +839,7 @@ async function SelectReviewCount(page, ReviewCount, reportName) {
             const startInput = page.locator("//label[contains(text(), 'Review Count')]/following::input[1]");
             await startInput.fill(String(min));
             console.log(`[${reportName}] Applied Review Count Start: ${min}`);
-            logSession(`[${reportName}] Applied Review Count Start: ${min}`);
+            logSession(`[${reportName}] Applied Review Count Start: ${min}`, false, { filter: "review_count", bound: "start", value: min });
         } catch (e) {
             console.error(`[${reportName}] Failed to apply start review count:`, e.message);
             logSession(`[${reportName}] Failed to apply start review count: ${e.message}`);
@@ -849,7 +849,7 @@ async function SelectReviewCount(page, ReviewCount, reportName) {
             const endInput = page.locator("//label[contains(text(), 'Review Count')]/following::input[2]");
             await endInput.fill(String(max));
             console.log(`[${reportName}] Applied Review Count End: ${max}`);
-            logSession(`[${reportName}] Applied Review Count End: ${max}`);
+            logSession(`[${reportName}] Applied Review Count End: ${max}`, false, { filter: "review_count", bound: "end", value: max });
         } catch (e) {
             console.error(`[${reportName}] Failed to apply end review count:`, e.message);
             logSession(`[${reportName}] Failed to apply end review count: ${e.message}`);
@@ -886,12 +886,12 @@ async function SelectVisitDuration(page, VisitDuration, reportName) {
         const startInput = page.locator("//label[contains(text(), 'Visit Duration(min)')]/following::input[1]");
         await startInput.fill(String(min));
         console.log(`[${reportName}] Applied Visit Duration Start: ${min}`);
-        logSession(`[${reportName}] Applied Visit Duration Start: ${min}`);
+        logSession(`[${reportName}] Applied Visit Duration Start: ${min}`, false, { filter: "visit_duration", bound: "start", value: min });
 
         const endInput = page.locator("//label[contains(text(), 'Visit Duration(min)')]/following::input[2]");
         await endInput.fill(String(max));
         console.log(`[${reportName}] Applied Visit Duration End: ${max}`);
-        logSession(`[${reportName}] Applied Visit Duration End: ${max}`);
+        logSession(`[${reportName}] Applied Visit Duration End: ${max}`, false, { filter: "visit_duration", bound: "end", value: max });
     } catch (error) {
         console.error(`[${reportName}] Failed to apply Visit Duration: ${error.message}`);
         logSession(`[${reportName}] Failed to apply Visit Duration: ${error.message}`);
@@ -924,7 +924,7 @@ async function SelectAverageDailyVisits(page, valueRange, reportName) {
             const minInput = page.locator("//label[contains(text(), 'Average Daily Visits')]/following::input[1]");
             await minInput.fill(String(min));
             console.log(`[${reportName}] Applied Average Daily Visits Start: ${min}`);
-            logSession(`[${reportName}] Applied Average Daily Visits Start: ${min}`);
+            logSession(`[${reportName}] Applied Average Daily Visits Start: ${min}`, false, { filter: "avg_daily_visits", bound: "start", value: min });
         } catch (e) {
             console.error(`[${reportName}] Failed to apply start Average Daily Visits:`, e.message);
             logSession(`[${reportName}] Failed to apply start Average Daily Visits: ${e.message}`);
@@ -934,7 +934,7 @@ async function SelectAverageDailyVisits(page, valueRange, reportName) {
             const maxInput = page.locator("//label[contains(text(), 'Average Daily Visits')]/following::input[2]");
             await maxInput.fill(String(max));
             console.log(`[${reportName}] Applied Average Daily Visits End: ${max}`);
-            logSession(`[${reportName}] Applied Average Daily Visits End: ${max}`);
+            logSession(`[${reportName}] Applied Average Daily Visits End: ${max}`, false, { filter: "avg_daily_visits", bound: "end", value: max });
         } catch (e) {
             console.error(`[${reportName}] Failed to apply end Average Daily Visits:`, e.message);
             logSession(`[${reportName}] Failed to apply end Average Daily Visits: ${e.message}`);
@@ -972,7 +972,7 @@ async function SelectAverageMonthlyVisits(page, valueRange, reportName) {
             const minInput = page.locator("//label[contains(text(), 'Average Monthly Visits')]/following::input[1]");
             await minInput.fill(String(min));
             console.log(`[${reportName}] Applied Average Monthly Visits Start: ${min}`);
-            logSession(`[${reportName}] Applied Average Monthly Visits Start: ${min}`);
+            logSession(`[${reportName}] Applied Average Monthly Visits Start: ${min}`, false, { filter: "avg_monthly_visits", bound: "start", value: min });
         } catch (e) {
             console.error(`[${reportName}] Failed to apply start Average Monthly Visits:`, e.message);
             logSession(`[${reportName}] Failed to apply start Average Monthly Visits: ${e.message}`);
@@ -982,7 +982,7 @@ async function SelectAverageMonthlyVisits(page, valueRange, reportName) {
             const maxInput = page.locator("//label[contains(text(), 'Average Monthly Visits')]/following::input[2]");
             await maxInput.fill(String(max));
             console.log(`[${reportName}] Applied Average Monthly Visits End: ${max}`);
-            logSession(`[${reportName}] Applied Average Monthly Visits End: ${max}`);
+            logSession(`[${reportName}] Applied Average Monthly Visits End: ${max}`, false, { filter: "avg_monthly_visits", bound: "end", value: max });
         } catch (e) {
             console.error(`[${reportName}] Failed to apply end Average Monthly Visits:`, e.message);
             logSession(`[${reportName}] Failed to apply end Average Monthly Visits: ${e.message}`);
@@ -1020,7 +1020,7 @@ async function SelectAverageDailyDevices(page, valueRange, reportName) {
             const minInput = page.locator("//label[contains(text(), 'Average Daily Devices')]/following::input[1]");
             await minInput.fill(String(min));
             console.log(`[${reportName}] Applied Average Daily Devices Start: ${min}`);
-            logSession(`[${reportName}] Applied Average Daily Devices Start: ${min}`);
+            logSession(`[${reportName}] Applied Average Daily Devices Start: ${min}`, false, { filter: "avg_daily_devices", bound: "start", value: min });
         } catch (e) {
             console.error(`[${reportName}] Failed to apply start Average Daily Devices:`, e.message);
             logSession(`[${reportName}] Failed to apply start Average Daily Devices: ${e.message}`);
@@ -1030,7 +1030,7 @@ async function SelectAverageDailyDevices(page, valueRange, reportName) {
             const maxInput = page.locator("//label[contains(text(), 'Average Daily Devices')]/following::input[2]");
             await maxInput.fill(String(max));
             console.log(`[${reportName}] Applied Average Daily Devices End: ${max}`);
-            logSession(`[${reportName}] Applied Average Daily Devices End: ${max}`);
+            logSession(`[${reportName}] Applied Average Daily Devices End: ${max}`, false, { filter: "avg_daily_devices", bound: "end", value: max });
         } catch (e) {
             console.error(`[${reportName}] Failed to apply end Average Daily Devices:`, e.message);
             logSession(`[${reportName}] Failed to apply end Average Daily Devices: ${e.message}`);
@@ -1068,7 +1068,7 @@ async function SelectAverageMonthlyDevices(page, valueRange, reportName) {
             const minInput = page.locator("//label[contains(text(), 'Average Monthly Devices')]/following::input[1]");
             await minInput.fill(String(min));
             console.log(`[${reportName}] Applied Average Monthly Devices Start: ${min}`);
-            logSession(`[${reportName}] Applied Average Monthly Devices Start: ${min}`);
+            logSession(`[${reportName}] Applied Average Monthly Devices Start: ${min}`, false, { filter: "avg_monthly_devices", bound: "start", value: min });
         } catch (e) {
             console.error(`[${reportName}] Failed to apply start Average Monthly Devices:`, e.message);
             logSession(`[${reportName}] Failed to apply start Average Monthly Devices: ${e.message}`);
@@ -1078,7 +1078,7 @@ async function SelectAverageMonthlyDevices(page, valueRange, reportName) {
             const maxInput = page.locator("//label[contains(text(), 'Average Monthly Devices')]/following::input[2]");
             await maxInput.fill(String(max));
             console.log(`[${reportName}] Applied Average Monthly Devices End: ${max}`);
-            logSession(`[${reportName}] Applied Average Monthly Devices End: ${max}`);
+            logSession(`[${reportName}] Applied Average Monthly Devices End: ${max}`, false, { filter: "avg_monthly_devices", bound: "end", value: max });
         } catch (e) {
             console.error(`[${reportName}] Failed to apply end Average Monthly Devices:`, e.message);
             logSession(`[${reportName}] Failed to apply end Average Monthly Devices: ${e.message}`);
@@ -1174,7 +1174,7 @@ async function SelectQualityLifeScore(page, range, reportName) {
         await clearAndType(endInput, max);
 
         console.log(`[${reportName}] Applied Quality of Life Score: ${min}–${max}`);
-        logSession(`[${reportName}] Applied Quality of Life Score: ${min}–${max}`);
+        logSession(`[${reportName}] Applied Quality of Life Score: ${min}–${max}`, false, { filter: "quality_of_life_score", value_min: min, value_max: max });
     } catch (e) {
         console.error(`[${reportName}] Failed to apply Quality of Life Score: ${e.message}`);
         logSession(`[${reportName}] Failed to apply Quality of Life Score: ${e.message}`);
@@ -1189,11 +1189,11 @@ async function clickCreateReportButton(page, reportName) {
         await createReportButton.click();
         const successMsg = `✅ 'Create Report' button clicked successfully for report '${reportName}'.`;
         console.log(successMsg);
-        logSession(successMsg);
+        logSession(successMsg, false, { report: reportName });
     } catch (error) {
         const errorMsg = `❌ Failed to click 'Create Report' button for report '${reportName}': ${error.message}`;
         console.error(errorMsg);
-        logSession(errorMsg);
+        logSession(errorMsg, false, { report: reportName });
     }
 }
 
@@ -1213,11 +1213,11 @@ async function enterReportName(page, reportName, reportNumber = false, multilaye
         }
 
         console.log(`✅ Report name '${reportName}' entered successfully.`);
-        logSession(`✅ Report name '${reportName}' entered successfully.`);
+        logSession(`✅ Report name '${reportName}' entered successfully.`, false, { report: reportName });
         return reportName;   // ✅ Return the report name
     } catch (err) {
         console.error(`❌ Failed to enter report name '${reportName}': ${err.message}`);
-        logSession(`❌ Failed to enter report name '${reportName}': ${err.message}`);
+        logSession(`❌ Failed to enter report name '${reportName}': ${err.message}`, false, { report: reportName });
         return null; // return null if failed
     }
 }
@@ -1290,12 +1290,13 @@ async function keplerDatasetsFetch(page, reportName) {
         console.log(`📝 Datasets Present : ${result.text}`);
         console.log(`⏱️ Time Taken : ${result.timeMinutes} minutes (${result.timeSeconds} seconds)`);
 
-        logSession("\n🧾 Kepler Report Result");
-        logSession(`📘 Report Name : ${result.reportName}`);
-        logSession(`🔗 URL : ${result.url}`);
-        logSession(`📌 status : ${result.status}`);
-        logSession(`📝 Datasets Present : ${result.text}`);
-        logSession(`⏱️ Time Taken : ${result.timeMinutes} minutes (${result.timeSeconds} seconds)`);
+        logSession("Kepler Report Result", false, {
+            report: result.reportName,
+            url: result.url,
+            status: result.status,
+            datasets: result.text,
+            duration_sec: result.timeSeconds,
+        });
 
         return result.status; // ✅ Enhancement 1 — return status
     };
@@ -2815,7 +2816,9 @@ async function verifyDefaultBentoCharts(
         );
 
         logSession(
-            `❌ Bento report content did not load for '${reportName}'.`
+            `❌ Bento report content did not load for '${reportName}'.`,
+            false,
+            { report: reportName, url: currentUrl, metric: config.heading }
         );
 
         logSession(
@@ -2896,7 +2899,9 @@ async function verifyDefaultBentoCharts(
         );
 
         logSession(
-            `✅ Bento charts loaded verified for '${reportName}' | ${loadedText}`
+            `✅ Bento charts loaded verified for '${reportName}' | ${loadedText}`,
+            false,
+            { report: reportName, charts_loaded_text: loadedText }
         );
 
     } else {
@@ -2958,7 +2963,9 @@ async function verifyDefaultBentoCharts(
 
     logSession(
         `✅ Default Bento verified for '${reportName}' | ` +
-        `${config.heading}: ${cardValue}`
+        `${config.heading}: ${cardValue}`,
+        false,
+        { report: reportName, metric: config.heading, value: cardValue }
     );
 
 
@@ -3049,14 +3056,12 @@ async function verifyAggregatedCount(page, reportName) {
         );
 
         logSession(
-            `❌ Aggregated Count Total value did not render for '${reportName}'.`
+            `❌ Aggregated Count Total value did not render for '${reportName}'.`,
+            false,
+            { report: reportName, url: currentUrl }
         );
 
         console.error(
-            `🔗 Current URL: ${currentUrl}`
-        );
-
-        logSession(
             `🔗 Current URL: ${currentUrl}`
         );
 
@@ -3071,7 +3076,9 @@ async function verifyAggregatedCount(page, reportName) {
             );
 
             logSession(
-                `⚠️ Aggregated Count summary page opened, but the Total value is missing/not loaded.`
+                `⚠️ Aggregated Count summary page opened, but the Total value is missing/not loaded.`,
+                false,
+                { report: reportName }
             );
 
         } else {
@@ -3081,7 +3088,9 @@ async function verifyAggregatedCount(page, reportName) {
             );
 
             logSession(
-                `⚠️ Unexpected page while verifying Aggregated Count.`
+                `⚠️ Unexpected page while verifying Aggregated Count.`,
+                false,
+                { report: reportName }
             );
         }
 
@@ -3103,7 +3112,9 @@ async function verifyAggregatedCount(page, reportName) {
         );
 
         logSession(
-            `⚠️ Aggregated Count Total value is empty for '${reportName}'.`
+            `⚠️ Aggregated Count Total value is empty for '${reportName}'.`,
+            false,
+            { report: reportName }
         );
 
         return null;
@@ -3126,7 +3137,9 @@ async function verifyAggregatedCount(page, reportName) {
     );
 
     logSession(
-        `✅ Aggregated Count verified for '${reportName}' | Total: ${totalValue}`
+        `✅ Aggregated Count verified for '${reportName}' | Total: ${totalValue}`,
+        false,
+        { report: reportName, total: totalValue }
     );
 
     return totalValue;
