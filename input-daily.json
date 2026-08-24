@@ -174,12 +174,6 @@
       "QualityLifeScore": "10-90"
     },
     {
-      "reportType": "Population",
-      "reportName": "Daily_Population_For_Multilayer",
-      "ReportNumber": 4,
-      "location": "Pune, Maharashtra, India"
-    },
-    {
       "reportType": "Places",
       "reportName": "Daily_Places_For_Multilayer",
       "ReportNumber": 5,
@@ -208,14 +202,6 @@
     },
     {
       "MergeType": "Unified",
-      "reportName": "Daily_PLV-Population-Unified",
-      "Report_TO_Merge": [
-        1,
-        4
-      ]
-    },
-    {
-      "MergeType": "Unified",
       "reportName": "Daily_DLV-QLI-Unified",
       "Report_TO_Merge": [
         2,
@@ -224,34 +210,10 @@
     },
     {
       "MergeType": "Unified",
-      "reportName": "Daily_DLV-Population-Unified",
-      "Report_TO_Merge": [
-        2,
-        4
-      ]
-    },
-    {
-      "MergeType": "Unified",
       "reportName": "Daily_Places-QLI-Unified",
       "Report_TO_Merge": [
         5,
         3
-      ]
-    },
-    {
-      "MergeType": "Unified",
-      "reportName": "Daily_Places-Population-Unified",
-      "Report_TO_Merge": [
-        5,
-        4
-      ]
-    },
-    {
-      "MergeType": "Unified",
-      "reportName": "Daily_QLI-Population-Unified",
-      "Report_TO_Merge": [
-        3,
-        4
       ]
     },
     {
@@ -264,26 +226,10 @@
     },
     {
       "MergeType": "Layered",
-      "reportName": "Daily_PLV-Population-Layered",
-      "Report_TO_Merge": [
-        1,
-        4
-      ]
-    },
-    {
-      "MergeType": "Layered",
       "reportName": "Daily_DLV-QLI-Layered",
       "Report_TO_Merge": [
         2,
         3
-      ]
-    },
-    {
-      "MergeType": "Layered",
-      "reportName": "Daily_DLV-Population-Layered",
-      "Report_TO_Merge": [
-        2,
-        4
       ]
     },
     {
@@ -293,22 +239,97 @@
         5,
         3
       ]
-    },
-    {
-      "MergeType": "Layered",
-      "reportName": "Daily_Places-Population-Layered",
-      "Report_TO_Merge": [
-        5,
-        4
-      ]
-    },
-    {
-      "MergeType": "Layered",
-      "reportName": "Daily_QLI-Population-Layered",
-      "Report_TO_Merge": [
-        3,
-        4
-      ]
     }
   ]
+   "WatsonAI": [
+    {
+      "reportType": "Quality of Life Index",
+      "query": "Analyze QLI distribution across Maharashtra",
+      "verification": {
+        "location": "[State] Maharashtra, India"
+      },
+      "expectedMessage": "Report created successfully"
+    },
+    {
+      "reportType": "Place Level Visits",
+      "query": "Create a PLV report for McDonalds in Pune for the period from June 1, 2026 to June 5, 2026",
+      "verification": {
+        "reportName": "Visitation by POI Report for McDonalds in Pune City",
+        "location": "[City] Pune, Maharashtra, India",
+        "dateRange": "Jun 01, 2026 - Jun 05, 2026",
+        "places": [
+          "Fast Food Restaurant",
+          "Restaurant"
+        ],
+        "brands": [
+          "Mcdonalds"
+        ]
+      },
+      "expectedMessage": "Report created successfully"
+    },
+    {
+      "reportType": "Place Level Visits",
+      "query": "Generate a PLV report for Nike stores in Mumbai from May 10, 2026 to May 15, 2026",
+      "verification": {
+        "reportName": "Visitation by POI Report for Nike in Mumbai City",
+        "location": "[City] Mumbai, Maharashtra, India",
+        "dateRange": "May 10, 2026 - May 15, 2026",
+        "places": [
+          "Shoe Store",
+          "Sportswear Store"
+        ],
+        "brands": [
+          "Nike"
+        ]
+      },
+      "expectedMessage": "Report created successfully"
+    },
+    {
+      "reportType": "Device Level Visits",
+      "query": "Create a DLV report for McDonalds in Mumbai from June 10, 2026 to June 12, 2026",
+      "verification": {
+        "reportName": "Device Level Visit Report for McDonalds in Mumbai City",
+        "location": "[City] Mumbai, Maharashtra, India",
+        "dateRange": "Jun 10, 2026 - Jun 12, 2026"
+      },
+      "expectedMessage": "Report created successfully"
+    },
+    {
+      "reportType": "Place Level Visits",
+      "query": "Create a PLV report for Starbucks in Mumbai for the period from July 1, 2026 to July 3, 2026",
+      "verification": {
+        "reportName": "Visitation by POI Report for Starbucks in Mumbai City",
+        "location": "[District] Mumbai City, Maharashtra, India",
+        "dateRange": "Jul 01, 2026 - Jul 03, 2026",
+        "places": [
+          "Cafe",
+          "Tea and Coffee Store"
+        ],
+        "brands": [
+          "Starbucks"
+        ]
+      },
+      "expectedMessage": "Report created successfully"
+    },
+    {
+      "reportType": "Device Level Visits",
+      "query": "Create a DLV report for Starbucks in Mumbai for the period from July 1, 2026 to July 3, 2026",
+      "verification": {
+        "reportName": "Device Level Visit Report for Starbucks in Mumbai City",
+        "location": "[City] Mumbai, Maharashtra, India",
+        "dateRange": "Jul 01, 2026 - Jul 03, 2026"
+      },
+      "expectedMessage": "Report created successfully"
+    },
+    {
+      "reportType": "Device Level Visits",
+      "query": "Create a DLV report for Apple stores in Mumbai from July 5, 2026 to July 10, 2026",
+      "verification": {
+        "reportName": "Device Level Visit Report for Apple in Mumbai City",
+        "location": "[City] Mumbai, Maharashtra, India",
+        "dateRange": "Jul 05, 2026 - Jul 10, 2026"
+      },
+      "expectedMessage": "Report created successfully"
+    }
+  ],
 }
