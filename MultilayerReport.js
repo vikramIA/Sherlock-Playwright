@@ -1,9 +1,62 @@
 const { performance } = require('perf_hooks');
-const { keplerDatasetsFetch, safeWait, monitorMultilayerReport } = require('./functions');
+const {
+    keplerDatasetsFetch, safeWait, monitorMultilayerReport,
+    searchAndClickReport, uploadAudiences, verifyAudienceUploadStatus,
+    clearSearchBar, Report_To_Persona_Flow
+} = require('./functions');
+const { addPersonaReportToTracking } = require('./PersonaStatusFunctions.js');
 const { logSession } = require('./Logger');
 
+// =============== Upload Audience Flow ===============
+// Note: Append Audience is not supported for Multilayer reports — merged
+// reports have no "Edit" option in their menu (only Rename/Upload Audience/
+// Share/Delete/etc.), so there is no way to re-open and re-trigger an upload.
+async function uploadAudienceFlow(page, reportName, UploadAudience) {
+    if (!Array.isArray(UploadAudience) || UploadAudience.length === 0) return;
+
+    for (const platform of UploadAudience) {
+        try {
+            console.log(`--- Starting upload process for platform: ${platform} ---`);
+            logSession(`--- Starting upload process for platform: ${platform} ---`);
+
+            // ==========================================
+            // 1. Select the merged multilayer report
+            // ==========================================
+            await searchAndClickReport(page, reportName);
+            await safeWait(page, 2000);
+
+            // ==========================================
+            // 2. Upload Audience
+            // ==========================================
+            await uploadAudiences(page, [platform]);
+            await safeWait(page, 2000);
+
+            // ==========================================
+            // 3. Verify upload
+            // ==========================================
+            const uploadResult = await verifyAudienceUploadStatus(page, reportName, platform);
+
+            console.log(`✅ Upload completed for '${reportName}'`);
+            console.log(`📊 Audience Count: ${uploadResult.audienceCount}`);
+            logSession(`✅ Upload completed for '${reportName}'`);
+            logSession(`📊 Audience Count: ${uploadResult.audienceCount}`);
+
+            // ==========================================
+            // 4. Clear search
+            // ==========================================
+            await clearSearchBar(page);
+            await safeWait(page, 2000);
+
+        } catch (err) {
+            console.error(`❌ Upload process failed for platform ${platform}: ${err.message}`);
+            logSession(`❌ Upload process failed for platform ${platform}: ${err.message}`);
+        }
+    }
+}
+
 // =============== Layered Merge Flow ===============
-async function layeredMerge(page, reportName, Report_TO_Merge, multilayerReportsMap, startTime) {
+async function layeredMerge(page, reportName, Report_TO_Merge, multilayerReportsMap, startTime, options = {}) {
+    const { Persona, env, UploadAudience } = options;
     const reportNameXPath = "//input[contains(@placeholder, 'report a memorable name')]";
     const reportSelectXPath = "//input[@name='multiselect-input']";
 
@@ -80,6 +133,14 @@ async function layeredMerge(page, reportName, Report_TO_Merge, multilayerReports
     await keplerDatasetsFetch(page, reportName);
     await safeWait(page, 2000);
 
+    // ===== Persona (optional) — reuses the same flow as a plain Explore report =====
+    if (Persona?.toUpperCase() === "YES") {
+        const personaCreated = await Report_To_Persona_Flow(page, reportName);
+        if (personaCreated) addPersonaReportToTracking(env, reportName, {
+            uploadAudience: UploadAudience
+        });
+    }
+
     const exploreXPath = "//a[@href='/explore' and @data-sidebar='menu-button']";
     const exploreBtn = page.locator(`xpath=${exploreXPath}`);
     await exploreBtn.click({ timeout: 10000 });
@@ -94,7 +155,8 @@ async function layeredMerge(page, reportName, Report_TO_Merge, multilayerReports
 }
 
 // =============== Unified Merge Flow ===============
-async function unifiedMerge(page, reportName, Report_TO_Merge, multilayerReportsMap, startTime) {
+async function unifiedMerge(page, reportName, Report_TO_Merge, multilayerReportsMap, startTime, options = {}) {
+    const { Persona, env, UploadAudience } = options;
     const reportNameXPath = "//input[contains(@placeholder, 'report a memorable name')]";
     const reportSelectXPath = "//input[@name='multiselect-input']";
 
@@ -199,13 +261,21 @@ async function unifiedMerge(page, reportName, Report_TO_Merge, multilayerReports
     await createBtn.click({ timeout: 10000 }).catch(() => logSession("⚠️ Create Multilayer button not clickable"));
     console.log("✅ Clicked 'Create Multilayer' button");
     logSession("✅ Clicked 'Create Multilayer' button");
-    
+
     // 🔥 Monitor Multilayer (THIS IS THE MAIN PART)
     const multilayerResult = await monitorMultilayerReport(page, reportName);
 
     console.log("📊 Multilayer Result:");
     console.log(multilayerResult);
     logSession(JSON.stringify(multilayerResult, null, 2));
+
+    // ===== Persona (optional) — reuses the same flow as a plain Explore report =====
+    if (Persona?.toUpperCase() === "YES") {
+        const personaCreated = await Report_To_Persona_Flow(page, reportName);
+        if (personaCreated) addPersonaReportToTracking(env, reportName, {
+            uploadAudience: UploadAudience
+        });
+    }
 
     const exploreXPath = "//a[@href='/explore' and @data-sidebar='menu-button']";
     const exploreBtn = page.locator(`xpath=${exploreXPath}`);
@@ -221,7 +291,7 @@ async function unifiedMerge(page, reportName, Report_TO_Merge, multilayerReports
 }
 
 // =============== Main Flow ===============
-async function MultilayerFlow(page, reportName, Report_TO_Merge, MergeType, multilayerReportsMap) {
+async function MultilayerFlow(page, reportName, Report_TO_Merge, MergeType, multilayerReportsMap, UploadAudience, Persona, env) {
     const MAX_GLOBAL_RETRIES = 5;
 
     for (let globalAttempt = 0; globalAttempt < MAX_GLOBAL_RETRIES; globalAttempt++) {
@@ -285,17 +355,20 @@ async function MultilayerFlow(page, reportName, Report_TO_Merge, MergeType, mult
                 const layeredBtnXPath = "//button[normalize-space(text())='Layered Datasets']";
                 await page.locator(`xpath=${layeredBtnXPath}`).click({ timeout: 15000 });
                 await safeWait(page, 2000);
-                await layeredMerge(page, reportName, Report_TO_Merge, multilayerReportsMap, startTime);
+                await layeredMerge(page, reportName, Report_TO_Merge, multilayerReportsMap, startTime, { Persona, env, UploadAudience });
             } else if (type === "unified") {
                 console.log("📌 Executing Unified Dataset Merge");
                 logSession("📌 Executing Unified Dataset Merge");
                 await safeWait(page, 2000);
-                await unifiedMerge(page, reportName, Report_TO_Merge, multilayerReportsMap, startTime);
+                await unifiedMerge(page, reportName, Report_TO_Merge, multilayerReportsMap, startTime, { Persona, env, UploadAudience });
             } else {
                 console.warn(`❌ Invalid MergeType: ${MergeType}`);
                 logSession(`❌ Invalid MergeType: ${MergeType}`);
                 return;
             }
+
+            // ===== Upload Audience (optional) =====
+            await uploadAudienceFlow(page, reportName, UploadAudience);
 
             console.log(`✅ Completed Multilayer flow successfully on attempt ${globalAttempt + 1}`);
             logSession(`✅ Completed Multilayer flow successfully on attempt ${globalAttempt + 1}`);

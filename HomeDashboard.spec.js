@@ -164,7 +164,7 @@ async function main() {
       logSession("📂 multilayerReportsMap before multilayer:", Array.from(multilayerReportsMap.entries()));
 
       for (const report of input.Multilayer) {
-        await Multilayerflow(page, report.reportName, report.Report_TO_Merge, report.MergeType, multilayerReportsMap);
+        await Multilayerflow(page, report.reportName, report.Report_TO_Merge, report.MergeType, multilayerReportsMap, report.UploadAudience, report.Persona, env);
       }
     }
     // watsonAI Flow

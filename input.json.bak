@@ -839,8 +839,7 @@
       ],
       "UploadAudience": [
         "META"
-      ],
-      "Persona": "YES"
+      ]
     },
     {
       "MergeType": "Unified",
@@ -852,7 +851,7 @@
       "UploadAudience": [
         "GOOGLE"
       ],
-      "Persona": "YES"
+      "AppendAudience": "Yes"
     },
     {
       "MergeType": "Unified",
@@ -1068,11 +1067,7 @@
       "Report_TO_Merge": [
         1,
         2
-      ],
-      "UploadAudience": [
-        "GOOGLE"
-      ],
-      "Persona": "YES"
+      ]
     },
     {
       "MergeType": "Layered",
@@ -1080,11 +1075,7 @@
       "Report_TO_Merge": [
         1,
         3
-      ],
-      "UploadAudience": [
-        "META"
-      ],
-      "Persona": "YES"
+      ]
     },
     {
       "MergeType": "Layered",
@@ -1092,12 +1083,7 @@
       "Report_TO_Merge": [
         1,
         5
-      ],
-      "UploadAudience": [
-        "META",
-        "GOOGLE"
-      ],
-      "Persona": "YES"
+      ]
     },
     {
       "MergeType": "Layered",

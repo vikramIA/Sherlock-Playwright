@@ -556,12 +556,6 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                         inputData.reportName,
                     );
 
-                    // const total = await verifyAggregatedCount(
-                    //     page,
-                    //     inputData.reportName
-                    // );
-
-                    // console.log(total);
 
                     // Handling Places -> Places Level Visit Report
                     if (inputData.PLACES_TO_Place_Level_Visit_Report?.toUpperCase() === "YES") {
