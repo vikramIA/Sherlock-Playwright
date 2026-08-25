@@ -1,7 +1,7 @@
 const { chromium } = require("@playwright/test");
 const exploreFlow = require("./ExploreReport.js");
 const PersonaFlow = require("./PersonaReport.js");
-const Multilayerflow = require("./MultilayerReport.js");
+const { MultilayerBatchFlow } = require("./MultilayerReport.js");
 const watsonAIReportFlow = require("./WatsonAIFlow.js");
 const csAgentFlow = require("./CSAgentFlow.js");
 const fs = require("fs");
@@ -178,9 +178,7 @@ async function main() {
         multilayerReportsMap: JSON.stringify(Array.from(multilayerReportsMap.entries())),
       });
 
-      for (const report of input.Multilayer) {
-        await Multilayerflow(page, report.reportName, report.Report_TO_Merge, report.MergeType, multilayerReportsMap, report.UploadAudience, report.Persona, env);
-      }
+      await MultilayerBatchFlow(page, input.Multilayer, multilayerReportsMap, env);
     }
     // watsonAI Flow
     await watsonAIReportFlow(

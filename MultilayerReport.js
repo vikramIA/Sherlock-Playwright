@@ -1,6 +1,7 @@
 const { performance } = require('perf_hooks');
 const {
     keplerDatasetsFetch, safeWait, monitorMultilayerReport,
+    checkMultilayerReportStatusOnce, finalizeCompletedMultilayerReport,
     searchAndClickReport, uploadAudiences, verifyAudienceUploadStatus,
     clearSearchBar, Report_To_Persona_Flow
 } = require('./functions');
@@ -290,6 +291,264 @@ async function unifiedMerge(page, reportName, Report_TO_Merge, multilayerReports
     logSession(`⏱️ Unified Merge completed for: ${reportName} | Reports: ${Report_TO_Merge} | Time: ${timeTakenMinutes.toFixed(2)} min (${timeTakenSeconds.toFixed(2)} sec)`, false, { flow: "multilayer", report: reportName, merge_type: "unified", duration_sec: timeTakenSeconds });
 }
 
+// =============== Trigger-only Unified Merge (for batched flow) ===============
+// Navigates to Explore and creates the merged report up through clicking
+// "Create Multilayer", but does NOT wait for it to finish processing — that
+// happens later, once, for the whole batch. Throws on any failure so the
+// caller can log it and exclude this report from the batch's status check.
+async function triggerUnifiedMultilayerReport(page, reportName, Report_TO_Merge, multilayerReportsMap) {
+    const exploreXPath = "//a[@href='/explore' and @data-sidebar='menu-button']";
+    await page.locator(`xpath=${exploreXPath}`).click({ timeout: 10000 });
+    await page.waitForURL('**/explore', { timeout: 10000 });
+    await safeWait(page, 3000);
+
+    const multilayerBtn = page
+        .locator("//button//span[normalize-space()='Add Multiple Layers']")
+        .locator('xpath=ancestor::button')
+        .filter({ hasNot: page.locator("[data-sidebar]") })
+        .first();
+    await multilayerBtn.waitFor({ state: 'visible', timeout: 10000 });
+    await multilayerBtn.click();
+
+    const multilayerHeaderXPath = "//div[normalize-space(text())='Multilayer']";
+    await page.locator(`xpath=${multilayerHeaderXPath}`).waitFor({ state: 'visible', timeout: 120000 });
+
+    const reportNameXPath = "//input[contains(@placeholder, 'report a memorable name')]";
+    const reportSelectXPath = "//input[@name='multiselect-input']";
+    await page.locator(`xpath=${reportNameXPath}`).fill(reportName, { timeout: 10000 });
+
+    let isFirstSelection = true;
+    for (const reportNum of Report_TO_Merge) {
+        const reportNameToSelect = multilayerReportsMap.get(Number(reportNum));
+        if (!reportNameToSelect) {
+            throw new Error(`Report number ${reportNum} not found in multilayerReportsMap`);
+        }
+
+        const reportSelectField = page.locator(`xpath=${reportSelectXPath}`);
+        if (isFirstSelection) {
+            await reportSelectField.fill("");
+            isFirstSelection = false;
+        }
+        await reportSelectField.fill(reportNameToSelect);
+        await safeWait(page, 1000);
+
+        const firstItem = page.locator("xpath=//div[@cmdk-item][1]");
+        if (await firstItem.count() === 0) {
+            throw new Error(`No recommended options found for: ${reportNameToSelect}`);
+        }
+
+        const firstItemText = (await firstItem.textContent())?.trim() || "";
+        if (firstItemText.toLowerCase() !== reportNameToSelect.toLowerCase()) {
+            throw new Error(`Mismatch! Expected "${reportNameToSelect}" but found "${firstItemText}"`);
+        }
+
+        await firstItem.click();
+        await safeWait(page, 800);
+    }
+
+    const nextStepButtonXPath = "//*[normalize-space(text())='Next Step']";
+    await page.locator(`xpath=${nextStepButtonXPath}`).click({ timeout: 10000 });
+    await safeWait(page, 5000);
+
+    await page.locator(`xpath=${multilayerHeaderXPath}`).waitFor({ state: 'visible', timeout: 120000 });
+
+    const joinGroupsXPath = "//div[normalize-space(text())='Join Group(s)']";
+    await page.locator(`xpath=${joinGroupsXPath}`).waitFor({ state: 'visible', timeout: 10000 });
+
+    await page.locator(`xpath=${nextStepButtonXPath}`).click({ timeout: 10000 });
+    await safeWait(page, 3000);
+
+    await page.locator(`xpath=${multilayerHeaderXPath}`).waitFor({ state: 'visible', timeout: 120000 });
+
+    const createButtonXPath = "//div[normalize-space()='Create Multilayer']";
+    await page.locator(`xpath=${createButtonXPath}`).click({ timeout: 10000 });
+
+    // Let the creation submission settle before navigating off to trigger the
+    // next report in the batch — without this, immediately clicking back to
+    // Explore for the next item can interrupt this report's creation before
+    // it registers, leaving it permanently "not found" later (seen in QA
+    // session 4: two back-to-back triggered reports never showed up at all).
+    await safeWait(page, 15000);
+
+    console.log(`🚀 Triggered unified multilayer report: ${reportName}`);
+    logSession(`🚀 Triggered unified multilayer report: ${reportName}`, false, { flow: "multilayer_batch", report: reportName });
+}
+
+// =============== Batched Unified Merge Flow ===============
+// Instead of triggering one unified report and blocking until it completes,
+// triggers up to UNIFIED_BATCH_SIZE reports back-to-back, waits once, then
+// checks each one's status — completed reports get their normal post-steps
+// (map load, persona, audience upload). Anything still processing at that
+// point gets polled every UNIFIED_BATCH_POLL_INTERVAL_MS (real runs showed
+// unified merges routinely taking longer than 5 min, so a single check was
+// skipping post-steps for almost everything) until UNIFIED_BATCH_TOTAL_WAIT_MS
+// total has elapsed; anything still not done by then is logged and skipped
+// rather than blocking further.
+const UNIFIED_BATCH_SIZE = 3;
+const UNIFIED_BATCH_WAIT_MS = 5 * 60 * 1000; // initial wait before the first status check
+const UNIFIED_BATCH_TOTAL_WAIT_MS = 20 * 60 * 1000; // give up on stragglers after this much total time
+const UNIFIED_BATCH_POLL_INTERVAL_MS = 30 * 1000; // poll cadence for stragglers still processing
+
+async function finalizeUnifiedBatchItem(page, item, env) {
+    const { finalReportName } = item;
+
+    const keplerResult = await finalizeCompletedMultilayerReport(page, finalReportName);
+    console.log(`✅ Map load status for '${finalReportName}':`, keplerResult);
+    logSession(`✅ Map load status for '${finalReportName}': ${JSON.stringify(keplerResult)}`);
+
+    if (item.Persona?.toUpperCase() === "YES") {
+        const personaCreated = await Report_To_Persona_Flow(page, finalReportName);
+        if (personaCreated) addPersonaReportToTracking(env, finalReportName, { uploadAudience: item.UploadAudience });
+    }
+
+    await uploadAudienceFlow(page, finalReportName, item.UploadAudience);
+
+    const timeTakenSeconds = (performance.now() - item.startTime) / 1000;
+    console.log(`⏱️ Batched unified merge completed for: ${finalReportName} | Time: ${(timeTakenSeconds / 60).toFixed(2)} min`);
+    logSession(`⏱️ Batched unified merge completed for: ${finalReportName} | Time: ${(timeTakenSeconds / 60).toFixed(2)} min`, false, { flow: "multilayer", report: finalReportName, merge_type: "unified", outcome: "success", duration_sec: timeTakenSeconds });
+}
+
+async function processUnifiedBatch(page, batch, multilayerReportsMap, env) {
+    if (batch.length === 0) return;
+
+    const triggered = [];
+
+    for (const item of batch) {
+        const startTime = performance.now();
+        const randomSuffix = Math.random().toString(36).substring(2, 7);
+        const finalReportName = `${item.reportName}_${randomSuffix}`;
+
+        try {
+            for (const num of item.Report_TO_Merge) {
+                if (!multilayerReportsMap.has(Number(num))) {
+                    throw new Error(`Report number ${num} not found in multilayerReportsMap`);
+                }
+            }
+            await triggerUnifiedMultilayerReport(page, finalReportName, item.Report_TO_Merge, multilayerReportsMap);
+            triggered.push({ ...item, finalReportName, startTime });
+        } catch (err) {
+            console.error(`❌ Failed to trigger '${item.reportName}': ${err.message}`);
+            logSession(`❌ Failed to trigger '${item.reportName}': ${err.message}`, false, { flow: "multilayer", report: item.reportName, outcome: "failure", reason: err.message });
+        }
+    }
+
+    if (triggered.length === 0) return;
+
+    const batchWaitStart = Date.now();
+
+    console.log(`⏳ Triggered ${triggered.length} unified multilayer report(s). Waiting 5 minutes before checking status...`);
+    logSession(`⏳ Triggered ${triggered.length} unified multilayer report(s). Waiting 5 minutes before checking status...`, false, { flow: "multilayer_batch", count: triggered.length });
+    await safeWait(page, UNIFIED_BATCH_WAIT_MS);
+
+    const stillProcessing = [];
+
+    for (const item of triggered) {
+        const { finalReportName } = item;
+        try {
+            const statusResult = await checkMultilayerReportStatusOnce(page, finalReportName);
+            console.log(`📋 Status for '${finalReportName}': ${statusResult.status}${statusResult.reason ? ` (${statusResult.reason})` : ""}`);
+            logSession(`📋 Status for '${finalReportName}': ${statusResult.status}`, false, { flow: "multilayer_batch", report: finalReportName, status: statusResult.status, reason: statusResult.reason || "" });
+
+            if (statusResult.status === "processing") {
+                stillProcessing.push(item);
+                continue;
+            }
+
+            if (statusResult.status !== "completed") {
+                console.warn(`⚠️ '${finalReportName}' not completed after 5 min (status: ${statusResult.status}) — skipping post-steps.`);
+                logSession(`⚠️ '${finalReportName}' not completed after 5 min (status: ${statusResult.status}) — skipping post-steps.`, false, { flow: "multilayer", report: finalReportName, outcome: "skipped", reason: statusResult.status });
+                continue;
+            }
+
+            await finalizeUnifiedBatchItem(page, item, env);
+
+        } catch (err) {
+            console.error(`❌ Post-processing failed for '${finalReportName}': ${err.message}`);
+            logSession(`❌ Post-processing failed for '${finalReportName}': ${err.message}`, false, { flow: "multilayer", report: finalReportName, outcome: "failure", reason: err.message });
+        }
+    }
+
+    if (stillProcessing.length === 0) return;
+
+    const deadline = batchWaitStart + UNIFIED_BATCH_TOTAL_WAIT_MS;
+    console.log(`⏳ ${stillProcessing.length} report(s) still processing after 5 min. Polling every 30s until 20 min total have elapsed...`);
+    logSession(`⏳ ${stillProcessing.length} report(s) still processing after 5 min. Polling every 30s until 20 min total have elapsed...`, false, { flow: "multilayer_batch", count: stillProcessing.length });
+
+    let remaining = stillProcessing;
+
+    while (remaining.length > 0 && Date.now() < deadline) {
+        await safeWait(page, UNIFIED_BATCH_POLL_INTERVAL_MS);
+
+        const nextRemaining = [];
+
+        for (const item of remaining) {
+            const { finalReportName } = item;
+            try {
+                const statusResult = await checkMultilayerReportStatusOnce(page, finalReportName);
+                const elapsedMin = ((Date.now() - batchWaitStart) / 60000).toFixed(1);
+                console.log(`📋 Poll status for '${finalReportName}' (${elapsedMin} min elapsed): ${statusResult.status}${statusResult.reason ? ` (${statusResult.reason})` : ""}`);
+                logSession(`📋 Poll status for '${finalReportName}': ${statusResult.status}`, false, { flow: "multilayer_batch", report: finalReportName, status: statusResult.status, reason: statusResult.reason || "", elapsed_min: elapsedMin });
+
+                if (statusResult.status === "processing") {
+                    nextRemaining.push(item);
+                    continue;
+                }
+
+                if (statusResult.status !== "completed") {
+                    console.warn(`⚠️ '${finalReportName}' ended as '${statusResult.status}' during polling — skipping post-steps.`);
+                    logSession(`⚠️ '${finalReportName}' ended as '${statusResult.status}' during polling — skipping post-steps.`, false, { flow: "multilayer", report: finalReportName, outcome: "skipped", reason: statusResult.status });
+                    continue;
+                }
+
+                await finalizeUnifiedBatchItem(page, item, env);
+
+            } catch (err) {
+                console.error(`❌ Post-processing failed for '${finalReportName}': ${err.message}`);
+                logSession(`❌ Post-processing failed for '${finalReportName}': ${err.message}`, false, { flow: "multilayer", report: finalReportName, outcome: "failure", reason: err.message });
+            }
+        }
+
+        remaining = nextRemaining;
+    }
+
+    for (const item of remaining) {
+        console.warn(`⚠️ '${item.finalReportName}' still not completed after 20 min total — giving up on post-steps.`);
+        logSession(`⚠️ '${item.finalReportName}' still not completed after 20 min total — giving up on post-steps.`, false, { flow: "multilayer", report: item.finalReportName, outcome: "skipped", reason: "timeout_20min" });
+    }
+}
+
+// =============== Batched entry point ===============
+// Drop-in replacement for looping MultilayerFlow over input.Multilayer: layered
+// merges run one at a time as before (unchanged), while unified merges are
+// grouped into batches of UNIFIED_BATCH_SIZE and processed via
+// processUnifiedBatch above.
+async function MultilayerBatchFlow(page, multilayerConfigs, multilayerReportsMap, env) {
+    beginFlow("multilayer");
+    let pendingUnifiedBatch = [];
+
+    const flushPending = async () => {
+        if (pendingUnifiedBatch.length === 0) return;
+        await processUnifiedBatch(page, pendingUnifiedBatch, multilayerReportsMap, env);
+        pendingUnifiedBatch = [];
+    };
+
+    for (const report of multilayerConfigs) {
+        const type = (report.MergeType || "").toLowerCase();
+
+        if (type === "unified") {
+            pendingUnifiedBatch.push(report);
+            if (pendingUnifiedBatch.length >= UNIFIED_BATCH_SIZE) {
+                await flushPending();
+            }
+        } else {
+            await flushPending();
+            await MultilayerFlow(page, report.reportName, report.Report_TO_Merge, report.MergeType, multilayerReportsMap, report.UploadAudience, report.Persona, env);
+        }
+    }
+
+    await flushPending();
+}
+
 // =============== Main Flow ===============
 async function MultilayerFlow(page, reportName, Report_TO_Merge, MergeType, multilayerReportsMap, UploadAudience, Persona, env) {
     const MAX_GLOBAL_RETRIES = 5;
@@ -393,4 +652,4 @@ async function MultilayerFlow(page, reportName, Report_TO_Merge, MergeType, mult
     }
 }
 
-module.exports = MultilayerFlow;
+module.exports = { MultilayerFlow, MultilayerBatchFlow };
