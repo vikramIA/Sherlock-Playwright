@@ -2505,8 +2505,10 @@ async function searchReportWithRetry(page, reportName) {
 
         } catch (err) {
 
-            console.log(`⚠ Attempt ${attempt} failed`);
-            logSession(`⚠ Attempt ${attempt} failed`);
+            if (attempt === MAX_RETRIES) {
+                console.log(`⚠ Attempt ${attempt} failed`);
+                logSession(`⚠ Attempt ${attempt} failed`);
+            }
 
             if (attempt < MAX_RETRIES) {
                 await page.waitForTimeout(RETRY_DELAY);
