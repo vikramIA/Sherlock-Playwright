@@ -926,7 +926,21 @@ async function verifyWatsonAISuccess(page, expectedMessage, expectedReportType, 
         // CLICK FOCUS MODE
         // =========================================================
 
-        await focusModeButton.click();
+        // The report-title label above this button can overlap it at narrower
+        // window widths and intercept the click for the full default timeout
+        // (seen under Xvfb's smaller default screen). Fall back to a force
+        // click rather than depending on window size to keep them apart.
+        try {
+            await focusModeButton.click();
+        } catch (err) {
+            console.log(
+                "⚠️ Focus Mode click was intercepted (likely by the report title label) — retrying with a force click."
+            );
+            logSession(
+                "⚠️ Focus Mode click was intercepted (likely by the report title label) — retrying with a force click."
+            );
+            await focusModeButton.click({ force: true });
+        }
 
         console.log(
             "✅ Focus Mode button clicked."
