@@ -145,11 +145,39 @@ async function activateCSAgent(page) {
 // 2. SELECT A PHASE (Phase1 / Phase2 / Phase3)
 // =========================================================
 
-async function selectCSAgentPhase(page, phaseKey) {
-    try {
-        const phaseCombobox = page.getByPlaceholder("Select one phase selection").last();
+// `optional: true` (used by the "fresh" flow) treats a phase selector that
+// never appears as expected rather than a failure. Confirmed app behavior:
+// the FIRST time a user ever opens CS Agent (no prior run on any company),
+// no phase selector is shown at all — it goes straight to asking for the
+// company name, with Phase 1 as the implicit default. Every time after
+// that, for that user, the selector always appears (even when starting a
+// brand-new company via "fresh"), and Phase 1 must be picked explicitly.
+// This function doesn't need to know which case it's in — it just reacts
+// to whichever actually renders. A genuine disconnect still throws either
+// way. "resume" mode never passes this — there, a missing selector means
+// there is no saved run to resume, which is a real failure.
+async function selectCSAgentPhase(page, phaseKey, { optional = false } = {}) {
+    const phaseCombobox = page.getByPlaceholder("Select one phase selection").last();
 
+    try {
         await waitForCSAgentElementOrDisconnect(page, phaseCombobox, 30000);
+    } catch (error) {
+
+        if (optional && !error.message.startsWith("CS Agent disconnected:")) {
+
+            console.log(`ℹ️ No phase selector shown — treating as a new user with no prior CS Agent run, skipping straight to company name.`);
+            logSession(`ℹ️ No phase selector shown — treating as a new user with no prior CS Agent run, skipping straight to company name.`);
+
+            return false;
+        }
+
+        console.error(`❌ Failed to select CS Agent phase '${phaseKey}': ${error.message}`);
+        logSession(`❌ Failed to select CS Agent phase '${phaseKey}': ${error.message}`);
+
+        throw error;
+    }
+
+    try {
         await phaseCombobox.click();
 
         const phaseOption = page.getByRole("option", {
@@ -169,6 +197,8 @@ async function selectCSAgentPhase(page, phaseKey) {
 
         console.log(`✅ Selected CS Agent phase: '${phaseKey}'.`);
         logSession(`✅ Selected CS Agent phase: '${phaseKey}'.`);
+
+        return true;
 
     } catch (error) {
 

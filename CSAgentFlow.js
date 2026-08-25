@@ -27,7 +27,14 @@ const { logSession, beginFlow } = require("./Logger");
 
 async function runFreshCSAgentCase(page, testCase) {
 
-    await selectCSAgentPhase(page, "Phase1");
+    // Only a user's very first-ever CS Agent run skips the phase choice
+    // entirely and goes straight to asking for the company name (Phase 1
+    // being the implicit default there). Every run after that shows the
+    // phase selector, even when starting a brand-new company via "fresh".
+    // `optional: true` skips the selection step instead of failing on that
+    // first-run case, and still selects Phase1 normally whenever the
+    // selector does appear.
+    await selectCSAgentPhase(page, "Phase1", { optional: true });
 
     await sendCSAgentChatAnswer(page, testCase.companyName);
     await sendCSAgentChatAnswer(page, testCase.problemStatement);
