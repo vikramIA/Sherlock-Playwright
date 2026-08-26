@@ -17,7 +17,7 @@ async function postUploadExploreReportFlow(page, inputData, isForMultilayer = fa
             const createBtnXPath = "//button[@data-sidebar='menu-button' and .//span[text()='Create Report']]";
             await page.locator(createBtnXPath).click();
             console.log(`✅ Clicked 'Create Report' for ${inputData.reportName}`);
-            logSession(`✅ Clicked 'Create Report' for ${inputData.reportName}`)
+            logSession(`✅ Clicked 'Create Report' for ${inputData.reportName}`, false, { report: inputData.reportName })
         } catch (err) {
             console.error(`❌ Failed during navigation: ${err.message}`);
             logSession(`❌ Failed during navigation: ${err.message}`, false, { flow: "post_upload_explore", report: inputData.reportName, outcome: "failure", reason: err.message });

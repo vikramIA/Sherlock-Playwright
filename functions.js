@@ -1483,9 +1483,12 @@ async function Report_To_Persona_Flow(page, reportName) {
             logSession(`❌ Report_To_Persona_Flow failed — report "${reportName}" not found in Explore.`);
         }
 
+        return reportExists;
+
     } catch (error) {
         console.error(`❌ Error in Report_To_Persona_Flow: ${error.message}`);
         logSession(`❌ Error in Report_To_Persona_Flow: ${error.message}`);
+        return false;
     }
 }
 
@@ -1513,10 +1516,10 @@ async function navigateAndCreatePersonaFlow(page, inputData, maxRetries = 5) {
             return; // Exit after success
 
         } catch (err) {
-            console.error(`❌ Attempt ${attempt} failed for ${inputData.reportName}:`, err.message);
-            logSession(`❌ Attempt ${attempt} failed for ${inputData.reportName}: ${err.message}`);
-
             if (attempt === maxRetries) {
+                console.error(`❌ Attempt ${attempt} failed for ${inputData.reportName}:`, err.message);
+                logSession(`❌ Attempt ${attempt} failed for ${inputData.reportName}: ${err.message}`);
+
                 console.error(`❌ Max retries reached. Could not complete Persona Flow for ${inputData.reportName}`);
                 logSession(`❌ Max retries reached. Could not complete Persona Flow for ${inputData.reportName}`);
                 throw err;
@@ -2043,12 +2046,16 @@ async function searchAndClickReport(page, reportName) {
             // ==========================================
             // 5. Find report
             // ==========================================
+            // A Persona-derived report keeps the exact same display name as its source report
+            // (e.g. once Report_To_Persona_Flow has run for this report, it shows up twice -
+            // once as its own type, once as "Insight type: Persona") so matching on name alone
+            // is ambiguous; excluding the Persona row disambiguates it.
 
-            const reportLink = page.locator(
-                `//a[normalize-space(text())='${reportName}']`
-            );
+            const reportRow = page.locator(
+                `xpath=//div[contains(@class,'mt-2 w-full')][.//a[normalize-space(text())='${reportName}']][not(.//p[contains(.,'Insight type:') and contains(.,'Persona')])]`
+            ).first();
 
-            await reportLink.waitFor({
+            await reportRow.waitFor({
                 state: "visible",
                 timeout: 30000
             });
@@ -2057,8 +2064,8 @@ async function searchAndClickReport(page, reportName) {
             // 6. Open three-dot menu
             // ==========================================
 
-            const threeDotButton = reportLink.locator(
-                "xpath=ancestor::div[contains(@class,'mt-2 w-full')]//button[@aria-haspopup='menu']"
+            const threeDotButton = reportRow.locator(
+                "button[aria-haspopup='menu']"
             );
 
             await threeDotButton.waitFor({
@@ -2498,8 +2505,10 @@ async function searchReportWithRetry(page, reportName) {
 
         } catch (err) {
 
-            console.log(`⚠ Attempt ${attempt} failed`);
-            logSession(`⚠ Attempt ${attempt} failed`);
+            if (attempt === MAX_RETRIES) {
+                console.log(`⚠ Attempt ${attempt} failed`);
+                logSession(`⚠ Attempt ${attempt} failed`);
+            }
 
             if (attempt < MAX_RETRIES) {
                 await page.waitForTimeout(RETRY_DELAY);
@@ -2634,39 +2643,8 @@ async function monitorMultilayerReport(page, reportName) {
         console.log(`✅ COMPLETE: ${reportName} completed in ${processingTimeMinutes} minutes.`);
         logSession(`✅ COMPLETE: ${reportName} completed in ${processingTimeMinutes} minutes.`);
 
-        const reportLink = reportContainer.locator(`xpath=.//a[contains(normalize-space(.),'${reportName}')]`);
-
         const loadStartTime = Date.now();
-
-        await safeWait(page, 10000); // wait for 10 seconds to  Page to be stable and then click the report link
-        // --- NEW RETRY CLICK LOGIC ---
-        const MAX_CLICK_RETRIES = 3;
-        let clickSuccess = false;
-
-        for (let i = 1; i <= MAX_CLICK_RETRIES; i++) {
-            try {
-                console.log(`🖱️ Attempting to click report (Attempt ${i}/${MAX_CLICK_RETRIES})...`);
-
-                await safeWait(page, 5000); // Small stability buffer
-                await reportLink.click({ force: true });
-
-                // Wait for URL to change to contain "explore/" (timeout after 60s)
-                await page.waitForURL(url => url.href.includes('explore/'), { timeout: 60000 });
-
-                console.log(`🔗 URL changed successfully. Navigation confirmed.`);
-                clickSuccess = true;
-                break;
-            } catch (e) {
-                console.warn(`⚠️ Click attempt ${i} failed or URL did not change: ${e.message}`);
-                if (i === MAX_CLICK_RETRIES) throw new Error("Failed to navigate to report details after multiple click attempts.");
-            }
-        }
-        // -----------------------------
-
-        // 🔥 Get Kepler Result
-        const keplerResult = await keplerDatasetsFetch(page, reportName);
-
-        // 🔥 Stop timer when kepler completes
+        const keplerResult = await finalizeCompletedMultilayerReport(page, reportName, reportContainer);
         const loadEndTime = Date.now();
 
         // Calculate loading time
@@ -2700,6 +2678,66 @@ async function monitorMultilayerReport(page, reportName) {
         };
     }
 }
+
+// One-shot status read for a multilayer report — no polling loop. Used by the
+// batched multilayer flow, which checks several triggered reports at once
+// instead of blocking on each one individually.
+async function checkMultilayerReportStatusOnce(page, reportName) {
+    try {
+        const reportContainer = await searchReportWithRetry(page, reportName);
+
+        if (!reportContainer) {
+            return { reportName, status: "not_found", reason: "Report not found" };
+        }
+
+        let statusText = await reportContainer
+            .locator("xpath=.//p[contains(text(),'Status:')]//span")
+            .textContent();
+        statusText = statusText?.trim().toLowerCase() || "unknown";
+
+        if (statusText === "completed") return { reportName, status: "completed" };
+        if (statusText === "failed") return { reportName, status: "failed", reason: "Report generation failed" };
+        return { reportName, status: "processing", reason: `Status: ${statusText}` };
+
+    } catch (error) {
+        return { reportName, status: "error", reason: error.message };
+    }
+}
+
+// Opens a completed multilayer report and waits for its map/kepler datasets to
+// load. Accepts an optional already-located reportContainer to avoid a
+// redundant search when the caller has just found it.
+async function finalizeCompletedMultilayerReport(page, reportName, reportContainer = null) {
+    const container = reportContainer || await searchReportWithRetry(page, reportName);
+    if (!container) throw new Error(`Report ${reportName} not found when finalizing`);
+
+    const reportLink = container.locator(`xpath=.//a[contains(normalize-space(.),'${reportName}')]`);
+
+    await safeWait(page, 10000); // wait for the page to be stable before clicking the report link
+
+    const MAX_CLICK_RETRIES = 3;
+
+    for (let i = 1; i <= MAX_CLICK_RETRIES; i++) {
+        try {
+            console.log(`🖱️ Attempting to click report (Attempt ${i}/${MAX_CLICK_RETRIES})...`);
+
+            await safeWait(page, 5000); // Small stability buffer
+            await reportLink.click({ force: true });
+
+            // Wait for URL to change to contain "explore/" (timeout after 60s)
+            await page.waitForURL(url => url.href.includes('explore/'), { timeout: 60000 });
+
+            console.log(`🔗 URL changed successfully. Navigation confirmed.`);
+            break;
+        } catch (e) {
+            console.warn(`⚠️ Click attempt ${i} failed or URL did not change: ${e.message}`);
+            if (i === MAX_CLICK_RETRIES) throw new Error("Failed to navigate to report details after multiple click attempts.");
+        }
+    }
+
+    return keplerDatasetsFetch(page, reportName);
+}
+
 // Function to verify default Bento charts for a given report type and name
 
 async function verifyDefaultBentoCharts(
@@ -2809,7 +2847,9 @@ async function verifyDefaultBentoCharts(
         );
 
         logSession(
-            `❌ Bento report content did not load for '${reportName}'.`
+            `❌ Bento report content did not load for '${reportName}'.`,
+            false,
+            { report: reportName, url: currentUrl, metric: config.heading }
         );
 
         logSession(
@@ -2890,7 +2930,9 @@ async function verifyDefaultBentoCharts(
         );
 
         logSession(
-            `✅ Bento charts loaded verified for '${reportName}' | ${loadedText}`
+            `✅ Bento charts loaded verified for '${reportName}' | ${loadedText}`,
+            false,
+            { report: reportName, charts_loaded_text: loadedText }
         );
 
     } else {
@@ -2952,7 +2994,9 @@ async function verifyDefaultBentoCharts(
 
     logSession(
         `✅ Default Bento verified for '${reportName}' | ` +
-        `${config.heading}: ${cardValue}`
+        `${config.heading}: ${cardValue}`,
+        false,
+        { report: reportName, metric: config.heading, value: cardValue }
     );
 
 
@@ -2994,19 +3038,14 @@ async function verifyAggregatedCount(page, reportName) {
         timeout: 30000
     });
 
-    // Find report row
-    const reportRow = reportText.locator(
-        "xpath=ancestor::div[.//button[@aria-haspopup='menu']][1]"
+    // Find report row and click its 3-dot menu (same reliable pattern as searchAndClickReport)
+    const menuButton = reportText.locator(
+        "xpath=ancestor::div[contains(@class,'mt-2 w-full')]//button[@aria-haspopup='menu']"
     );
 
-    await expect(reportRow).toBeVisible({
+    await expect(menuButton).toBeVisible({
         timeout: 10000
     });
-
-    // Click 3-dot menu
-    const menuButton = reportRow.locator(
-        'button[aria-haspopup="menu"]'
-    );
 
     await menuButton.click();
 
@@ -4248,7 +4287,10 @@ module.exports = {
     searchAndClickReport,
     clearSearchBar,
     uploadAudiences,
+    searchReportWithRetry,
     monitorMultilayerReport,
+    checkMultilayerReportStatusOnce,
+    finalizeCompletedMultilayerReport,
     verifyDefaultBentoCharts,
     verifyAggregatedCount,
     verifyAudienceUploadStatus,

@@ -9,9 +9,10 @@ const {
     SelectAverageDailyDevices, SelectAverageMonthlyDevices,
     selectAvailableAttributes, SelectQualityLifeScore, safeWait, verifyDefaultBentoCharts, verifyAggregatedCount, verifyAudienceUploadStatus, verifyAppendAudience
 } = require('./functions');
+const { addPersonaReportToTracking } = require('./PersonaStatusFunctions.js');
 
 
-async function exploreFlow(page, inputData, isForMultilayer = false, multilayerReportsMap = false) {
+async function exploreFlow(page, inputData, isForMultilayer = false, multilayerReportsMap = false, env) {
     const randomSuffix = () => Math.random().toString(36).substring(2, 7);
     inputData.reportName = `${inputData.reportName}: ${randomSuffix()}`;
     beginFlow("explore");
@@ -92,6 +93,13 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                         inputData.reportName,
                     );
 
+                    if (inputData.Persona?.toUpperCase() === "YES") {
+                        const personaCreated = await Report_To_Persona_Flow(page, inputData.reportName);
+                        if (personaCreated) addPersonaReportToTracking(env, inputData.reportName, {
+                            uploadAudience: inputData.UploadAudience
+                        });
+                    }
+
                     const total = await verifyAggregatedCount(
                         page,
                         inputData.reportName,
@@ -99,9 +107,8 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
 
                     console.log(total);
 
-                    if (inputData.Persona?.toUpperCase() === "YES") {
-                        await Report_To_Persona_Flow(page, inputData.reportName);
-                    }
+                    console.log(`✅ 'place level visits' flow completed successfully for '${inputData.reportName}'.`);
+                    logSession(`✅ 'place level visits' flow completed successfully for '${inputData.reportName}'.`, false, { flow: "explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
 
                     if (
                         Array.isArray(inputData.UploadAudience) &&
@@ -327,6 +334,13 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                         inputData.reportName,
                     );
 
+                    if (inputData.Persona?.toUpperCase() === "YES") {
+                        const personaCreated = await Report_To_Persona_Flow(page, inputData.reportName);
+                        if (personaCreated) addPersonaReportToTracking(env, inputData.reportName, {
+                            uploadAudience: inputData.UploadAudience
+                        });
+                    }
+
                     const total = await verifyAggregatedCount(
                         page,
                         inputData.reportName,
@@ -334,10 +348,9 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
 
                     console.log(total);
 
+                    console.log(`✅ 'device level visits' flow completed successfully for '${inputData.reportName}'.`);
+                    logSession(`✅ 'device level visits' flow completed successfully for '${inputData.reportName}'.`, false, { flow: "explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
 
-                    if (inputData.Persona?.toUpperCase() === "YES") {
-                        await Report_To_Persona_Flow(page, inputData.reportName);
-                    }
 
                     if (
                         Array.isArray(inputData.UploadAudience) &&
@@ -558,12 +571,6 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                         inputData.reportName,
                     );
 
-                    const total = await verifyAggregatedCount(
-                        page,
-                        inputData.reportName
-                    );
-
-                    console.log(total);
 
                     // Handling Places -> Places Level Visit Report
                     if (inputData.PLACES_TO_Place_Level_Visit_Report?.toUpperCase() === "YES") {
@@ -607,7 +614,10 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                             }
                             else {
                                 if (PLVReportInputs.Persona?.toUpperCase() === "YES") {
-                                    await Report_To_Persona_Flow(page, PLVReportInputs.reportName);
+                                    const personaCreated = await Report_To_Persona_Flow(page, PLVReportInputs.reportName);
+                                    if (personaCreated) addPersonaReportToTracking(env, PLVReportInputs.reportName, {
+                                        uploadAudience: PLVReportInputs.UploadAudience
+                                    });
                                 }
                             }
 
@@ -665,7 +675,10 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                             }
                             else {
                                 if (DLVReportInputs.Persona?.toUpperCase() === "YES") {
-                                    await Report_To_Persona_Flow(page, DLVReportInputs.reportName);
+                                    const personaCreated = await Report_To_Persona_Flow(page, DLVReportInputs.reportName);
+                                    if (personaCreated) addPersonaReportToTracking(env, DLVReportInputs.reportName, {
+                                        uploadAudience: DLVReportInputs.UploadAudience
+                                    });
                                 }
                             }
 
@@ -679,6 +692,16 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                             await safeWait(page, 2000);
                         }
                     }
+
+                    const total = await verifyAggregatedCount(
+                        page,
+                        inputData.reportName
+                    );
+
+                    console.log(total);
+
+                    console.log(`✅ 'places' flow completed successfully for '${inputData.reportName}'.`);
+                    logSession(`✅ 'places' flow completed successfully for '${inputData.reportName}'.`, false, { flow: "explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
 
 
                     logSession(`✅ 'places' flow completed successfully: ${inputData.reportName}`, false, { flow: "explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
@@ -710,6 +733,9 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                         inputData.reportName,
                     );
 
+                    console.log(`✅ 'quality of life index' flow completed successfully for '${inputData.reportName}'.`);
+                    logSession(`✅ 'quality of life index' flow completed successfully for '${inputData.reportName}'.`, false, { flow: "explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
+
 
                     logSession(`✅ 'quality of life index' flow completed successfully: ${inputData.reportName}`, false, { flow: "explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
                 } catch (err) {
@@ -737,7 +763,8 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                         inputData.reportType,
                         inputData.reportName,
                     );
-                    logSession(`✅ 'population' flow completed successfully: ${inputData.reportName}`, false, { flow: "explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
+                    console.log(`✅ 'population' flow completed successfully for '${inputData.reportName}'.`);
+                    logSession(`✅ 'population' flow completed successfully for '${inputData.reportName}'.`, false, { flow: "explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
                 } catch (err) {
                     console.error(`❌ Error in 'population' flow: ${err.message}`);
                     logSession(`❌ Error in 'population' flow: ${err.message}`, false, { flow: "explore", report: inputData.reportName, outcome: "failure", reason: err.message });
@@ -764,7 +791,9 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                         inputData.reportName,
                     );
 
-                    logSession(`✅ 'home locations' flow completed successfully: ${inputData.reportName}`, false, { flow: "explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
+                    console.log(`✅ 'home locations' flow completed successfully for '${inputData.reportName}'.`);
+                    logSession(`✅ 'home locations' flow completed successfully for '${inputData.reportName}'.`, false, { flow: "explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
+
                 } catch (err) {
                     console.error(`❌ Error in 'home locations' flow: ${err.message}`);
                     logSession(`❌ Error in 'home locations' flow: ${err.message}`, false, { flow: "explore", report: inputData.reportName, outcome: "failure", reason: err.message });
@@ -785,7 +814,9 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                     await keplerDatasetsFetch(page, inputData.reportName);
                     await safeWait(page, 2000);
 
-                    logSession(`✅ 'h9 master' flow completed successfully: ${inputData.reportName}`, false, { flow: "explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
+                    console.log(`✅ 'h9 master' flow completed successfully for '${inputData.reportName}'.`);
+                    logSession(`✅ 'h9 master' flow completed successfully for '${inputData.reportName}'.`, false, { flow: "explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
+
                 } catch (err) {
                     console.error(`❌ Error in 'h9 master' flow: ${err.message}`);
                     logSession(`❌ Error in 'h9 master' flow: ${err.message}`, false, { flow: "explore", report: inputData.reportName, outcome: "failure", reason: err.message });
@@ -806,7 +837,9 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                     await keplerDatasetsFetch(page, inputData.reportName);
                     await safeWait(page, 2000);
 
-                    logSession(`✅ 'quality of life index raw' flow completed successfully: ${inputData.reportName}`, false, { flow: "explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
+                    console.log(`✅ 'quality of life index raw' flow completed successfully for '${inputData.reportName}'.`);
+                    logSession(`✅ 'quality of life index raw' flow completed successfully for '${inputData.reportName}'.`, false, { flow: "explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
+
                 } catch (err) {
                     console.error(`❌ Error in 'quality of life index raw' flow: ${err.message}`);
                     logSession(`❌ Error in 'quality of life index raw' flow: ${err.message}`, false, { flow: "explore", report: inputData.reportName, outcome: "failure", reason: err.message });
@@ -843,7 +876,9 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
 
                     console.log(total);
 
-                    logSession(`✅ 'places internal' flow completed successfully: ${inputData.reportName}`, false, { flow: "explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
+                    console.log(`✅ 'places internal' flow completed successfully for '${inputData.reportName}'.`);
+                    logSession(`✅ 'places internal' flow completed successfully for '${inputData.reportName}'.`, false, { flow: "explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
+
                 } catch (err) {
                     console.error(`❌ Error in 'places internal' flow: ${err.message}`);
                     logSession(`❌ Error in 'places internal' flow: ${err.message}`, false, { flow: "explore", report: inputData.reportName, outcome: "failure", reason: err.message });

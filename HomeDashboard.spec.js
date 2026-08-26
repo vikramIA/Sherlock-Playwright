@@ -1,9 +1,9 @@
 const { chromium } = require("@playwright/test");
 const exploreFlow = require("./ExploreReport.js");
 const PersonaFlow = require("./PersonaReport.js");
-const Multilayerflow = require("./MultilayerReport.js");
+const { MultilayerBatchFlow } = require("./MultilayerReport.js");
 const watsonAIReportFlow = require("./WatsonAIFlow.js");
-const input = require("./input.json");
+const csAgentFlow = require("./CSAgentFlow.js");
 const fs = require("fs");
 const path = require("path");
 const { loginAndNavigate, safeWait } = require("./functions");
@@ -14,16 +14,22 @@ const RecordingManager = require("./Recording.js");
 
 const { exec } = require("child_process");
 
-const cliEnvs = process.argv.slice(2);
+const cliArgs = process.argv.slice(2);
 const allEnvs = Object.keys(envConfig);
+const checkTypes = ["daily", "detail"];
 
-// ✅ Case 1: No env → run all in parallel
-if (cliEnvs.length === 0) {
-  console.log("🚀 No ENV passed → Running ALL envs in parallel...\n");
+// checkType is an optional 2nd CLI arg — "daily" (fast smoke check, input-daily.json)
+// or "detail" (full check, input.json). Defaults to "detail" to preserve prior behavior.
+const isCheckType = (arg) => checkTypes.includes((arg || "").toLowerCase());
+
+// ✅ Case 1: No env → run all in parallel (an optional lone checkType arg is passed through)
+if (cliArgs.length === 0 || (cliArgs.length === 1 && isCheckType(cliArgs[0]))) {
+  const checkType = cliArgs[0] ? cliArgs[0].toLowerCase() : "detail";
+  console.log(`🚀 No ENV passed → Running ALL envs in parallel (${checkType} check)...\n`);
 
   allEnvs.forEach(env => {
-    exec(`node HomeDashboard.spec.js ${env}`, (err, stdout, stderr) => {
-      console.log(`\n================ ${env.toUpperCase()} =================`);
+    exec(`node HomeDashboard.spec.js ${env} ${checkType}`, (err, stdout, stderr) => {
+      console.log(`\n================ ${env.toUpperCase()} (${checkType}) =================`);
       console.log(stdout);
       if (err) console.error(stderr);
     });
@@ -33,11 +39,19 @@ if (cliEnvs.length === 0) {
 }
 
 // ✅ Only runs when env is provided
-const env = cliEnvs[0];
+const env = cliArgs[0];
+const checkType = isCheckType(cliArgs[1]) ? cliArgs[1].toLowerCase() : "detail";
 
 if (!envConfig[env]) {
   throw new Error(`❌ Environment "${env}" not found. Use: ${allEnvs.join(", ")}`);
 }
+
+if (cliArgs[1] && !isCheckType(cliArgs[1])) {
+  throw new Error(`❌ Unknown check type "${cliArgs[1]}". Use: ${checkTypes.join(", ")}`);
+}
+
+const inputFile = checkType === "daily" ? "./input-daily.json" : "./input.json";
+const input = require(inputFile);
 
 const { baseUrl, email, password, secret } = envConfig[env];
 initLogger(env); // ✅ initialize env-based logging
@@ -67,9 +81,46 @@ function cleanupOldSessions(baseDir, keepLast = 5, foldersList = null) {
   }
 }
 
+function countPlannedReports(input) {
+  const explore = input.explore?.length || 0;
+  const persona = input.Persona?.length || 0;
+  const personaPostUpload = (input.Persona || []).reduce(
+    (sum, p) => sum + (p.postUploadReports?.length || 0),
+    0
+  );
+
+  // Mirrors the actual filter in main(): ReportForMultilayer only runs
+  // when Multilayer is non-empty, and only for reports it actually references.
+  const multilayer = input.Multilayer?.length || 0;
+  let reportForMultilayer = 0;
+  if (multilayer > 0) {
+    const requiredReports = new Set(input.Multilayer.flatMap(m => m.Report_TO_Merge));
+    reportForMultilayer = (input.ReportForMultilayer || []).filter(r =>
+      requiredReports.has(r.ReportNumber)
+    ).length;
+  }
+
+  const watsonAI = input.WatsonAI?.length || 0;
+  const csAgent = input.CSAgent?.length > 0 ? input.CSAgent.length : 0;
+
+  const totalReportsPlanned =
+    explore + persona + personaPostUpload + reportForMultilayer + multilayer + watsonAI + csAgent;
+
+  return {
+    explore,
+    persona,
+    persona_post_upload: personaPostUpload,
+    report_for_multilayer: reportForMultilayer,
+    multilayer,
+    watson_ai: watsonAI,
+    cs_agent: csAgent,
+    total_reports_planned: totalReportsPlanned,
+  };
+}
+
 function createSessionFolder() {
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-").replace("T", "_").split("Z")[0];
-  const sessionDir = path.join(__dirname, "session_artifacts", `${env}_Session_${timestamp}`);
+  const sessionDir = path.join(__dirname, "session_artifacts", `${env}_${checkType}_Session_${timestamp}`);
   fs.mkdirSync(sessionDir, { recursive: true });
   return sessionDir;
 }
@@ -77,15 +128,23 @@ function createSessionFolder() {
 async function main() {
   const sessionBaseDir = path.join(__dirname, "session_artifacts");
 
-  // ✅ Filter only current env folders
+  // ✅ Filter only current env+checkType folders so daily/detail histories don't clobber each other
   const envFolders = fs.existsSync(sessionBaseDir)
-    ? fs.readdirSync(sessionBaseDir).filter(f => f.startsWith(env))
+    ? fs.readdirSync(sessionBaseDir).filter(f => f.startsWith(`${env}_${checkType}`))
     : [];
 
   cleanupOldSessions(sessionBaseDir, 5, envFolders);
 
   const newSession = getLastSessionNumber() + 1;
   logSession(getSessionHeader(newSession), true);
+
+  logSession("Planned run scope", false, {
+    flow: "run_plan",
+    check_type: checkType,
+    cadence: checkType === "daily" ? "daily" : "weekly",
+    input_file: inputFile,
+    ...countPlannedReports(input),
+  });
 
   let browser, context, page, recording;
   const sessionDir = createSessionFolder();
@@ -154,11 +213,11 @@ async function main() {
 
 
     // Explore Flow
-    for (const report of input.explore || []) await exploreFlow(page, report);
+    for (const report of input.explore || []) await exploreFlow(page, report, false, false, env);
     await safeWait(page, 10000);
 
     // Persona Flow
-    for (const report of input.Persona || []) await PersonaFlow(page, report);
+    for (const report of input.Persona || []) await PersonaFlow(page, report, env);
     await safeWait(page, 10000);
 
     // Multilayer Flow
@@ -168,7 +227,7 @@ async function main() {
 
       for (const report of input.ReportForMultilayer || []) {
         if (requiredReports.has(report.ReportNumber)) {
-          await exploreFlow(page, report, true, multilayerReportsMap);
+          await exploreFlow(page, report, true, multilayerReportsMap, env);
         }
       }
 
@@ -177,16 +236,20 @@ async function main() {
         multilayerReportsMap: JSON.stringify(Array.from(multilayerReportsMap.entries())),
       });
 
-      for (const report of input.Multilayer) {
-        await Multilayerflow(page, report.reportName, report.Report_TO_Merge, report.MergeType, multilayerReportsMap);
-      }
+      await MultilayerBatchFlow(page, input.Multilayer, multilayerReportsMap, env);
     }
-    //watsonAI Flow
+    // watsonAI Flow
     await watsonAIReportFlow(
       page,
       input.WatsonAI || []
     );
     await safeWait(page, 10000);
+
+    // CS Agent Flow
+    if (input.CSAgent?.length > 0) {
+      await csAgentFlow(page, input.CSAgent);
+      await safeWait(page, 10000);
+    }
 
   } catch (err) {
     console.error(`❌ Script failed: ${err.message}`);

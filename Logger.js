@@ -8,23 +8,6 @@ let currentFlow;
 let currentReportStartedAt;
 let runStats = { success: 0, failure: 0, skipped: 0, reports: new Set() };
 
-// Call once per report-processing entry point (top of exploreFlow/PersonaFlow/etc.).
-// Tags every subsequent logSession call with flow= until the next beginFlow() call,
-// and lets outcome-tagged lines auto-report how long that report took.
-function beginFlow(flow) {
-    currentFlow = flow;
-    currentReportStartedAt = Date.now();
-}
-
-function getRunSummary() {
-    return {
-        total_reports: runStats.reports.size,
-        success: runStats.success,
-        failure: runStats.failure,
-        skipped: runStats.skipped,
-    };
-}
-
 // Matches emoji used across the codebase to mark severity (✅/❌/⚠️/etc.) so they
 // can be stripped from the persisted message and mapped to a real level= field.
 const EMOJI_REGEX = /[\u{1F300}-\u{1FAFF}\u{2300}-\u{27BF}\u{FE0F}]/gu;
@@ -59,6 +42,23 @@ function toLogfmt(fields) {
 function splitContext(cleanedMessage) {
     const match = cleanedMessage.match(/^\[([^\]]+)\]\s*(.*)$/);
     return match ? { context: match[1], msg: match[2] } : { context: undefined, msg: cleanedMessage };
+}
+
+// Call once per report-processing entry point (top of exploreFlow/PersonaFlow/etc.).
+// Tags every subsequent logSession call with flow= until the next beginFlow() call,
+// and lets outcome-tagged lines auto-report how long that report took.
+function beginFlow(flow) {
+    currentFlow = flow;
+    currentReportStartedAt = Date.now();
+}
+
+function getRunSummary() {
+    return {
+        total_reports: runStats.reports.size,
+        success: runStats.success,
+        failure: runStats.failure,
+        skipped: runStats.skipped,
+    };
 }
 
 function initLogger(env) {
