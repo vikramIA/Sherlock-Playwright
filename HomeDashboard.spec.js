@@ -81,6 +81,43 @@ function cleanupOldSessions(baseDir, keepLast = 5, foldersList = null) {
   }
 }
 
+function countPlannedReports(input) {
+  const explore = input.explore?.length || 0;
+  const persona = input.Persona?.length || 0;
+  const personaPostUpload = (input.Persona || []).reduce(
+    (sum, p) => sum + (p.postUploadReports?.length || 0),
+    0
+  );
+
+  // Mirrors the actual filter in main(): ReportForMultilayer only runs
+  // when Multilayer is non-empty, and only for reports it actually references.
+  const multilayer = input.Multilayer?.length || 0;
+  let reportForMultilayer = 0;
+  if (multilayer > 0) {
+    const requiredReports = new Set(input.Multilayer.flatMap(m => m.Report_TO_Merge));
+    reportForMultilayer = (input.ReportForMultilayer || []).filter(r =>
+      requiredReports.has(r.ReportNumber)
+    ).length;
+  }
+
+  const watsonAI = input.WatsonAI?.length || 0;
+  const csAgent = input.CSAgent?.length > 0 ? input.CSAgent.length : 0;
+
+  const totalReportsPlanned =
+    explore + persona + personaPostUpload + reportForMultilayer + multilayer + watsonAI + csAgent;
+
+  return {
+    explore,
+    persona,
+    persona_post_upload: personaPostUpload,
+    report_for_multilayer: reportForMultilayer,
+    multilayer,
+    watson_ai: watsonAI,
+    cs_agent: csAgent,
+    total_reports_planned: totalReportsPlanned,
+  };
+}
+
 function createSessionFolder() {
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-").replace("T", "_").split("Z")[0];
   const sessionDir = path.join(__dirname, "session_artifacts", `${env}_${checkType}_Session_${timestamp}`);
@@ -100,6 +137,12 @@ async function main() {
 
   const newSession = getLastSessionNumber() + 1;
   logSession(getSessionHeader(newSession), true);
+
+  logSession("Planned run scope", false, {
+    flow: "run_plan",
+    input_file: inputFile,
+    ...countPlannedReports(input),
+  });
 
   let browser, context, page, recording;
   const sessionDir = createSessionFolder();
