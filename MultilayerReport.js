@@ -153,6 +153,7 @@ async function layeredMerge(page, reportName, Report_TO_Merge, multilayerReports
     const timeTakenMinutes = timeTakenSeconds / 60;
     console.log(`⏱️ Layered Merge completed for: ${reportName} | Reports: ${Report_TO_Merge} | Time: ${timeTakenMinutes.toFixed(2)} min (${timeTakenSeconds.toFixed(2)} sec)`);
     logSession(`⏱️ Layered Merge completed for: ${reportName} | Reports: ${Report_TO_Merge} | Time: ${timeTakenMinutes.toFixed(2)} min (${timeTakenSeconds.toFixed(2)} sec)`, false, { flow: "multilayer", report: reportName, merge_type: "layered", duration_sec: timeTakenSeconds });
+    return true;
 }
 
 // =============== Unified Merge Flow ===============
@@ -289,6 +290,7 @@ async function unifiedMerge(page, reportName, Report_TO_Merge, multilayerReports
     const timeTakenMinutes = timeTakenSeconds / 60;
     console.log(`⏱️ Unified Merge completed for: ${reportName} | Reports: ${Report_TO_Merge} | Time: ${timeTakenMinutes.toFixed(2)} min (${timeTakenSeconds.toFixed(2)} sec)`);
     logSession(`⏱️ Unified Merge completed for: ${reportName} | Reports: ${Report_TO_Merge} | Time: ${timeTakenMinutes.toFixed(2)} min (${timeTakenSeconds.toFixed(2)} sec)`, false, { flow: "multilayer", report: reportName, merge_type: "unified", duration_sec: timeTakenSeconds });
+    return true;
 }
 
 // =============== Trigger-only Unified Merge (for batched flow) ===============
@@ -616,15 +618,20 @@ async function MultilayerFlow(page, reportName, Report_TO_Merge, MergeType, mult
                 const layeredBtnXPath = "//button[normalize-space(text())='Layered Datasets']";
                 await page.locator(`xpath=${layeredBtnXPath}`).click({ timeout: 15000 });
                 await safeWait(page, 2000);
-                await layeredMerge(page, reportName, Report_TO_Merge, multilayerReportsMap, startTime, { Persona, env, UploadAudience });
+                mergeCompleted = await layeredMerge(page, reportName, Report_TO_Merge, multilayerReportsMap, startTime, { Persona, env, UploadAudience });
             } else if (type === "unified") {
                 console.log("📌 Executing Unified Dataset Merge");
                 logSession("📌 Executing Unified Dataset Merge");
                 await safeWait(page, 2000);
-                await unifiedMerge(page, reportName, Report_TO_Merge, multilayerReportsMap, startTime, { Persona, env, UploadAudience });
+                mergeCompleted = await unifiedMerge(page, reportName, Report_TO_Merge, multilayerReportsMap, startTime, { Persona, env, UploadAudience });
             } else {
                 console.warn(`❌ Invalid MergeType: ${MergeType}`);
                 logSession(`❌ Invalid MergeType: ${MergeType}`, false, { flow: "multilayer", report: reportName, outcome: "failure", reason: "invalid_merge_type" });
+                return;
+            }
+
+            if (!mergeCompleted) {
+                // layeredMerge/unifiedMerge already logged the skip reason with an outcome tag.
                 return;
             }
 

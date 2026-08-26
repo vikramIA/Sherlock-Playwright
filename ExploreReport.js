@@ -259,8 +259,6 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                             }
                         }
                     }
-
-                    logSession(`✅ 'place level visits' flow completed successfully: ${inputData.reportName}`, false, { flow: "explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
                 } catch (err) {
                     console.error(`❌ Error in 'place level visits' flow: ${err.message}`);
                     logSession(`❌ Error in 'place level visits' flow: ${err.message}`, false, { flow: "explore", report: inputData.reportName, outcome: "failure", reason: err.message });
@@ -509,7 +507,6 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                             }
                         }
                     }
-                    logSession(`✅ 'device level visits' flow completed successfully: ${inputData.reportName}`, false, { flow: "explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
                 } catch (err) {
                     console.error(`❌ Error in 'device level visits' flow: ${err.message}`);
                     logSession(`❌ Error in 'device level visits' flow: ${err.message}`, false, { flow: "explore", report: inputData.reportName, outcome: "failure", reason: err.message });
@@ -702,9 +699,6 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
 
                     console.log(`✅ 'places' flow completed successfully for '${inputData.reportName}'.`);
                     logSession(`✅ 'places' flow completed successfully for '${inputData.reportName}'.`, false, { flow: "explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
-
-
-                    logSession(`✅ 'places' flow completed successfully: ${inputData.reportName}`, false, { flow: "explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
                 } catch (err) {
                     console.error(`❌ Error in 'places' flow: ${err.message}`);
                     logSession(`❌ Error in 'places' flow: ${err.message}`, false, { flow: "explore", report: inputData.reportName, outcome: "failure", reason: err.message });
@@ -735,9 +729,6 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
 
                     console.log(`✅ 'quality of life index' flow completed successfully for '${inputData.reportName}'.`);
                     logSession(`✅ 'quality of life index' flow completed successfully for '${inputData.reportName}'.`, false, { flow: "explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
-
-
-                    logSession(`✅ 'quality of life index' flow completed successfully: ${inputData.reportName}`, false, { flow: "explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
                 } catch (err) {
                     console.error(`❌ Error in 'quality of life index' flow: ${err.message}`);
                     logSession(`❌ Error in 'quality of life index' flow: ${err.message}`, false, { flow: "explore", report: inputData.reportName, outcome: "failure", reason: err.message });

@@ -3125,7 +3125,9 @@ async function verifyAggregatedCount(page, reportName) {
             );
         }
 
-        return null;
+        throw new Error(
+            `Aggregated Count Total value did not render for '${reportName}'.`
+        );
     }
 
     // ==========================================
@@ -3148,7 +3150,9 @@ async function verifyAggregatedCount(page, reportName) {
             { report: reportName }
         );
 
-        return null;
+        throw new Error(
+            `Aggregated Count Total value is empty for '${reportName}'.`
+        );
     }
 
     // ==========================================
