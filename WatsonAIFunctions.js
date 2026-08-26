@@ -3,6 +3,38 @@ const { expect } = require("@playwright/test");
 
 
 // =========================================================
+// Resolves to the key of whichever locator becomes visible first, racing
+// them concurrently instead of checking one at a time — so the common
+// case (the first one in the list) resolves exactly as fast as before,
+// while still detecting whichever other state actually happened. Resolves
+// to null only if NONE of them ever become visible within timeout.
+// =========================================================
+
+function waitForFirstVisible(locators, timeout) {
+    return new Promise((resolve) => {
+        let settledCount = 0;
+        let resolved = false;
+
+        for (const { key, locator } of locators) {
+            locator.waitFor({ state: "visible", timeout })
+                .then(() => {
+                    if (!resolved) {
+                        resolved = true;
+                        resolve(key);
+                    }
+                })
+                .catch(() => {
+                    settledCount++;
+                    if (!resolved && settledCount === locators.length) {
+                        resolve(null);
+                    }
+                });
+        }
+    });
+}
+
+
+// =========================================================
 // 1. OPEN WATSON AI
 // =========================================================
 
@@ -27,20 +59,47 @@ async function openWatsonAI(page) {
         logSession("✅ Profile icon clicked.");
 
 
-        // Switch to WatsonAI
+        // Switch to WatsonAI — unless we're already there. The same
+        // profile menu shows "Switch to SherlockAI" instead whenever
+        // WatsonAI mode is already active (e.g. right after a prior
+        // WatsonAI-flow run in the same session), so don't assume which
+        // label will be showing — race both and react to whichever
+        // actually renders.
         const switchWatsonAI = page.getByRole("button", {
             name: "Switch to WatsonAI",
             exact: true
         });
 
-        await expect(switchWatsonAI).toBeVisible({
-            timeout: 15000
+        const switchBackToSherlockAI = page.getByRole("button", {
+            name: "Switch to SherlockAI",
+            exact: true
         });
 
-        await switchWatsonAI.click();
+        const menuState = await waitForFirstVisible([
+            { key: "needsSwitch", locator: switchWatsonAI },
+            { key: "alreadyInWatsonAI", locator: switchBackToSherlockAI }
+        ], 15000);
 
-        console.log("✅ Switched to WatsonAI.");
-        logSession("✅ Switched to WatsonAI.");
+        if (menuState === "alreadyInWatsonAI") {
+
+            await page.keyboard.press("Escape");
+
+            console.log("ℹ️ Already in WatsonAI mode — closed the profile menu without switching.");
+            logSession("ℹ️ Already in WatsonAI mode — closed the profile menu without switching.");
+
+        } else if (menuState === "needsSwitch") {
+
+            await switchWatsonAI.click();
+
+            console.log("✅ Switched to WatsonAI.");
+            logSession("✅ Switched to WatsonAI.");
+
+        } else {
+
+            throw new Error(
+                "Neither 'Switch to WatsonAI' nor 'Switch to SherlockAI' appeared after clicking the profile icon."
+            );
+        }
 
     } catch (error) {
 
@@ -158,15 +217,27 @@ async function waitForWatsonAIResponse(page) {
 // waits/times out searching for a field that will never appear.)
 // =========================================================
 
-async function checkWatsonAIQueryError(page) {
-    // .last() because past error blocks (from earlier queries in the
-    // same session) remain in the chat history — always check the
-    // most recent one, not a stale one from a previous query.
-    const errorMessage = page
-        .getByText("Failed to fetch Sherlock search results")
-        .last();
+// previousErrorCount: how many of these error blocks already existed in
+// the chat BEFORE this query was submitted. The error block never gets
+// removed from the DOM once it appears (unlike the "No Data"/"Failed"
+// toasts elsewhere in this file, which auto-dismiss), so a plain
+// .last().isVisible() check keeps re-matching that same leftover element
+// on every later query too — confirmed live in the qa logs: one real
+// error on the first query in a session caused every subsequent query
+// (10+ in a row, several of which had genuinely succeeded) to get
+// wrongly flagged with the same stale error. Only a genuinely NEW error
+// block (count grew past the pre-query baseline) counts as a failure.
+async function checkWatsonAIQueryError(page, previousErrorCount = 0) {
+    const errorLocator = page.getByText("Failed to fetch Sherlock search results");
 
-    const hasError = await errorMessage
+    const currentCount = await errorLocator.count();
+
+    if (currentCount <= previousErrorCount) {
+        return;
+    }
+
+    const hasError = await errorLocator
+        .last()
         .isVisible({ timeout: 3000 })
         .catch(() => false);
 
@@ -1207,59 +1278,94 @@ async function watsonAIKeplerValidation(page, reportName, reportOpenSeconds) {
                     const isDatasetPanelOpen = async () =>
                         (await page.locator(".source-data-catalog").count()) > 0;
 
-                    if (!(await isDatasetPanelOpen())) {
+                    // Same interception this file already works around
+                    // for the Focus Mode button just above (see "Focus
+                    // Mode click was intercepted (likely by the report
+                    // title label)") — confirmed live via DOM inspection
+                    // that the BentoBox charts tooltip / report-title
+                    // label can sit on top of this button's hit area, so
+                    // a plain click() (bounded 30s default timeout) can
+                    // fail actionability and get silently swallowed by
+                    // .catch(() => {}), leaving the panel closed and a
+                    // report with real data wrongly flagged no_data.
+                    // Retry with a bounded timeout, then fall back to a
+                    // force click that bypasses the actionability check
+                    // entirely — confirmed live that a plain DOM
+                    // .click() (which force: true approximates) opens
+                    // the panel correctly even while occluded.
+                    for (
+                        let attempt = 0;
+                        attempt < 3 && !(await isDatasetPanelOpen());
+                        attempt++
+                    ) {
 
-                        await keplerArrow.first().click().catch(() => { });
+                        await keplerArrow.first()
+                            .click({ timeout: 5000 })
+                            .catch(() =>
+                                keplerArrow.first()
+                                    .click({ timeout: 5000, force: true })
+                                    .catch(() => { })
+                            );
+
                         await page.waitForTimeout(500);
                     }
 
-                    // If the click above happened to close it instead
-                    // of opening it (e.g. it was already open but our
-                    // check above raced with a re-render), click once
-                    // more to bring it back open.
-                    if (!(await isDatasetPanelOpen())) {
+                    // Read the "Datasets(N)" counter next to the "Add
+                    // Data" button instead of parsing row-count text.
+                    // Confirmed live: this span reads "Datasets(1)" for
+                    // a report with a normal tabular dataset, and plain
+                    // "Datasets" (no parens at all) when the catalog is
+                    // genuinely empty. This also sidesteps the earlier
+                    // row-text approach entirely breaking on choropleth
+                    // report types (QLI) whose row entry reads "Vector
+                    // tile" instead of a number — same selector pattern
+                    // already proven for Explore reports in
+                    // keplerDatasetsFetch() in functions.js.
+                    const datasetsLabel = page.locator(
+                        "//button[.//text()[normalize-space()='Add Data']]/preceding-sibling::span"
+                    );
 
-                        await keplerArrow.first().click().catch(() => { });
-                        await page.waitForTimeout(500);
+                    let datasetsLabelText = "";
+
+                    if (await isDatasetPanelOpen()) {
+
+                        const pollDeadline =
+                            Date.now() + 20000;
+
+                        while (Date.now() < pollDeadline) {
+
+                            if (await datasetsLabel.count() > 0) {
+
+                                datasetsLabelText =
+                                    (await datasetsLabel.first().innerText())
+                                        .trim();
+
+                                if (/\(\d+\)/.test(datasetsLabelText)) {
+
+                                    break;
+                                }
+                            }
+
+                            await page.waitForTimeout(1000);
+                        }
                     }
 
-                    const datasetRows =
-                        page.locator(".source-data-rows").first();
+                    const datasetCountMatch =
+                        datasetsLabelText.match(/\((\d+)\)/);
 
-                    let rowsText = "";
-
-                    try {
-
-                        await datasetRows.waitFor({
-                            state: "visible",
-                            timeout: 10000
-                        });
-
-                        rowsText = (
-                            await datasetRows.innerText()
-                        ).trim();
-
-                    } catch {
-
-                        rowsText = "";
-                    }
-
-                    const rowCountMatch =
-                        rowsText.match(/(\d+)/);
-
-                    const rowCount =
-                        rowCountMatch
-                            ? parseInt(rowCountMatch[1], 10)
+                    const datasetCount =
+                        datasetCountMatch
+                            ? parseInt(datasetCountMatch[1], 10)
                             : 0;
 
-                    if (rowCount > 0) {
+                    if (datasetCount > 0) {
 
                         console.log(
-                            `✅ Dataset rows confirmed: '${rowsText}'.`
+                            `✅ Datasets confirmed: '${datasetsLabelText}'.`
                         );
 
                         logSession(
-                            `✅ Dataset rows confirmed: '${rowsText}'.`
+                            `✅ Datasets confirmed: '${datasetsLabelText}'.`
                         );
 
                         return log({
@@ -1269,7 +1375,7 @@ async function watsonAIKeplerValidation(page, reportName, reportOpenSeconds) {
                             url: currentURL,
 
                             text:
-                                `WatsonAI generated report opened successfully with real data (${rowsText}).`,
+                                `WatsonAI generated report opened successfully with real data (${datasetsLabelText}).`,
 
                             status: "success",
 
@@ -1278,11 +1384,11 @@ async function watsonAIKeplerValidation(page, reportName, reportOpenSeconds) {
                     }
 
                     console.log(
-                        `⚠️ Kepler sidebar rendered, but no dataset rows detected (rowsText: '${rowsText}').`
+                        `⚠️ Kepler sidebar rendered, but no datasets detected (datasetsLabelText: '${datasetsLabelText}').`
                     );
 
                     logSession(
-                        `⚠️ Kepler sidebar rendered, but no dataset rows detected (rowsText: '${rowsText}').`
+                        `⚠️ Kepler sidebar rendered, but no datasets detected (datasetsLabelText: '${datasetsLabelText}').`
                     );
 
                     return log({
@@ -1292,7 +1398,7 @@ async function watsonAIKeplerValidation(page, reportName, reportOpenSeconds) {
                         url: currentURL,
 
                         text:
-                            `Kepler sidebar rendered, but no dataset rows were detected — report likely has no data (rowsText: '${rowsText}').`,
+                            `Kepler sidebar rendered, but no datasets were detected — report likely has no data (datasetsLabelText: '${datasetsLabelText}').`,
 
                         status: "no_data",
 

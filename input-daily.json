@@ -141,29 +141,26 @@
       "SubCategory": "Fast food restaurant",
       "Brands": "McDonald's",
       "Rating": "2-5",
-      "ReviewCount": "10-500",
+      "ReviewCount": "0-302292",
       "AverageDailyVisits": "2-20000",
-      "AverageMonthlyVisits": "3-20000",
-      "AverageDailyDevices": "4-20000",
-      "AverageMonthlyDevices": "5-20000"
+      "AverageMonthlyVisits": "3-645383",
+      "AverageDailyDevices": "4-29000",
+      "AverageMonthlyDevices": "5-359167"
     },
     {
       "reportType": "Device Level Visits",
-      "reportName": "Daily_DLV_For_Multilayer",
+      "reportName": "DLV_Normal_Report",
       "ReportNumber": 2,
-      "place": "food.restaurant.fast_food",
+      "place": "auto.car.dealership",
       "location": "Pune, Maharashtra, India",
       "StartDateRange": "2026-06-01",
       "EndDateRange": "2026-06-07",
-      "Brands": "McDonald's",
-      "SubCategory": "Fast food restaurant",
       "Rating": "2-5",
-      "ReviewCount": "10-500",
+      "ReviewCount": "0-302292",
       "AverageDailyVisits": "2-20000",
-      "AverageMonthlyVisits": "3-20000",
-      "AverageDailyDevices": "4-20000",
-      "AverageMonthlyDevices": "5-20000",
-      "behaviors": "College Students",
+      "AverageMonthlyVisits": "3-645383",
+      "AverageDailyDevices": "4-29000",
+      "AverageMonthlyDevices": "5-359167",
       "age": "18-25; 26-35"
     },
     {
@@ -177,18 +174,15 @@
       "reportType": "Places",
       "reportName": "Daily_Places_For_Multilayer",
       "ReportNumber": 5,
-      "place": "food.restaurant.fast_food",
+      "place": "facility.education.university",
       "location": "Pune, Maharashtra, India",
       "StartDateRange": "2026-06-01",
       "EndDateRange": "2026-06-07",
-      "SubCategory": "Fast food restaurant",
-      "Brands": "McDonald's",
-      "Rating": "2-5",
       "ReviewCount": "10-500",
       "AverageDailyVisits": "2-20000",
-      "AverageMonthlyVisits": "3-20000",
-      "AverageDailyDevices": "4-20000",
-      "AverageMonthlyDevices": "5-20000"
+      "AverageMonthlyVisits": "3-645383",
+      "AverageDailyDevices": "4-29000",
+      "AverageMonthlyDevices": "5-359167"
     }
   ],
   "Multilayer": [
@@ -252,9 +246,9 @@
     },
     {
       "reportType": "Device Level Visits",
-      "query": "Create a DLV report for McDonalds in Mumbai from June 10, 2026 to June 12, 2026",
+      "query": "Create a DLV report for Dominos in Mumbai from June 10, 2026 to June 12, 2026",
       "verification": {
-        "reportName": "Device Level Visit Report for McDonalds in Mumbai City",
+        "reportName": "Device Level Visit Report for Dominos in Mumbai City",
         "location": "[City] Mumbai, Maharashtra, India",
         "dateRange": "Jun 10, 2026 - Jun 12, 2026"
       },

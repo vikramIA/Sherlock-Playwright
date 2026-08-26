@@ -122,21 +122,27 @@ async function csAgentFlow(page, testCases = []) {
             //
             // Verified live: reloading while already on /watsonai
             // stays on /watsonai with a fresh, empty chat — it does
-            // NOT bounce back to the SherlockAI home page. The profile
-            // menu's toggle button flips between "Switch to WatsonAI"
-            // and "Switch to SherlockAI" depending on which mode is
-            // currently active, and openWatsonAI() only ever looks for
-            // the former — so calling it unconditionally after a reload
-            // that keeps us in WatsonAI mode fails deterministically.
-            // Check for the chat interface itself (ground truth) instead
-            // of assuming which button label will be showing.
+            // NOT bounce back to the SherlockAI home page. openWatsonAI()
+            // now handles the already-there case itself (the profile
+            // menu shows "Switch to SherlockAI" instead of "Switch to
+            // WatsonAI" when that's true), but it's still worth skipping
+            // the extra profile-icon click entirely when we can already
+            // see the chat interface — ground truth for "are we in
+            // WatsonAI" — right after the reload.
+            //
+            // NOTE: use waitFor(), not isVisible({ timeout }) — isVisible()
+            // is a one-shot check that doesn't actually poll despite taking
+            // a timeout option, so right after a reload it can catch the
+            // chat UI mid-render and wrongly report "not visible" before
+            // it's had a chance to paint.
             // =================================================
 
             await page.reload({ waitUntil: "networkidle", timeout: 60000 });
 
             const alreadyInWatsonAI = await page
                 .getByPlaceholder("Ask a question or make a command", { exact: true })
-                .isVisible({ timeout: 5000 })
+                .waitFor({ state: "visible", timeout: 5000 })
+                .then(() => true)
                 .catch(() => false);
 
             if (!alreadyInWatsonAI) {

@@ -3471,9 +3471,9 @@
     },
     {
       "reportType": "Place Level Visits",
-      "query": "Create a PLV report for McDonalds in Pune for the period from June 1, 2026 to June 5, 2026",
+      "query": "Create a PLV report for Dominos in Pune for the period from June 1, 2026 to June 5, 2026",
       "verification": {
-        "reportName": "Visitation by POI Report for McDonalds in Pune City",
+        "reportName": "Visitation by POI Report for Dominos in Pune City",
         "location": "[City] Pune, Maharashtra, India",
         "dateRange": "Jun 01, 2026 - Jun 05, 2026",
         "places": [
@@ -3481,18 +3481,18 @@
           "Restaurant"
         ],
         "brands": [
-          "Mcdonalds"
+          "Dominos"
         ]
       },
       "expectedMessage": "Report created successfully"
     },
     {
       "reportType": "Place Level Visits",
-      "query": "Generate a PLV report for Nike stores in Mumbai from May 10, 2026 to May 15, 2026",
+      "query": "Generate a PLV report for Nike stores in Mumbai from June 10, 2026 to June 15, 2026",
       "verification": {
         "reportName": "Visitation by POI Report for Nike in Mumbai City",
         "location": "[City] Mumbai, Maharashtra, India",
-        "dateRange": "May 10, 2026 - May 15, 2026",
+        "dateRange": "Jun 10, 2026 - Jun 15, 2026",
         "places": [
           "Shoe Store",
           "Sportswear Store"
@@ -3505,9 +3505,9 @@
     },
     {
       "reportType": "Device Level Visits",
-      "query": "Create a DLV report for McDonalds in Mumbai from June 10, 2026 to June 12, 2026",
+      "query": "Create a DLV report for Dominos in Mumbai from June 10, 2026 to June 12, 2026",
       "verification": {
-        "reportName": "Device Level Visit Report for McDonalds in Mumbai City",
+        "reportName": "Device Level Visit Report for Dominos in Mumbai City",
         "location": "[City] Mumbai, Maharashtra, India",
         "dateRange": "Jun 10, 2026 - Jun 12, 2026"
       },
@@ -3542,11 +3542,11 @@
     },
     {
       "reportType": "Place Level Visits",
-      "query": "Create a PLV report for restaurants in Mumbai from April 1, 2026 to April 7, 2026",
+      "query": "Create a PLV report for restaurants in Mumbai from June 13, 2026 to June 18, 2026",
       "verification": {
         "reportName": "Visitation by POI Report for Restaurants in Mumbai",
         "location": "[City] Mumbai, Maharashtra, India",
-        "dateRange": "Apr 01, 2026 - Apr 07, 2026",
+        "dateRange": "Jun 13, 2026 - Jun 18, 2026",
         "places": [
           "Restaurant"
         ]
@@ -3555,11 +3555,11 @@
     },
     {
       "reportType": "Device Level Visits",
-      "query": "Generate a DLV report for shopping malls in mumbai from March 15, 2026 to March 20, 2026",
+      "query": "Generate a DLV report for shopping malls in mumbai from July 1, 2026 to July 5, 2026",
       "verification": {
         "reportName": "Device Level Visit Report for Shopping Malls in Mumbai",
         "location": "[City] Mumbai, Maharashtra, India",
-        "dateRange": "Mar 15, 2026 - Mar 20, 2026"
+        "dateRange": "Jul 01, 2026 - Jul 05, 2026"
       },
       "expectedMessage": "Report created successfully"
     },
@@ -3583,11 +3583,11 @@
     },
     {
       "reportType": "Place Level Visits",
-      "query": "Create a PLV report for hospitals in Chennai from February 1, 2026 to February 10, 2026",
+      "query": "Create a PLV report for hospitals in Chennai from June 24, 2026 to June 30, 2026",
       "verification": {
         "reportName": "Visitation by POI Report for Hospitals in Chennai",
-        "location": "[City] Chennai, Tamil Nadu, India",
-        "dateRange": "Feb 01, 2026 - Feb 10, 2026",
+        "location": "[District] Chennai, Tamil Nadu, India",
+        "dateRange": "Jun 24, 2026 - Jun 30, 2026",
         "places": [
           "Hospital"
         ]
@@ -3596,11 +3596,11 @@
     },
     {
       "reportType": "Device Level Visits",
-      "query": "Create a DLV report for airports in Maharashtra from January 1, 2026 to January 3, 2026",
+      "query": "Create a DLV report for airports in Maharashtra from July 1, 2026 to July 7, 2026",
       "verification": {
         "reportName": "Device Level Visit Report for Airports in Maharashtra",
         "location": "[State] Maharashtra, India",
-        "dateRange": "Jan 01, 2026 - Jan 03, 2026"
+        "dateRange": "Jul 01, 2026 - Jul 07, 2026"
       },
       "expectedMessage": "Report created successfully"
     }

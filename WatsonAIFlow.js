@@ -52,6 +52,16 @@ async function watsonAIFlow(page, reports) {
             // ENTER QUERY
             // =================================================
 
+            // Baseline count taken BEFORE this query is submitted —
+            // an error block from an earlier query in this session
+            // stays in the chat DOM forever, so checkWatsonAIQueryError
+            // needs this to tell "a new error happened for THIS query"
+            // apart from "an old error is still sitting there".
+            const previousErrorCount =
+                await page
+                    .getByText("Failed to fetch Sherlock search results")
+                    .count();
+
             await enterWatsonAIQuery(
                 page,
                 inputData.query
@@ -73,7 +83,7 @@ async function watsonAIFlow(page, reports) {
             // will never appear.
             // =================================================
 
-            await checkWatsonAIQueryError(page);
+            await checkWatsonAIQueryError(page, previousErrorCount);
 
 
             // =================================================
