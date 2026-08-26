@@ -1516,10 +1516,10 @@ async function navigateAndCreatePersonaFlow(page, inputData, maxRetries = 5) {
             return; // Exit after success
 
         } catch (err) {
-            console.error(`❌ Attempt ${attempt} failed for ${inputData.reportName}:`, err.message);
-            logSession(`❌ Attempt ${attempt} failed for ${inputData.reportName}: ${err.message}`);
-
             if (attempt === maxRetries) {
+                console.error(`❌ Attempt ${attempt} failed for ${inputData.reportName}:`, err.message);
+                logSession(`❌ Attempt ${attempt} failed for ${inputData.reportName}: ${err.message}`);
+
                 console.error(`❌ Max retries reached. Could not complete Persona Flow for ${inputData.reportName}`);
                 logSession(`❌ Max retries reached. Could not complete Persona Flow for ${inputData.reportName}`);
                 throw err;

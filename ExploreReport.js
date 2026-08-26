@@ -107,6 +107,9 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
 
                     console.log(total);
 
+                    console.log(`✅ 'place level visits' flow completed successfully for '${inputData.reportName}'.`);
+                    logSession(`✅ 'place level visits' flow completed successfully for '${inputData.reportName}'.`, false, { flow: "explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
+
                     if (
                         Array.isArray(inputData.UploadAudience) &&
                         inputData.UploadAudience.length > 0
@@ -343,6 +346,9 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                     );
 
                     console.log(total);
+
+                    console.log(`✅ 'device level visits' flow completed successfully for '${inputData.reportName}'.`);
+                    logSession(`✅ 'device level visits' flow completed successfully for '${inputData.reportName}'.`, false, { flow: "explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
 
 
                     if (
@@ -692,6 +698,9 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
 
                     console.log(total);
 
+                    console.log(`✅ 'places' flow completed successfully for '${inputData.reportName}'.`);
+                    logSession(`✅ 'places' flow completed successfully for '${inputData.reportName}'.`, false, { flow: "explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
+
 
                 } catch (err) {
                     console.error(`❌ Error in 'places' flow: ${err.message}`);
@@ -721,6 +730,9 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                         inputData.reportName,
                     );
 
+                    console.log(`✅ 'quality of life index' flow completed successfully for '${inputData.reportName}'.`);
+                    logSession(`✅ 'quality of life index' flow completed successfully for '${inputData.reportName}'.`, false, { flow: "explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
+
 
                 } catch (err) {
                     console.error(`❌ Error in 'quality of life index' flow: ${err.message}`);
@@ -747,6 +759,8 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                         inputData.reportType,
                         inputData.reportName,
                     );
+                    console.log(`✅ 'population' flow completed successfully for '${inputData.reportName}'.`);
+                    logSession(`✅ 'population' flow completed successfully for '${inputData.reportName}'.`, false, { flow: "explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
                 } catch (err) {
                     console.error(`❌ Error in 'population' flow: ${err.message}`);
                     logSession(`❌ Error in 'population' flow: ${err.message}`, false, { flow: "explore", report: inputData.reportName, outcome: "failure", reason: err.message });
@@ -773,6 +787,9 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                         inputData.reportName,
                     );
 
+                    console.log(`✅ 'home locations' flow completed successfully for '${inputData.reportName}'.`);
+                    logSession(`✅ 'home locations' flow completed successfully for '${inputData.reportName}'.`, false, { flow: "explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
+
                 } catch (err) {
                     console.error(`❌ Error in 'home locations' flow: ${err.message}`);
                     logSession(`❌ Error in 'home locations' flow: ${err.message}`, false, { flow: "explore", report: inputData.reportName, outcome: "failure", reason: err.message });
@@ -793,6 +810,9 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                     await keplerDatasetsFetch(page, inputData.reportName);
                     await safeWait(page, 2000);
 
+                    console.log(`✅ 'h9 master' flow completed successfully for '${inputData.reportName}'.`);
+                    logSession(`✅ 'h9 master' flow completed successfully for '${inputData.reportName}'.`, false, { flow: "explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
+
                 } catch (err) {
                     console.error(`❌ Error in 'h9 master' flow: ${err.message}`);
                     logSession(`❌ Error in 'h9 master' flow: ${err.message}`, false, { flow: "explore", report: inputData.reportName, outcome: "failure", reason: err.message });
@@ -812,6 +832,9 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
 
                     await keplerDatasetsFetch(page, inputData.reportName);
                     await safeWait(page, 2000);
+
+                    console.log(`✅ 'quality of life index raw' flow completed successfully for '${inputData.reportName}'.`);
+                    logSession(`✅ 'quality of life index raw' flow completed successfully for '${inputData.reportName}'.`, false, { flow: "explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
 
                 } catch (err) {
                     console.error(`❌ Error in 'quality of life index raw' flow: ${err.message}`);
@@ -848,6 +871,9 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                     );
 
                     console.log(total);
+
+                    console.log(`✅ 'places internal' flow completed successfully for '${inputData.reportName}'.`);
+                    logSession(`✅ 'places internal' flow completed successfully for '${inputData.reportName}'.`, false, { flow: "explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
 
                 } catch (err) {
                     console.error(`❌ Error in 'places internal' flow: ${err.message}`);
