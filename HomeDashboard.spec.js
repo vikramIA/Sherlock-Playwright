@@ -140,6 +140,8 @@ async function main() {
 
   logSession("Planned run scope", false, {
     flow: "run_plan",
+    check_type: checkType,
+    cadence: checkType === "daily" ? "daily" : "weekly",
     input_file: inputFile,
     ...countPlannedReports(input),
   });
