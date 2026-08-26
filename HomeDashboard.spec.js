@@ -153,9 +153,22 @@ async function main() {
   try {
     const isHeadless = input.headless?.toUpperCase() === "YES";
 
+    // Safe on any machine: maximize the window and pin DPI scaling so
+    // screenshots/videos come out consistent regardless of the host display.
+    const launchArgs = ['--start-maximized', '--force-device-scale-factor=1', '--high-dpi-support=1'];
+
+    // VMs/CI runners often have no real GPU, so Chromium needs to fall back to
+    // software rendering (SwiftShader). Forcing that on a machine with a real
+    // GPU is unnecessary and can hurt rendering, so only add these when told
+    // we're on a VM via RUN_ON_VM=true.
+    const isVM = process.env.RUN_ON_VM?.toUpperCase() === "TRUE";
+    if (isVM) {
+      launchArgs.push('--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist');
+    }
+
     browser = await chromium.launch({
       headless: isHeadless,
-      args: ['--start-maximized', '--force-device-scale-factor=1', '--high-dpi-support=1'],
+      args: launchArgs,
     });
 
     context = await browser.newContext({

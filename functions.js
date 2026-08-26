@@ -1505,7 +1505,7 @@ async function navigateAndCreatePersonaFlow(page, inputData, maxRetries = 5) {
             await page.waitForURL('**/explore');
 
             console.log(`✅ Navigated to Explore for report: ${inputData.reportName}`);
-            logSession(`✅ Navigated to Explore for report: ${inputData.reportName}`);
+            logSession(`✅ Navigated to Explore for report: ${inputData.reportName}`, false, { report: inputData.reportName });
 
             // ✅ Click the first visible "Create Persona Workflow" button
             const personaButton = page.getByRole('button', { name: 'Create Persona Workflow' }).first();

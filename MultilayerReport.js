@@ -71,8 +71,8 @@ async function layeredMerge(page, reportName, Report_TO_Merge, multilayerReports
 
         if (!reportNameToSelect) {
             console.log(`⚠️ Report number ${reportNum} not found in multilayerReportsMap`);
-            logSession(`⚠️ Report number ${reportNum} not found in multilayerReportsMap`);
-            return; // stop process
+            logSession(`⚠️ Report number ${reportNum} not found in multilayerReportsMap`, false, { flow: "multilayer", report: reportName, merge_type: "layered", outcome: "skipped", reason: `report_number_${reportNum}_not_found` });
+            return false; // stop process
         }
 
         const reportSelectField = page.locator(`xpath=${reportSelectXPath}`);
@@ -97,8 +97,8 @@ async function layeredMerge(page, reportName, Report_TO_Merge, multilayerReports
         const count = await firstItem.count();
         if (count === 0) {
             console.log(`❌ No recommended options found for: ${reportNameToSelect}`);
-            logSession(`❌ No recommended options found for: ${reportNameToSelect}`);
-            return; // stop without error
+            logSession(`❌ No recommended options found for: ${reportNameToSelect}`, false, { flow: "multilayer", report: reportName, merge_type: "layered", outcome: "skipped", reason: "no_recommended_options" });
+            return false; // stop without error
         }
 
         // Get the text inside first item
@@ -110,8 +110,8 @@ async function layeredMerge(page, reportName, Report_TO_Merge, multilayerReports
         // Compare EXACT match
         if (firstItemText.toLowerCase() !== reportNameToSelect.toLowerCase()) {
             console.log(`❌ Mismatch! Expected "${reportNameToSelect}" but found "${firstItemText}". Stopping process.`);
-            logSession(`❌ Mismatch! Expected "${reportNameToSelect}" but found "${firstItemText}". Stopping process.`);
-            return; // stop quietly
+            logSession(`❌ Mismatch! Expected "${reportNameToSelect}" but found "${firstItemText}". Stopping process.`, false, { flow: "multilayer", report: reportName, merge_type: "layered", outcome: "skipped", reason: "report_name_mismatch" });
+            return false; // stop quietly
         }
 
         // Select first item
@@ -171,8 +171,8 @@ async function unifiedMerge(page, reportName, Report_TO_Merge, multilayerReports
 
         if (!reportNameToSelect) {
             console.log(`⚠️ Report number ${reportNum} not found in multilayerReportsMap`);
-            logSession(`⚠️ Report number ${reportNum} not found in multilayerReportsMap`);
-            return; // stop process
+            logSession(`⚠️ Report number ${reportNum} not found in multilayerReportsMap`, false, { flow: "multilayer", report: reportName, merge_type: "unified", outcome: "skipped", reason: `report_number_${reportNum}_not_found` });
+            return false; // stop process
         }
 
         const reportSelectField = page.locator(`xpath=${reportSelectXPath}`);
@@ -197,8 +197,8 @@ async function unifiedMerge(page, reportName, Report_TO_Merge, multilayerReports
         const count = await firstItem.count();
         if (count === 0) {
             console.log(`❌ No recommended options found for: ${reportNameToSelect}`);
-            logSession(`❌ No recommended options found for: ${reportNameToSelect}`);
-            return; // stop without error
+            logSession(`❌ No recommended options found for: ${reportNameToSelect}`, false, { flow: "multilayer", report: reportName, merge_type: "unified", outcome: "skipped", reason: "no_recommended_options" });
+            return false; // stop without error
         }
 
         // Get the text inside first item
@@ -210,8 +210,8 @@ async function unifiedMerge(page, reportName, Report_TO_Merge, multilayerReports
         // Compare EXACT match
         if (firstItemText.toLowerCase() !== reportNameToSelect.toLowerCase()) {
             console.log(`❌ Mismatch! Expected "${reportNameToSelect}" but found "${firstItemText}". Stopping process.`);
-            logSession(`❌ Mismatch! Expected "${reportNameToSelect}" but found "${firstItemText}". Stopping process.`);
-            return; // stop quietly
+            logSession(`❌ Mismatch! Expected "${reportNameToSelect}" but found "${firstItemText}". Stopping process.`, false, { flow: "multilayer", report: reportName, merge_type: "unified", outcome: "skipped", reason: "report_name_mismatch" });
+            return false; // stop quietly
         }
 
         // Select first item
@@ -609,6 +609,7 @@ async function MultilayerFlow(page, reportName, Report_TO_Merge, MergeType, mult
 
             // ===== Execute Merge Type =====
             const type = MergeType.toLowerCase();
+            let mergeCompleted;
             if (type === "layered") {
                 console.log("📌 Executing Layered Datasets Merge");
                 logSession("📌 Executing Layered Datasets Merge");

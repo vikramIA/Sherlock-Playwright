@@ -267,6 +267,8 @@ async function PersonaFlow(page, inputData, env) {
                         }
 
                         await CDPTriggerAfterUpload(page, inputData);
+                        console.log(`✅ ${type} flow completed successfully for '${inputData.reportName}'.`);
+                        logSession(`✅ ${type} flow completed successfully for '${inputData.reportName}'.`, false, { flow: "persona", report: inputData.reportName, report_type: type, outcome: "success" });
                         return;
                     }
 
@@ -385,7 +387,7 @@ async function PersonaFlow(page, inputData, env) {
             if (!Array.isArray(postReports) || postReports.length === 0) {
                 const msg = "❌ No postUploadReports found. Skipping CDP trigger.";
                 console.error(msg);
-                logSession(msg);
+                logSession(msg, false, { flow: "persona_cdp", report: inputData.reportName, outcome: "skipped", reason: "no_post_upload_reports" });
                 return;   // STOP only this report flow
             }
 
@@ -394,7 +396,7 @@ async function PersonaFlow(page, inputData, env) {
             if (!report.reportName) {
                 const msg = "❌ postUploadReports[0].reportName missing. Skipping CDP.";
                 console.error(msg);
-                logSession(msg);
+                logSession(msg, false, { flow: "persona_cdp", report: inputData.reportName, outcome: "skipped", reason: "post_upload_report_name_missing" });
                 return;
             }
 
@@ -420,7 +422,7 @@ async function PersonaFlow(page, inputData, env) {
                 await PersonaReportName(page, newReportName);
             } catch (err) {
                 console.error(`❌ PersonaReportName failed: ${err.message}`);
-                logSession(`❌ PersonaReportName failed: ${err.message}`);
+                logSession(`❌ PersonaReportName failed: ${err.message}`, false, { flow: "persona_cdp", report: newReportName, outcome: "failure", reason: err.message });
                 return; // Stop this persona creation only
             }
 
@@ -431,7 +433,7 @@ async function PersonaFlow(page, inputData, env) {
                 }
             } catch (err) {
                 console.error(`❌ selectBehaviors failed: ${err.message}`);
-                logSession(`❌ selectBehaviors failed: ${err.message}`);
+                logSession(`❌ selectBehaviors failed: ${err.message}`, false, { flow: "persona_cdp", report: newReportName, outcome: "failure", reason: err.message });
                 return;
             }
 
@@ -442,7 +444,7 @@ async function PersonaFlow(page, inputData, env) {
                 }
             } catch (err) {
                 console.error(`❌ selectAgeRanges failed: ${err.message}`);
-                logSession(`❌ selectAgeRanges failed: ${err.message}`);
+                logSession(`❌ selectAgeRanges failed: ${err.message}`, false, { flow: "persona_cdp", report: newReportName, outcome: "failure", reason: err.message });
                 return;
             }
 
