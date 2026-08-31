@@ -637,8 +637,11 @@ async function selectDateRange(page, startDate, endDate) {
 
         await page.waitForTimeout(300);
 
-        // Close picker if still open
-        if (await page.locator(".rdp-root").isVisible()) {
+        // Close picker if still open. The range picker renders two
+        // .rdp-root panels at once (both visible months), so this must
+        // check just one of them rather than the bare locator — otherwise
+        // Playwright's strict mode throws on the multi-match.
+        if (await page.locator(".rdp-root").first().isVisible()) {
             await page.keyboard.press("Escape");
         }
 
@@ -3192,8 +3195,8 @@ async function verifyAudienceUploadStatus(
         // ==========================================
 
         const profileIcon = page.locator(
-            "//div[@type='button']//*[name()='svg']"
-        );
+            "//div[@type='button']//*[name()='svg' and not(contains(@class,'lucide'))]"
+        ).first();
 
         await expect(profileIcon).toBeVisible({
             timeout: 30000

@@ -43,11 +43,13 @@ async function openWatsonAI(page) {
         console.log("🤖 Opening WatsonAI...");
         logSession("🤖 Opening WatsonAI...");
 
-        // Profile icon
-        // TODO: Replace with actual profile locator
+        // Profile icon — the button-type div also wraps chevron-down utility
+        // icons (lucide svgs) elsewhere on the page, so the xpath must
+        // exclude those to stay a single match instead of strict-mode
+        // violating on whichever chevron happens to render.
         const profileIcon = page.locator(
-            "//div[@type='button']//*[name()='svg']"
-        );
+            "//div[@type='button']//*[name()='svg' and not(contains(@class,'lucide'))]"
+        ).first();
 
         await expect(profileIcon).toBeVisible({
             timeout: 30000

@@ -897,6 +897,7 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
             const errMsg = `❌ Error while selecting report type '${inputData.reportType}': ${err.message}`;
             console.error(errMsg);
             logSession(errMsg, false, { flow: "explore", report: inputData.reportName, outcome: "failure", reason: err.message });
+            await recoverExploreState(page, inputData.reportName);
             return;
         }
 
@@ -904,6 +905,23 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
         const finalError = `❌ General Error in Explore flow for ${inputData.reportName}: ${err.message}`;
         console.error(finalError);
         logSession(finalError, false, { flow: "explore", report: inputData.reportName, outcome: "failure", reason: err.message });
+        await recoverExploreState(page, inputData.reportName);
+    }
+}
+
+// A mid-flow failure (e.g. a stuck date picker/modal) can leave overlay
+// state on top of the page that silently swallows the next report's
+// "Create Report" click. Reload so the next report starts from a clean
+// Explore page instead of cascading into repeated timeouts.
+async function recoverExploreState(page, reportName) {
+    try {
+        await page.keyboard.press("Escape");
+        await page.reload();
+        await safeWait(page, 2000);
+    } catch (cleanupErr) {
+        const cleanupMsg = `❌ Failed to recover Explore page state after '${reportName}': ${cleanupErr.message}`;
+        console.error(cleanupMsg);
+        logSession(cleanupMsg, false, { flow: "explore", report: reportName, outcome: "failure", reason: cleanupErr.message });
     }
 }
 
