@@ -11,6 +11,7 @@ const envConfig = require("./Environments.json");
 const { initLogger, getSessionHeader, getLastSessionNumber, logSession, getRunSummary } = require("./Logger");
 const NetworkLogger = require("./networkLogger.js");
 const RecordingManager = require("./Recording.js");
+const { sendSlackStatus } = require("./SlackNotifier");
 
 const { exec } = require("child_process");
 
@@ -81,6 +82,16 @@ function cleanupOldSessions(baseDir, keepLast = 5, foldersList = null) {
   }
 }
 
+function formatDuration(ms) {
+  const totalSec = Math.round(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  if (h > 0) return `${h}h ${m}m ${s}s`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
 function countPlannedReports(input) {
   const explore = input.explore?.length || 0;
   const persona = input.Persona?.length || 0;
@@ -135,18 +146,21 @@ async function main() {
 
   cleanupOldSessions(sessionBaseDir, 5, envFolders);
 
+  const runStartedAt = Date.now();
   const newSession = getLastSessionNumber() + 1;
   logSession(getSessionHeader(newSession), true);
 
+  const plannedReports = countPlannedReports(input);
   logSession("Planned run scope", false, {
     flow: "run_plan",
     check_type: checkType,
     cadence: checkType === "daily" ? "daily" : "weekly",
     input_file: inputFile,
-    ...countPlannedReports(input),
+    ...plannedReports,
   });
 
   let browser, context, page, recording;
+  let scriptError = null;
   const sessionDir = createSessionFolder();
   const tracePath = path.join(sessionDir, 'trace.zip');
 
@@ -254,6 +268,7 @@ async function main() {
   } catch (err) {
     console.error(`❌ Script failed: ${err.message}`);
     logSession(`❌ SCRIPT FAILED: ${err.message}\n${err.stack}`);
+    scriptError = err.message;
   } finally {
     if (context && page) {
       await context.tracing.stop({ path: tracePath });
@@ -277,8 +292,33 @@ async function main() {
     logSession("✅ Browser closed, session complete.");
 
     const summary = getRunSummary();
+    const reportsPlanned = plannedReports.total_reports_planned;
+    const reportsAttempted = summary.total_reports;
+    const reportsNotRun = reportsPlanned - reportsAttempted;
+    const totalDurationMs = Date.now() - runStartedAt;
     console.log("🏁 Run Summary:", summary);
-    logSession("Run Summary", false, { flow: "run_summary", ...summary });
+    logSession("Run Summary", false, {
+      flow: "run_summary",
+      ...summary,
+      reports_planned: reportsPlanned,
+      reports_attempted: reportsAttempted,
+      reports_not_run: reportsNotRun,
+      total_duration_ms: totalDurationMs,
+      total_duration: formatDuration(totalDurationMs),
+    });
+
+    await sendSlackStatus({
+      env,
+      checkType,
+      session: newSession,
+      reportsPlanned,
+      reportsAttempted,
+      reportsNotRun,
+      success: summary.success,
+      failure: summary.failure,
+      skipped: summary.skipped,
+      error: scriptError,
+    });
   }
 }
 

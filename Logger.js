@@ -6,7 +6,11 @@ let currentEnv;
 let currentSession = 0;
 let currentFlow;
 let currentReportStartedAt;
-let runStats = { success: 0, failure: 0, skipped: 0, reports: new Set() };
+// Keyed by report name (or a synthetic key when no report= was given) so a report
+// logged more than once — e.g. a build-success followed by a later upload-failure
+// for the same report — is counted once, under its most recent outcome. Keeps
+// success+failure+skipped in sync with total_reports.
+let runStats = { byReport: new Map(), unnamedSeq: 0 };
 
 // Matches emoji used across the codebase to mark severity (✅/❌/⚠️/etc.) so they
 // can be stripped from the persisted message and mapped to a real level= field.
@@ -53,11 +57,15 @@ function beginFlow(flow) {
 }
 
 function getRunSummary() {
+    const counts = { success: 0, failure: 0, skipped: 0 };
+    for (const outcome of runStats.byReport.values()) {
+        counts[outcome] = (counts[outcome] || 0) + 1;
+    }
     return {
-        total_reports: runStats.reports.size,
-        success: runStats.success,
-        failure: runStats.failure,
-        skipped: runStats.skipped,
+        total_reports: runStats.byReport.size,
+        success: counts.success,
+        failure: counts.failure,
+        skipped: counts.skipped,
     };
 }
 
@@ -74,7 +82,7 @@ function initLogger(env) {
 
 function getSessionHeader(sessionNumber) {
     currentSession = sessionNumber;
-    runStats = { success: 0, failure: 0, skipped: 0, reports: new Set() };
+    runStats = { byReport: new Map(), unnamedSeq: 0 };
     return toLogfmt({
         ts: new Date().toISOString(),
         level: 'info',
@@ -122,8 +130,8 @@ function logToFile(filePath, message, isSessionStart = false, meta) {
         if (fields.duration_ms === undefined && currentReportStartedAt !== undefined) {
             fields.duration_ms = Date.now() - currentReportStartedAt;
         }
-        runStats[fields.outcome] = (runStats[fields.outcome] || 0) + 1;
-        if (fields.report) runStats.reports.add(fields.report);
+        const reportKey = fields.report || `__unnamed_${runStats.unnamedSeq++}`;
+        runStats.byReport.set(reportKey, fields.outcome);
     }
 
     fs.appendFileSync(filePath, toLogfmt(fields) + '\n', 'utf-8');
