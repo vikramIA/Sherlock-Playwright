@@ -4,6 +4,39 @@ const { logSession } = require('./Logger');
 const { authenticator } = require('otplib');
 const { expect } = require("@playwright/test");
 
+// Function to detect and accept the Auth0 "Authorize App" consent screen
+// (sometimes shown after password entry or after OTP submission)
+
+async function handleAuthorizeConsent(page) {
+
+    const acceptButton = page.locator(
+        "button[name='action'][value='accept']"
+    );
+
+    if (
+        await acceptButton.isVisible({
+            timeout: 5000
+        }).catch(() => false)
+    ) {
+
+        console.log(
+            "➡ 'Authorize App' consent screen detected. Clicking Accept."
+        );
+
+        logSession(
+            "➡ 'Authorize App' consent screen detected. Clicking Accept."
+        );
+
+        await acceptButton.click();
+
+        await page.waitForTimeout(1500);
+
+        return true;
+    }
+
+    return false;
+}
+
 // Function to perform login and navigate to the home page
 
 async function loginAndNavigate(
@@ -133,6 +166,22 @@ async function loginAndNavigate(
                 ).click();
 
                 await page.waitForTimeout(2000);
+
+                // Consent screen can appear right after password (skips MFA)
+                await handleAuthorizeConsent(page);
+
+                if (page.url().includes("/home")) {
+
+                    console.log(
+                        "✅ Login Successful (no MFA required)."
+                    );
+
+                    logSession(
+                        "✅ Login Successful (no MFA required)."
+                    );
+
+                    return;
+                }
             }
 
 
@@ -238,6 +287,11 @@ async function loginAndNavigate(
                     await otpInput.press(
                         "Enter"
                     );
+
+                    await page.waitForTimeout(1500);
+
+                    // Consent screen can appear right after OTP submission
+                    await handleAuthorizeConsent(page);
 
                     await page.waitForURL(
                         "**/home",
@@ -4253,6 +4307,7 @@ async function verifyAppendAudience(
 
 
 module.exports = {
+    handleAuthorizeConsent,
     searchAndClickInRepository,
     safeWait,
     MatchRateFetch,
