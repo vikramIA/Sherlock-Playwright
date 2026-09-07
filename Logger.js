@@ -58,7 +58,7 @@ function beginFlow(flow) {
 
 function getRunSummary() {
     const counts = { success: 0, failure: 0, skipped: 0 };
-    for (const outcome of runStats.byReport.values()) {
+    for (const { outcome } of runStats.byReport.values()) {
         counts[outcome] = (counts[outcome] || 0) + 1;
     }
     return {
@@ -67,6 +67,17 @@ function getRunSummary() {
         failure: counts.failure,
         skipped: counts.skipped,
     };
+}
+
+// Per-report breakdown for outcomes worth naming individually (success is the
+// common case and not interesting to enumerate).
+function getRunDetails() {
+    const details = { failures: [], skipped: [] };
+    for (const [report, { outcome, reason }] of runStats.byReport.entries()) {
+        if (outcome === 'failure') details.failures.push({ report, reason });
+        else if (outcome === 'skipped') details.skipped.push({ report, reason });
+    }
+    return details;
 }
 
 function initLogger(env) {
@@ -131,7 +142,7 @@ function logToFile(filePath, message, isSessionStart = false, meta) {
             fields.duration_ms = Date.now() - currentReportStartedAt;
         }
         const reportKey = fields.report || `__unnamed_${runStats.unnamedSeq++}`;
-        runStats.byReport.set(reportKey, fields.outcome);
+        runStats.byReport.set(reportKey, { outcome: fields.outcome, reason: fields.reason });
     }
 
     fs.appendFileSync(filePath, toLogfmt(fields) + '\n', 'utf-8');
@@ -156,4 +167,5 @@ module.exports = {
     getContext,
     beginFlow,
     getRunSummary,
+    getRunDetails,
 };

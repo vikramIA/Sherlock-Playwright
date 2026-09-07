@@ -3,3 +3,4 @@ session_artifacts
 logs
 test-results
 splunk
+.env
