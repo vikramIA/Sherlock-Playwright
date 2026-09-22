@@ -1355,7 +1355,7 @@ async function keplerDatasetsFetch(page, reportName) {
             duration_sec: result.timeSeconds,
         });
 
-        return result.status; // ✅ Enhancement 1 — return status
+        return result; // return full result object so callers can read result.status
     };
 
     const startTime = Date.now();
@@ -2891,36 +2891,52 @@ async function verifyDefaultBentoCharts(
 
         const currentUrl = page.url();
 
-        console.error(
-            `❌ Bento report content did not load for '${reportName}'.`
-        );
+        // Distinguish "Bento genuinely failed to render" from "there was never
+        // going to be Bento content here" (no data / redirected to summary page),
+        // so failures aren't all reported as the same generic timeout.
+        let diagnosedReason = null;
+        let diagnosedStatus = "bento_render_timeout";
 
-        console.error(
-            `❌ Expected Bento heading: '${config.heading}'`
-        );
+        if (currentUrl.includes("/explore/summary?id=")) {
+            diagnosedReason = `Report redirected to the large-dataset summary page (${currentUrl}) instead of the normal report view — this page does not render the standard Bento layout.`;
+            diagnosedStatus = "report_redirected_to_summary";
+        } else {
+            try {
+                const toastDivs = page.locator("div:has-text('No Data'), div:has-text('Failed')");
+                if (await toastDivs.count() > 0) {
+                    const rawText = await toastDivs.first().innerText();
+                    const toastText = rawText.split("\n")[0].trim();
+                    if (toastText.toLowerCase().includes("no data")) {
+                        diagnosedReason = `Report returned no data ("${toastText}") — there is no Bento content to validate.`;
+                        diagnosedStatus = "report_no_data";
+                    } else {
+                        diagnosedReason = `Report failed to load ("${toastText}") — there is no Bento content to validate.`;
+                        diagnosedStatus = "report_load_failed";
+                    }
+                }
+            } catch {
+                // best-effort diagnosis only; fall through to generic message
+            }
+        }
 
-        console.error(
-            `🔗 Current URL: ${currentUrl}`
-        );
+        const failureMessage = diagnosedReason
+            ? `Bento validation could not run for '${reportName}': ${diagnosedReason}`
+            : `Bento report content did not load for '${reportName}'. Expected heading '${config.heading}' was not visible.`;
+
+        console.error(`❌ ${failureMessage}`);
+        console.error(`🔗 Current URL: ${currentUrl}`);
 
         logSession(
-            `❌ Bento report content did not load for '${reportName}'.`,
+            `❌ ${failureMessage}`,
             false,
-            { report: reportName, url: currentUrl, metric: config.heading }
-        );
-
-        logSession(
-            `❌ Expected Bento heading: '${config.heading}'`
+            { report: reportName, url: currentUrl, metric: config.heading, reason: diagnosedStatus }
         );
 
         logSession(
             `🔗 Current URL: ${currentUrl}`
         );
 
-        throw new Error(
-            `Bento report content did not load for '${reportName}'. ` +
-            `Expected heading '${config.heading}' was not visible.`
-        );
+        throw new Error(failureMessage);
     }
 
 

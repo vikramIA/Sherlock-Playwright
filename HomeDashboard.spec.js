@@ -8,7 +8,7 @@ const fs = require("fs");
 const path = require("path");
 const { loginAndNavigate, safeWait } = require("./functions");
 const envConfig = require("./Environments.json");
-const { initLogger, getSessionHeader, getLastSessionNumber, logSession, getRunSummary, getRunDetails } = require("./Logger");
+const { initLogger, getSessionHeader, getLastSessionNumber, logSession, getRunSummary } = require("./Logger");
 const NetworkLogger = require("./networkLogger.js");
 const RecordingManager = require("./Recording.js");
 const { sendSlackStatus } = require("./SlackNotifier");
@@ -292,7 +292,6 @@ async function main() {
     logSession("✅ Browser closed, session complete.");
 
     const summary = getRunSummary();
-    const details = getRunDetails();
     const reportsPlanned = plannedReports.total_reports_planned;
     const reportsAttempted = summary.total_reports;
     const reportsNotRun = reportsPlanned - reportsAttempted;
@@ -318,8 +317,6 @@ async function main() {
       success: summary.success,
       failure: summary.failure,
       skipped: summary.skipped,
-      failures: details.failures,
-      skippedReports: details.skipped,
       error: scriptError,
     });
   }

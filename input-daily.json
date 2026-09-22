@@ -140,27 +140,17 @@
       "EndDateRange": "2026-06-07",
       "SubCategory": "Fast food restaurant",
       "Brands": "McDonald's",
-      "Rating": "2-5",
-      "ReviewCount": "0-302292",
-      "AverageDailyVisits": "2-20000",
-      "AverageMonthlyVisits": "3-645383",
-      "AverageDailyDevices": "4-29000",
-      "AverageMonthlyDevices": "5-359167"
+      "Rating": "2-5"
     },
     {
       "reportType": "Device Level Visits",
-      "reportName": "DLV_Normal_Report",
+      "reportName": "Daily_DLV_For_Multilayer",
       "ReportNumber": 2,
       "place": "auto.car.dealership",
       "location": "Pune, Maharashtra, India",
       "StartDateRange": "2026-06-01",
       "EndDateRange": "2026-06-07",
       "Rating": "2-5",
-      "ReviewCount": "0-302292",
-      "AverageDailyVisits": "2-20000",
-      "AverageMonthlyVisits": "3-645383",
-      "AverageDailyDevices": "4-29000",
-      "AverageMonthlyDevices": "5-359167",
       "age": "18-25; 26-35"
     },
     {
@@ -177,12 +167,7 @@
       "place": "facility.education.university",
       "location": "Pune, Maharashtra, India",
       "StartDateRange": "2026-06-01",
-      "EndDateRange": "2026-06-07",
-      "ReviewCount": "10-500",
-      "AverageDailyVisits": "2-20000",
-      "AverageMonthlyVisits": "3-645383",
-      "AverageDailyDevices": "4-29000",
-      "AverageMonthlyDevices": "5-359167"
+      "EndDateRange": "2026-06-07"
     }
   ],
   "Multilayer": [

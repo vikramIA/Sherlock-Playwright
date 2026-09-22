@@ -714,8 +714,14 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                     await safeWait(page, 1000);
 
                     await clickCreateReportButton(page, inputData.reportName);
-                    await keplerDatasetsFetch(page, inputData.reportName);
+                    const result = await keplerDatasetsFetch(page, inputData.reportName);
                     await safeWait(page, 2000);
+
+                    if (result.status === 'no_data' || result.status === 'error' || result.status === 'timeout' || result.status === 'summary') {
+                        console.log(`[${inputData.reportName}] ⛔ Skipping further flows due to Kepler status: ${result.status}`);
+                        logSession(`[${inputData.reportName}] ⛔ Skipping further flows due to Kepler status: ${result.status}`, false, { flow: "explore", report: inputData.reportName, outcome: "skipped", reason: `kepler_status_${result.status}` });
+                        return;
+                    }
 
                     await verifyDefaultBentoCharts(
                         page,
@@ -741,8 +747,14 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
 
                     await clickCreateReportButton(page, inputData.reportName);
 
-                    await keplerDatasetsFetch(page, inputData.reportName);
+                    const result = await keplerDatasetsFetch(page, inputData.reportName);
                     await safeWait(page, 2000);
+
+                    if (result.status === 'no_data' || result.status === 'error' || result.status === 'timeout' || result.status === 'summary') {
+                        console.log(`[${inputData.reportName}] ⛔ Skipping further flows due to Kepler status: ${result.status}`);
+                        logSession(`[${inputData.reportName}] ⛔ Skipping further flows due to Kepler status: ${result.status}`, false, { flow: "explore", report: inputData.reportName, outcome: "skipped", reason: `kepler_status_${result.status}` });
+                        return;
+                    }
 
                     await verifyDefaultBentoCharts(
                         page,
@@ -768,8 +780,14 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
 
                     await clickCreateReportButton(page, inputData.reportName);
 
-                    await keplerDatasetsFetch(page, inputData.reportName);
+                    const result = await keplerDatasetsFetch(page, inputData.reportName);
                     await safeWait(page, 2000);
+
+                    if (result.status === 'no_data' || result.status === 'error' || result.status === 'timeout' || result.status === 'summary') {
+                        console.log(`[${inputData.reportName}] ⛔ Skipping further flows due to Kepler status: ${result.status}`);
+                        logSession(`[${inputData.reportName}] ⛔ Skipping further flows due to Kepler status: ${result.status}`, false, { flow: "explore", report: inputData.reportName, outcome: "skipped", reason: `kepler_status_${result.status}` });
+                        return;
+                    }
 
                     await verifyDefaultBentoCharts(
                         page,
@@ -846,8 +864,14 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
 
                     await clickCreateReportButton(page, inputData.reportName);
 
-                    await keplerDatasetsFetch(page, inputData.reportName);
+                    const result = await keplerDatasetsFetch(page, inputData.reportName);
                     await safeWait(page, 2000);
+
+                    if (result.status === 'no_data' || result.status === 'error' || result.status === 'timeout' || result.status === 'summary') {
+                        console.log(`[${inputData.reportName}] ⛔ Skipping further flows due to Kepler status: ${result.status}`);
+                        logSession(`[${inputData.reportName}] ⛔ Skipping further flows due to Kepler status: ${result.status}`, false, { flow: "explore", report: inputData.reportName, outcome: "skipped", reason: `kepler_status_${result.status}` });
+                        return;
+                    }
 
                     await verifyDefaultBentoCharts(
                         page,
