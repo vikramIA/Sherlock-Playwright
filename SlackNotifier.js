@@ -41,7 +41,7 @@ function statusEmoji({ error, failure }) {
 // Splunk is fed from the fixed log path on the VM that runs these checks
 // (one file per env: dev_log.txt / qa_log.txt / prod_log.txt), so the only
 // part of the dashboard URL that changes per run is which source file to filter to.
-const SPLUNK_BASE_URL = "https://splunk.infiniteanalytics.com/en-GB/app/search/sherlock";
+const SPLUNK_BASE_URL = "https://splunk.infiniteanalytics.com/en-GB/app/search/sherlock_automation_dashboard";
 const SPLUNK_LOG_DIR = "/home/azureuser/Sherlock-Playwright/logs";
 
 function buildSplunkUrl(env) {
