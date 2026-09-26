@@ -35,6 +35,167 @@ function waitForFirstVisible(locators, timeout) {
 
 
 // =========================================================
+// SHARED WATSONAI CHAT LOCATORS / HELPERS
+// =========================================================
+
+const WATSONAI_PROMPT_PLACEHOLDER = "Ask a question or make a command";
+
+// Query-level failures WatsonAI answers with instead of a report form.
+// Like the old "Failed to fetch..." block, these stay in the chat DOM, so
+// they're only treated as failures when their count grows past a baseline
+// taken before the query was sent.
+const WATSONAI_QUERY_ERROR_PATTERN =
+    /Failed to fetch Sherlock search results|I hit a connection problem/;
+
+// Every WatsonAI reply (text-only answer, form prompt, "report is ready",
+// post-report summary) ends with its own "Copy response" button, so this
+// count going up is the signal that a NEW reply has landed.
+function watsonAICopyResponseButtons(page) {
+    return page.getByRole("button", { name: "Copy response", exact: true });
+}
+
+function watsonAIReportNameFields(page) {
+    return page.getByRole("textbox", { name: "Report Name *" });
+}
+
+function watsonAIQueryErrors(page) {
+    return page.getByText(WATSONAI_QUERY_ERROR_PATTERN);
+}
+
+// Text of the most recent WatsonAI reply (the message block that owns the
+// last "Copy response" button), trimmed for logging.
+async function getLatestWatsonAIReplyText(page, maxLength = 300) {
+    try {
+        const text = await watsonAICopyResponseButtons(page)
+            .last()
+            .locator("xpath=ancestor::div[.//p][1]")
+            .innerText({ timeout: 5000 });
+
+        return text.replace(/\s+/g, " ").trim().slice(0, maxLength);
+    } catch {
+        return "(reply text unavailable)";
+    }
+}
+
+// Snapshot of the chat state taken right BEFORE a query is sent, so the
+// waits below can tell this query's output apart from earlier messages
+// that are still sitting in the chat.
+async function getWatsonAIChatBaseline(page) {
+    return {
+        copyCount: await watsonAICopyResponseButtons(page).count(),
+        formCount: await watsonAIReportNameFields(page).count(),
+        errorCount: await watsonAIQueryErrors(page).count()
+    };
+}
+
+// The prompt can be visible while still not accepting input (e.g. a report
+// left open in Focus Mode sits on top of it), which is what broke the next
+// query in earlier runs — so check editable, not just visible.
+async function waitForWatsonAIChatReady(page, timeout = 30000) {
+    const promptField = page.getByPlaceholder(WATSONAI_PROMPT_PLACEHOLDER, { exact: true });
+
+    await expect(promptField).toBeEditable({ timeout });
+}
+
+// Close icon of a report opened in Focus Mode.
+const WATSONAI_REPORT_CLOSE_ICON = "svg.cursor-pointer.fill-button-destructive-base";
+
+// Every WatsonAI-generated report is expected to get a summary. DLV/PLV
+// summaries land ~3-60s after the report finishes loading; QLI currently
+// gets none (no summary request is made — confirmed in the dev network log),
+// which is an app bug. A missing summary makes the report outcome=warning
+// in WatsonAIFlow rather than hiding it inside success.
+const WATSONAI_SUMMARY_TIMEOUT_MS = 60 * 1000;
+
+async function waitForWatsonAIReportSummary(page, copyCountBeforeOpen, timeout = WATSONAI_SUMMARY_TIMEOUT_MS) {
+
+    console.log("⏳ Waiting for WatsonAI report summary...");
+    logSession("⏳ Waiting for WatsonAI report summary...");
+
+    try {
+        await expect(watsonAICopyResponseButtons(page)).toHaveCount(
+            copyCountBeforeOpen + 1,
+            { timeout }
+        );
+
+        // The Copy button renders with the first chunk of the summary;
+        // give the rest of the stream a moment to finish scrolling the chat.
+        await page.waitForTimeout(3000);
+
+        const summaryText = await getLatestWatsonAIReplyText(page, 200);
+
+        console.log(`✅ WatsonAI report summary received: '${summaryText}'`);
+        logSession(`✅ WatsonAI report summary received: '${summaryText}'`);
+
+        return true;
+
+    } catch {
+
+        console.log(`⚠️ WatsonAI report summary did not appear within ${Math.round(timeout / 1000)}s. Continuing — report will be marked as a warning.`);
+        logSession(`⚠️ WatsonAI report summary did not appear within ${Math.round(timeout / 1000)}s. Continuing — report will be marked as a warning.`);
+
+        return false;
+    }
+}
+
+// Closes a report left open in Focus Mode and confirms the chat prompt is
+// usable again. Returns true when the chat is ready for the next query.
+// Never throws — callers are mid-cleanup and must move on to the next report.
+async function closeWatsonAIReport(page, reportName, { onlyIfOpen = false } = {}) {
+
+    const closeIcon = page.locator(WATSONAI_REPORT_CLOSE_ICON).last();
+
+    try {
+
+        const isOpen = await closeIcon
+            .waitFor({ state: "visible", timeout: onlyIfOpen ? 5000 : 30000 })
+            .then(() => true)
+            .catch(() => false);
+
+        if (isOpen) {
+
+            console.log(`❌ Closing WatsonAI report: '${reportName}'`);
+            logSession(`❌ Closing WatsonAI report: '${reportName}'`);
+
+            await closeIcon.click({ timeout: 15000 })
+                .catch(() => closeIcon.click({ force: true, timeout: 15000 }));
+
+            await closeIcon.waitFor({ state: "hidden", timeout: 15000 });
+
+        } else if (!onlyIfOpen) {
+
+            console.log(`⚠️ Close icon for '${reportName}' not found — report may not be in Focus Mode.`);
+            logSession(`⚠️ Close icon for '${reportName}' not found — report may not be in Focus Mode.`);
+        }
+
+    } catch (error) {
+
+        console.error(`⚠️ Failed to close WatsonAI report: ${error.message}`);
+        logSession(`⚠️ Failed to close WatsonAI report: ${error.message}`);
+
+        await page.keyboard.press("Escape").catch(() => { });
+    }
+
+    try {
+
+        await waitForWatsonAIChatReady(page);
+
+        console.log(`✅ Returned to WatsonAI chat.`);
+        logSession(`✅ Returned to WatsonAI chat.`);
+
+        return true;
+
+    } catch (error) {
+
+        console.error(`⚠️ Could not confirm WatsonAI chat: ${error.message}`);
+        logSession(`⚠️ Could not confirm WatsonAI chat: ${error.message}`);
+
+        return false;
+    }
+}
+
+
+// =========================================================
 // 1. OPEN WATSON AI
 // =========================================================
 
@@ -152,16 +313,26 @@ async function enterWatsonAIQuery(page, query) {
             `✅ WatsonAI query entered: ${query}`
         );
 
-        const sendButton = page.locator('fieldset').filter({
-            has: page.locator('svg')
-        }).last();
+        // The send arrow is the fieldset right after the prompt. A page-wide
+        // "last fieldset with an svg" matched some other element after a
+        // QLI report had been opened, so anchor on the prompt instead, and
+        // fall back to Enter (which also submits) if it still isn't there.
+        const sendButton = promptField.locator(
+            "xpath=following::fieldset[.//*[name()='svg']][1]"
+        );
 
-        await sendButton.waitFor({
-            state: "visible",
-            timeout: 10000
-        });
+        const hasSendButton = await sendButton
+            .waitFor({ state: "visible", timeout: 5000 })
+            .then(() => true)
+            .catch(() => false);
 
-        await sendButton.click();
+        if (hasSendButton) {
+            await sendButton.click();
+        } else {
+            console.log("ℹ️ Send button not found next to the prompt — submitting with Enter.");
+            logSession("ℹ️ Send button not found next to the prompt — submitting with Enter.");
+            await promptField.press("Enter");
+        }
 
         console.log("✅ WatsonAI query submitted.");
 
@@ -187,8 +358,54 @@ async function enterWatsonAIQuery(page, query) {
 // 3. WAIT FOR WATSON AI RESPONSE
 // =========================================================
 
-async function waitForWatsonAIResponse(page) {
+// Must be called BEFORE the query is submitted, so the response can't be
+// missed. Never rejects — resolves to the Response, or to the Error if none
+// arrived in time — so it can't become an unhandled rejection when the
+// query entry itself fails and nobody awaits it.
+function watchWatsonAISearchRequest(page, timeout = 4 * 60 * 1000) {
+    return page.waitForResponse(
+        response =>
+            response.url().includes("/api/services/search/search") &&
+            response.request().method() === "POST",
+        { timeout }
+    ).catch(error => error);
+}
+
+// searchResponsePromise: from watchWatsonAISearchRequest(). The chat prompt
+// stays disabled until this backend call settles — seen on dev: it hung for
+// ~180s and then returned 502, while the old 120s loader-only wait gave up
+// first and left the next query unable to type into the disabled prompt.
+async function waitForWatsonAIResponse(page, searchResponsePromise = null) {
     try {
+        if (searchResponsePromise) {
+
+            const startedAt = Date.now();
+
+            console.log("⏳ Waiting for WatsonAI search API response...");
+
+            const searchResponse = await searchResponsePromise;
+
+            const seconds = ((Date.now() - startedAt) / 1000).toFixed(1);
+
+            if (searchResponse instanceof Error) {
+
+                throw new Error(
+                    `WatsonAI search API did not respond: ${searchResponse.message.split("\n")[0]}`
+                );
+            }
+
+            if (searchResponse.status() >= 400) {
+
+                throw new Error(
+                    `WatsonAI search API failed: HTTP ${searchResponse.status()} after ${seconds}s ` +
+                    `(${searchResponse.url()}).`
+                );
+            }
+
+            console.log(`✅ WatsonAI search API responded: HTTP ${searchResponse.status()} after ${seconds}s.`);
+            logSession(`✅ WatsonAI search API responded: HTTP ${searchResponse.status()} after ${seconds}s.`);
+        }
+
         const watsonAILoader = page.locator(
             'div.flex.h-8.min-w-\\[40px\\].items-center.justify-center.rounded-lg.bg-surface-container-overlay-level-2.px-3.py-2'
         ).last();
@@ -252,6 +469,62 @@ async function checkWatsonAIQueryError(page, previousErrorCount = 0) {
 }
 
 // =========================================================
+// 3C. WAIT FOR THE REPORT FORM (OR FAIL WITH WATSONAI'S REPLY)
+// WatsonAI can answer a query in three ways:
+//   - a prefilled report form (expected)
+//   - a known query error ("I hit a connection problem — try that again.")
+//   - a plain text reply with no form at all — e.g. the QLI query currently
+//     gets "I can only help with Sherlock's location data..." back.
+// Without this, the last two cases just sit out the 30s Report Name wait
+// and get logged as a locator timeout instead of what WatsonAI said.
+// =========================================================
+
+async function waitForWatsonAIReportForm(page, baseline, timeout = 180000) {
+
+    // A text reply and the form can land a moment apart, so a new reply
+    // without a form only counts as "no form" once it has had this long.
+    const FORM_GRACE_MS = 5000;
+    const deadline = Date.now() + timeout;
+    let replyWithoutFormSince = null;
+
+    while (Date.now() < deadline) {
+
+        if (await watsonAIReportNameFields(page).count() > baseline.formCount) {
+            return;
+        }
+
+        if (await watsonAIQueryErrors(page).count() > baseline.errorCount) {
+
+            const errorText = (
+                await watsonAIQueryErrors(page).last().innerText().catch(() => "")
+            ).trim();
+
+            throw new Error(`WatsonAI failed to process the query: '${errorText}'`);
+        }
+
+        if (await watsonAICopyResponseButtons(page).count() > baseline.copyCount) {
+
+            replyWithoutFormSince ??= Date.now();
+
+            if (Date.now() - replyWithoutFormSince > FORM_GRACE_MS) {
+
+                const replyText = await getLatestWatsonAIReplyText(page);
+
+                throw new Error(
+                    `WatsonAI did not generate a report form. WatsonAI replied: '${replyText}'`
+                );
+            }
+        }
+
+        await page.waitForTimeout(1000);
+    }
+
+    throw new Error(
+        `WatsonAI did not respond with a report form within ${Math.round(timeout / 1000)}s.`
+    );
+}
+
+// =========================================================
 // 4. VERIFY GENERATED REPORT FIELDS
 // =========================================================
 
@@ -272,9 +545,7 @@ async function verifyWatsonAIReportFields(page, expectedData) {
         // REPORT NAME
         // =====================================================
 
-        const reportNameField = page.getByRole("textbox", {
-            name: "Report Name *"
-        });
+        const reportNameField = watsonAIReportNameFields(page).last();
 
         await reportNameField.waitFor({
             state: "visible",
@@ -299,6 +570,10 @@ async function verifyWatsonAIReportFields(page, expectedData) {
         logSession(
             `✅ WatsonAI generated Report Name: '${actualReportName}'`
         );
+
+
+        // Soft checks below that failed (logged, not thrown).
+        const fieldWarnings = [];
 
 
         // =====================================================
@@ -340,6 +615,7 @@ async function verifyWatsonAIReportFields(page, expectedData) {
 
             console.log(message);
             logSession(message);
+            fieldWarnings.push("Location");
         }
 
         // Code after this will continue executing
@@ -397,6 +673,7 @@ async function verifyWatsonAIReportFields(page, expectedData) {
                 `❌ Failed to validate Date Range: ${error.message}`;
             console.log(message);
             logSession(message);
+            fieldWarnings.push("Date Range");
         }
 
 
@@ -435,12 +712,25 @@ async function verifyWatsonAIReportFields(page, expectedData) {
                 logSession(
                     `📍 WatsonAI generated Places: ${actualPlaces.join(", ")}`
                 );
+
+                const missingPlaces = (expectedData.places || []).filter(
+                    expectedPlace => !actualPlaces.includes(expectedPlace)
+                );
+
+                if (missingPlaces.length > 0) {
+
+                    throw new Error(
+                        `Places mismatch. Missing expected: '${missingPlaces.join(", ")}', ` +
+                        `Actual Places: '${actualPlaces.join(", ")}'.`
+                    );
+                }
             }
         } catch (error) {
             const message =
-                `❌ Failed to read Places from the UI: ${error.message}`;
+                `❌ Failed to validate Places: ${error.message}`;
             console.log(message);
             logSession(message);
+            fieldWarnings.push("Places");
         }
 
 
@@ -452,41 +742,52 @@ async function verifyWatsonAIReportFields(page, expectedData) {
             const expectedBrands =
                 expectedData.brands || [];
 
-            for (const expectedBrand of expectedBrands) {
+            if (expectedBrands.length > 0) {
 
-                const brandField = page
-                    .locator(
-                        "div.box-border.h-11.w-full.min-w-0.max-w-full.overflow-auto"
-                    )
-                    .filter({
-                        hasText: expectedBrand
-                    })
-                    .first();
+                // Anchored on the "Brands" label rather than filtering the
+                // selected-value box by the expected brand's text: when
+                // WatsonAI leaves Brands empty (seen on dev + qa for the
+                // Starbucks PLV query) the old text filter could only wait
+                // 30s and log a bare locator timeout. Reading the field
+                // directly reports what was actually prefilled.
+                const brandsField = page
+                    .locator("xpath=//label[normalize-space()='Brands']/..")
+                    .last();
 
-                await brandField.waitFor({
+                await brandsField.waitFor({
                     state: "visible",
                     timeout: 30000
                 });
 
-                const actualBrand = (
-                    await brandField.innerText()
-                ).trim();
+                const actualBrands = (
+                    await brandsField.innerText()
+                )
+                    .split("\n")
+                    .map(brand => brand.trim())
+                    .filter(brand => brand && brand !== "Brands");
 
-                if (!actualBrand.includes(expectedBrand)) {
+                const missingBrands = expectedBrands.filter(
+                    expectedBrand => !actualBrands.some(
+                        actualBrand => actualBrand.includes(expectedBrand)
+                    )
+                );
+
+                if (missingBrands.length > 0) {
 
                     throw new Error(
-                        `Brand mismatch.\n` +
-                        `Expected brand: '${expectedBrand}'\n` +
-                        `Actual Brands: '${actualBrand}'`
+                        actualBrands.length === 0
+                            ? `Brands field is empty — WatsonAI did not prefill expected brand(s): '${missingBrands.join(", ")}'.`
+                            : `Brand mismatch. Expected: '${missingBrands.join(", ")}', ` +
+                            `Actual Brands: '${actualBrands.join(", ")}'.`
                     );
                 }
 
                 console.log(
-                    `✅ Brand matched: '${expectedBrand}'`
+                    `✅ Brands matched: '${expectedBrands.join(", ")}'`
                 );
 
                 logSession(
-                    `✅ Brand matched: '${expectedBrand}'`
+                    `✅ Brands matched: '${expectedBrands.join(", ")}'`
                 );
             }
         } catch (error) {
@@ -494,22 +795,25 @@ async function verifyWatsonAIReportFields(page, expectedData) {
                 `❌ Failed to validate Brands: ${error.message}`;
             console.log(message);
             logSession(message);
+            fieldWarnings.push("Brands");
         }
 
 
         // =====================================================
-        // SUCCESS
+        // RESULT
+        // These checks are soft — a mismatch is logged but does not
+        // stop the report — so only claim full success when none of
+        // them actually failed.
         // =====================================================
 
-        console.log(
-            "✅ All applicable WatsonAI report fields validated successfully."
-        );
+        const resultMessage = fieldWarnings.length === 0
+            ? "✅ All applicable WatsonAI report fields validated successfully."
+            : `⚠️ WatsonAI report fields validated with warnings in: ${fieldWarnings.join(", ")}. Continuing with report creation.`;
 
-        logSession(
-            "✅ All applicable WatsonAI report fields validated successfully."
-        );
+        console.log(resultMessage);
+        logSession(resultMessage);
 
-        return actualReportName;
+        return { reportName: actualReportName, fieldWarnings };
 
 
     } catch (error) {
@@ -797,6 +1101,10 @@ async function verifyWatsonAISuccess(page, expectedMessage, expectedReportType, 
         // CLICK OPEN REPORT
         // =========================================================
 
+        // Baseline for the post-open summary reply (see below).
+        const copyCountBeforeOpen =
+            await watsonAICopyResponseButtons(page).count();
+
         await openReportButton.click();
 
         console.log(
@@ -936,9 +1244,13 @@ async function verifyWatsonAISuccess(page, expectedMessage, expectedReportType, 
         // WAIT FOR FOCUS MODE BUTTON
         // =========================================================
 
+        // Every opened report leaves its inline map card (with its own
+        // Focus Mode "expand" button) in the chat, so .last() is the one
+        // for THIS report — .first() would re-open an earlier report's
+        // card on the 2nd+ query of a session.
         const focusModeButton = page.locator(
-            "button.inline-flex.items-center.justify-center.gap-2.whitespace-nowrap.text-sm.font-medium.transition-colors.focus-visible\\:outline-none.focus-visible\\:ring-1.focus-visible\\:ring-ring.disabled\\:pointer-events-none.disabled\\:opacity-50.\\[\\&_svg\\]\\:pointer-events-none.\\[\\&_svg\\]\\:size-4.\\[\\&_svg\\]\\:shrink-0.text-primary-foreground.shadow.h-9.w-9.mb-1.cursor-pointer.rounded-md.bg-surface-container-overlay-level-2.p-1.hover\\:bg-surface-container-overlay-level-1"
-        ).first();
+            "button:has(svg.lucide-expand)"
+        ).last();
 
         await focusModeButton.waitFor({
             state: "visible",
@@ -996,15 +1308,33 @@ async function verifyWatsonAISuccess(page, expectedMessage, expectedReportType, 
 
 
         // =========================================================
+        // WAIT FOR THE POST-OPEN WATSONAI SUMMARY
+        // =========================================================
+
+        // After Open Report, WatsonAI now streams a data summary (tables +
+        // "You could ask: ...") into the chat below the report card. While
+        // it streams, the chat keeps auto-scrolling, so the Focus Mode
+        // button never holds still long enough to be clicked — that is
+        // what left Focus Mode half-open, the close icon unclickable and
+        // the prompt unusable for the next query. Wait for the summary
+        // reply first. A missing summary doesn't stop the Kepler/Bento
+        // checks — WatsonAIFlow turns it into outcome=warning.
+        reportTypeValidation.summaryReceived =
+            await waitForWatsonAIReportSummary(page, copyCountBeforeOpen);
+
+
+        // =========================================================
         // CLICK FOCUS MODE
         // =========================================================
+
+        await focusModeButton.scrollIntoViewIfNeeded().catch(() => { });
 
         // The report-title label above this button can overlap it at narrower
         // window widths and intercept the click for the full default timeout
         // (seen under Xvfb's smaller default screen). Fall back to a force
         // click rather than depending on window size to keep them apart.
         try {
-            await focusModeButton.click();
+            await focusModeButton.click({ timeout: 15000 });
         } catch (err) {
             console.log(
                 "⚠️ Focus Mode click was intercepted (likely by the report title label) — retrying with a force click."
@@ -1014,6 +1344,13 @@ async function verifyWatsonAISuccess(page, expectedMessage, expectedReportType, 
             );
             await focusModeButton.click({ force: true });
         }
+
+        // Focus Mode is confirmed by its close icon — without this, a click
+        // that didn't take effect only surfaces much later as a failed close.
+        await page.locator(WATSONAI_REPORT_CLOSE_ICON).last().waitFor({
+            state: "visible",
+            timeout: 30000
+        });
 
         console.log(
             "✅ Focus Mode button clicked."
@@ -1130,6 +1467,10 @@ async function watsonAIKeplerValidation(page, reportName, reportOpenSeconds) {
         const POLL_INTERVAL = 1000;
 
         const startPoll = Date.now();
+
+        const NO_DATA_GRACE_MS = 2 * 60 * 1000;
+
+        let firstEmptyDatasetsAt = null;
 
 
         while (true) {
@@ -1248,7 +1589,7 @@ async function watsonAIKeplerValidation(page, reportName, reportOpenSeconds) {
 
                 try {
 
-                    await keplerArrow.first().waitFor({
+                    await keplerArrow.last().waitFor({
                         state: "visible",
                         timeout: 5000
                     });
@@ -1301,10 +1642,10 @@ async function watsonAIKeplerValidation(page, reportName, reportOpenSeconds) {
                         attempt++
                     ) {
 
-                        await keplerArrow.first()
+                        await keplerArrow.last()
                             .click({ timeout: 5000 })
                             .catch(() =>
-                                keplerArrow.first()
+                                keplerArrow.last()
                                     .click({ timeout: 5000, force: true })
                                     .catch(() => { })
                             );
@@ -1339,7 +1680,7 @@ async function watsonAIKeplerValidation(page, reportName, reportOpenSeconds) {
                             if (await datasetsLabel.count() > 0) {
 
                                 datasetsLabelText =
-                                    (await datasetsLabel.first().innerText())
+                                    (await datasetsLabel.last().innerText())
                                         .trim();
 
                                 if (/\(\d+\)/.test(datasetsLabelText)) {
@@ -1383,6 +1724,27 @@ async function watsonAIKeplerValidation(page, reportName, reportOpenSeconds) {
 
                             reportOpenSeconds
                         });
+                    }
+
+                    // The dataset panel/counter can still be empty right
+                    // after Focus Mode opens (seen for QLI on dev: empty
+                    // label on one run, 'Datasets(1)' on another), so only
+                    // call it no_data once it has stayed empty for a while.
+                    firstEmptyDatasetsAt ??= Date.now();
+
+                    if (Date.now() - firstEmptyDatasetsAt < NO_DATA_GRACE_MS) {
+
+                        console.log(
+                            `⏳ No datasets detected yet (datasetsLabelText: '${datasetsLabelText}', panel open: ${await isDatasetPanelOpen()}). Retrying...`
+                        );
+
+                        logSession(
+                            `⏳ No datasets detected yet (datasetsLabelText: '${datasetsLabelText}', panel open: ${await isDatasetPanelOpen()}). Retrying...`
+                        );
+
+                        await page.waitForTimeout(5000);
+
+                        continue;
                     }
 
                     console.log(
@@ -1485,8 +1847,15 @@ async function watsonAIKeplerValidation(page, reportName, reportOpenSeconds) {
 module.exports = {
     openWatsonAI,
     enterWatsonAIQuery,
+    watchWatsonAISearchRequest,
     waitForWatsonAIResponse,
+    WATSONAI_SUMMARY_TIMEOUT_MS,
     checkWatsonAIQueryError,
+    getWatsonAIChatBaseline,
+    getLatestWatsonAIReplyText,
+    waitForWatsonAIReportForm,
+    waitForWatsonAIChatReady,
+    closeWatsonAIReport,
     verifyWatsonAIReportFields,
     clickWatsonAISubmit,
     verifyWatsonAISuccess,

@@ -1,5 +1,6 @@
 const { logSession } = require("./Logger");
 const { expect } = require("@playwright/test");
+const { getLatestWatsonAIReplyText } = require("./WatsonAIFunctions.js");
 
 
 // =========================================================
@@ -126,7 +127,22 @@ async function activateCSAgent(page) {
 
         const activatedText = page.getByText("Agent mode activated.").last();
 
-        await waitForCSAgentElementOrDisconnect(page, activatedText, 30000);
+        try {
+            await waitForCSAgentElementOrDisconnect(page, activatedText, 30000);
+        } catch (error) {
+
+            if (error.message.startsWith("CS Agent disconnected:")) throw error;
+
+            // Currently seen on qa: WatsonAI answers the command like a
+            // normal question ("Tell me a little more — which brand or
+            // area...") instead of entering agent mode. Surface that reply
+            // rather than a bare locator timeout.
+            const replyText = await getLatestWatsonAIReplyText(page);
+
+            throw new Error(
+                `CS Agent did not activate ('Agent mode activated.' not shown within 30s). WatsonAI replied: '${replyText}'`
+            );
+        }
 
         console.log(`✅ CS Agent mode activated.`);
         logSession(`✅ CS Agent mode activated.`);

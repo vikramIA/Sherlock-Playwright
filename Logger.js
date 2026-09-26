@@ -9,7 +9,7 @@ let currentReportStartedAt;
 // Keyed by report name (or a synthetic key when no report= was given) so a report
 // logged more than once — e.g. a build-success followed by a later upload-failure
 // for the same report — is counted once, under its most recent outcome. Keeps
-// success+failure+skipped in sync with total_reports.
+// success+warning+failure+skipped in sync with total_reports.
 let runStats = { byReport: new Map(), unnamedSeq: 0 };
 
 // Matches emoji used across the codebase to mark severity (✅/❌/⚠️/etc.) so they
@@ -56,14 +56,19 @@ function beginFlow(flow) {
     currentReportStartedAt = Date.now();
 }
 
+// outcome=warning: the report itself was created and verified, but something
+// around it is off (e.g. WatsonAI never posted its summary, or a prefilled
+// field didn't match). Counted on its own so it's neither hidden inside
+// success nor inflating failure.
 function getRunSummary() {
-    const counts = { success: 0, failure: 0, skipped: 0 };
+    const counts = { success: 0, warning: 0, failure: 0, skipped: 0 };
     for (const { outcome } of runStats.byReport.values()) {
         counts[outcome] = (counts[outcome] || 0) + 1;
     }
     return {
         total_reports: runStats.byReport.size,
         success: counts.success,
+        warning: counts.warning,
         failure: counts.failure,
         skipped: counts.skipped,
     };
@@ -72,12 +77,20 @@ function getRunSummary() {
 // Per-report breakdown for outcomes worth naming individually (success is the
 // common case and not interesting to enumerate).
 function getRunDetails() {
-    const details = { failures: [], skipped: [] };
+    const details = { warnings: [], failures: [], skipped: [] };
     for (const [report, { outcome, reason }] of runStats.byReport.entries()) {
-        if (outcome === 'failure') details.failures.push({ report, reason });
+        if (outcome === 'warning') details.warnings.push({ report, reason });
+        else if (outcome === 'failure') details.failures.push({ report, reason });
         else if (outcome === 'skipped') details.skipped.push({ report, reason });
     }
     return details;
+}
+
+// The outcome most recently recorded for a report this run ({ outcome, reason })
+// or undefined. Lets a caller avoid overwriting a failure that an inner flow
+// already recorded for the same report with its own later success line.
+function getReportOutcome(report) {
+    return runStats.byReport.get(report);
 }
 
 function initLogger(env) {
@@ -168,4 +181,5 @@ module.exports = {
     beginFlow,
     getRunSummary,
     getRunDetails,
+    getReportOutcome,
 };

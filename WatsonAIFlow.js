@@ -1,8 +1,13 @@
 const {
     openWatsonAI,
     enterWatsonAIQuery,
+    watchWatsonAISearchRequest,
     waitForWatsonAIResponse,
-    checkWatsonAIQueryError,
+    WATSONAI_SUMMARY_TIMEOUT_MS,
+    getWatsonAIChatBaseline,
+    waitForWatsonAIReportForm,
+    waitForWatsonAIChatReady,
+    closeWatsonAIReport,
     verifyWatsonAIReportFields,
     clickWatsonAISubmit,
     verifyWatsonAISuccess,
@@ -28,8 +33,15 @@ async function watsonAIFlow(page, reports) {
 
     for (const inputData of reports) {
 
-        let actualReportName = "Unknown";
+        // Placeholder until WatsonAI generates the real name. Must be unique
+        // per input — the run summary counts reports by this name, so a
+        // shared "Unknown" merged every early failure into one.
+        let actualReportName = `WatsonAI ${inputData.reportType} (name not generated)`;
         let reportOpened = false;
+        // Problems that don't fail the report (it was still created and
+        // verified) but must not be reported as a clean success either —
+        // they turn the final outcome into "warning".
+        const reportWarnings = [];
         beginFlow("watson_ai");
 
         try {
@@ -52,15 +64,14 @@ async function watsonAIFlow(page, reports) {
             // ENTER QUERY
             // =================================================
 
-            // Baseline count taken BEFORE this query is submitted —
-            // an error block from an earlier query in this session
-            // stays in the chat DOM forever, so checkWatsonAIQueryError
-            // needs this to tell "a new error happened for THIS query"
-            // apart from "an old error is still sitting there".
-            const previousErrorCount =
-                await page
-                    .getByText("Failed to fetch Sherlock search results")
-                    .count();
+            // Baseline taken BEFORE this query is submitted — replies,
+            // forms and error blocks from earlier queries in this session
+            // stay in the chat DOM forever, so the wait below needs this
+            // to tell "THIS query got a reply/error" apart from "an old
+            // one is still sitting there".
+            const chatBaseline = await getWatsonAIChatBaseline(page);
+
+            const searchResponse = watchWatsonAISearchRequest(page);
 
             await enterWatsonAIQuery(
                 page,
@@ -70,31 +81,34 @@ async function watsonAIFlow(page, reports) {
 
             // =================================================
             // WAIT FOR WATSONAI RESPONSE
+            // Fails fast with WatsonAI's own reply when it answers
+            // with an error or a text-only reply instead of a report
+            // form (e.g. the QLI query currently gets no form),
+            // instead of timing out on the Report Name field.
             // =================================================
 
-            await waitForWatsonAIResponse(page);
+            await waitForWatsonAIResponse(page, searchResponse);
 
-
-            // =================================================
-            // CHECK FOR A WATSONAI QUERY-LEVEL ERROR
-            // (e.g. "Failed to fetch Sherlock search results")
-            // Must run BEFORE looking for report fields, otherwise
-            // we just wait/time out searching for a field that
-            // will never appear.
-            // =================================================
-
-            await checkWatsonAIQueryError(page, previousErrorCount);
+            await waitForWatsonAIReportForm(page, chatBaseline);
 
 
             // =================================================
             // VERIFY GENERATED REPORT FIELDS
             // =================================================
 
-            actualReportName =
+            const fieldCheck =
                 await verifyWatsonAIReportFields(
                     page,
                     inputData.verification
                 );
+
+            actualReportName = fieldCheck.reportName;
+
+            if (fieldCheck.fieldWarnings.length > 0) {
+                reportWarnings.push(
+                    `field_mismatch: ${fieldCheck.fieldWarnings.join(", ")}`
+                );
+            }
 
 
             // =================================================
@@ -119,6 +133,13 @@ async function watsonAIFlow(page, reports) {
 
             // At this point Open Report was clicked
             reportOpened = true;
+
+            // Every WatsonAI-generated report should get a summary.
+            if (!reportValidation.summaryReceived) {
+                reportWarnings.push(
+                    `summary_missing: no WatsonAI summary within ${Math.round(WATSONAI_SUMMARY_TIMEOUT_MS / 1000)}s`
+                );
+            }
 
 
             // =================================================
@@ -155,75 +176,10 @@ async function watsonAIFlow(page, reports) {
 
 
                 // =============================================
-                // CLOSE INCORRECT REPORT
+                // CLOSE INCORRECT REPORT + RETURN TO CHAT
                 // =============================================
 
-                try {
-
-                    const crossIcon = page.locator(
-                        "svg.cursor-pointer.fill-button-destructive-base"
-                    );
-
-                    await crossIcon.waitFor({
-                        state: "visible",
-                        timeout: 30000
-                    });
-
-                    console.log(
-                        `❌ Closing incorrectly generated WatsonAI report: '${actualReportName}'`
-                    );
-
-                    logSession(
-                        `❌ Closing incorrectly generated WatsonAI report: '${actualReportName}'`
-                    );
-
-                    await crossIcon.click();
-
-                } catch (closeError) {
-
-                    console.error(
-                        `⚠️ Could not close incorrect report: ${closeError.message}`
-                    );
-
-                    logSession(
-                        `⚠️ Could not close incorrect report: ${closeError.message}`
-                    );
-                }
-
-
-                // =============================================
-                // RETURN TO WATSONAI CHAT
-                // =============================================
-
-                try {
-
-                    const queryInput = page.getByPlaceholder(
-                        "Ask a question or make a command"
-                    );
-
-                    await queryInput.waitFor({
-                        state: "visible",
-                        timeout: 30000
-                    });
-
-                    console.log(
-                        `✅ Returned to WatsonAI chat.`
-                    );
-
-                    logSession(
-                        `✅ Returned to WatsonAI chat.`
-                    );
-
-                } catch (chatError) {
-
-                    console.error(
-                        `⚠️ Could not confirm WatsonAI chat: ${chatError.message}`
-                    );
-
-                    logSession(
-                        `⚠️ Could not confirm WatsonAI chat: ${chatError.message}`
-                    );
-                }
+                await closeWatsonAIReport(page, actualReportName);
 
 
                 console.log(
@@ -297,90 +253,42 @@ async function watsonAIFlow(page, reports) {
 
 
             // =================================================
-            // CLOSE REPORT AFTER SUCCESS
+            // CLOSE REPORT AFTER SUCCESS + RETURN TO CHAT
             // =================================================
 
-            try {
-
-                const crossIcon = page.locator(
-                    "svg.cursor-pointer.fill-button-destructive-base"
-                );
-
-                await crossIcon.waitFor({
-                    state: "visible",
-                    timeout: 30000
-                });
-
-                console.log(
-                    `❌ Closing WatsonAI report: '${actualReportName}'`
-                );
-
-                logSession(
-                    `❌ Closing WatsonAI report: '${actualReportName}'`
-                );
-
-                await crossIcon.click();
-
-            } catch (closeError) {
-
-                console.error(
-                    `⚠️ Failed to close WatsonAI report: ${closeError.message}`
-                );
-
-                logSession(
-                    `⚠️ Failed to close WatsonAI report: ${closeError.message}`
-                );
-            }
-
-
-            // =================================================
-            // WAIT FOR WATSONAI CHAT
-            // =================================================
-
-            try {
-
-                const queryInput = page.getByPlaceholder(
-                    "Ask a question or make a command"
-                );
-
-                await queryInput.waitFor({
-                    state: "visible",
-                    timeout: 30000
-                });
-
-                console.log(
-                    `✅ Returned to WatsonAI chat.`
-                );
-
-                logSession(
-                    `✅ Returned to WatsonAI chat.`
-                );
-
-            } catch (chatError) {
-
-                console.error(
-                    `⚠️ Could not confirm WatsonAI chat: ${chatError.message}`
-                );
-
-                logSession(
-                    `⚠️ Could not confirm WatsonAI chat: ${chatError.message}`
-                );
-            }
+            await closeWatsonAIReport(page, actualReportName);
 
 
             // =================================================
             // REPORT COMPLETED
             // =================================================
 
-            console.log(
-                `🎉 WatsonAI ${inputData.reportType} completed successfully.`
-            );
+            if (reportWarnings.length > 0) {
 
-            logSession(
-                `🎉 WatsonAI ${inputData.reportType} completed successfully.`,
-                false,
-                { flow: "watson_ai", report: actualReportName, report_type: inputData.reportType, outcome: "success" }
-            );
+                const warningReason = reportWarnings.join("; ");
+
+                console.log(
+                    `⚠️ WatsonAI ${inputData.reportType} completed with warnings: ${warningReason}`
+                );
+
+                logSession(
+                    `⚠️ WatsonAI ${inputData.reportType} completed with warnings.`,
+                    false,
+                    { flow: "watson_ai", report: actualReportName, report_type: inputData.reportType, outcome: "warning", reason: warningReason }
+                );
+
+            } else {
+
+                console.log(
+                    `🎉 WatsonAI ${inputData.reportType} completed successfully.`
+                );
+
+                logSession(
+                    `🎉 WatsonAI ${inputData.reportType} completed successfully.`,
+                    false,
+                    { flow: "watson_ai", report: actualReportName, report_type: inputData.reportType, outcome: "success" }
+                );
+            }
 
 
         } catch (error) {
@@ -410,80 +318,26 @@ async function watsonAIFlow(page, reports) {
 
 
             // =================================================
-            // TRY TO CLOSE REPORT IF IT IS OPEN
+            // TRY TO CLOSE REPORT IF IT IS OPEN + RETURN TO CHAT
             // =================================================
 
             if (reportOpened) {
 
-                try {
+                await closeWatsonAIReport(page, actualReportName, { onlyIfOpen: true });
 
-                    const crossIcon = page.locator(
-                        "svg.cursor-pointer.fill-button-destructive-base"
-                    );
+            } else {
 
-                    if (
-                        await crossIcon.isVisible({
-                            timeout: 5000
-                        }).catch(() => false)
-                    ) {
-
-                        console.log(
-                            `🔄 Attempting to close failed WatsonAI report...`
-                        );
-
-                        logSession(
-                            `🔄 Attempting to close failed WatsonAI report...`
-                        );
-
-                        await crossIcon.click();
-
-                    }
-
-                } catch (closeError) {
-
-                    console.error(
-                        `⚠️ Failed to close report after error: ${closeError.message}`
-                    );
-
-                    logSession(
-                        `⚠️ Failed to close report after error: ${closeError.message}`
-                    );
-                }
-            }
-
-
-            // =================================================
-            // WAIT FOR WATSONAI CHAT
-            // =================================================
-
-            try {
-
-                const queryInput = page.getByPlaceholder(
-                    "Ask a question or make a command"
-                );
-
-                await queryInput.waitFor({
-                    state: "visible",
-                    timeout: 15000
-                });
-
-                console.log(
-                    `✅ WatsonAI chat ready for next report.`
-                );
-
-                logSession(
-                    `✅ WatsonAI chat ready for next report.`
-                );
-
-            } catch (chatError) {
-
-                console.error(
-                    `⚠️ WatsonAI chat was not confirmed after failure: ${chatError.message}`
-                );
-
-                logSession(
-                    `⚠️ WatsonAI chat was not confirmed after failure: ${chatError.message}`
-                );
+                // The prompt stays disabled while a failed query's search
+                // request is still settling, so allow more than a moment.
+                await waitForWatsonAIChatReady(page, 60000)
+                    .then(() => {
+                        console.log(`✅ WatsonAI chat ready for next report.`);
+                        logSession(`✅ WatsonAI chat ready for next report.`);
+                    })
+                    .catch(chatError => {
+                        console.error(`⚠️ WatsonAI chat was not confirmed after failure: ${chatError.message}`);
+                        logSession(`⚠️ WatsonAI chat was not confirmed after failure: ${chatError.message}`);
+                    });
             }
 
 

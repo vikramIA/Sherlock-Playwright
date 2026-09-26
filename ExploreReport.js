@@ -3,7 +3,7 @@ const {
     navigateAndCreateExploreReport, selectBehaviors, selectAgeRanges,
     clearSearchBar, uploadAudiences, searchAndClickReport, selectLocations,
     selectPlaces, selectDateRange, clickCreateReportButton, enterReportName,
-    selectExploreReportType, keplerDatasetsFetch, Report_To_Persona_Flow,
+    selectExploreReportType, keplerDatasetsFetch, createPersonaFromReportOrThrow, assertAudienceUploadsSucceeded,
     selectSubCategory, selectBrands, SelectRating, SelectReviewCount,
     SelectVisitDuration, SelectAverageDailyVisits, SelectAverageMonthlyVisits,
     SelectAverageDailyDevices, SelectAverageMonthlyDevices,
@@ -94,8 +94,8 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                     );
 
                     if (inputData.Persona?.toUpperCase() === "YES") {
-                        const personaCreated = await Report_To_Persona_Flow(page, inputData.reportName);
-                        if (personaCreated) addPersonaReportToTracking(env, inputData.reportName, {
+                        await createPersonaFromReportOrThrow(page, inputData.reportName);
+                        addPersonaReportToTracking(env, inputData.reportName, {
                             uploadAudience: inputData.UploadAudience
                         });
                     }
@@ -111,6 +111,8 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                         Array.isArray(inputData.UploadAudience) &&
                         inputData.UploadAudience.length > 0
                     ) {
+                        const failedUploads = [];
+
                         for (const platform of inputData.UploadAudience) {
                             try {
                                 console.log(
@@ -251,10 +253,14 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                                 logSession(
                                     `❌ Upload/Append process failed for platform ${platform}: ${err.message}`,
                                     false,
-                                    { flow: "explore_audience_upload", report: inputData.reportName, platform, outcome: "failure", reason: err.message }
+                                    { flow: "explore_audience_upload", report: inputData.reportName, platform }
                                 );
+
+                                failedUploads.push(`${platform}: ${err.message.split("\n")[0]}`);
                             }
                         }
+
+                        assertAudienceUploadsSucceeded(inputData.reportName, failedUploads);
                     }
 
                     logSession(`✅ 'place level visits' flow completed successfully: ${inputData.reportName}`, false, { flow: "explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
@@ -332,8 +338,8 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                     );
 
                     if (inputData.Persona?.toUpperCase() === "YES") {
-                        const personaCreated = await Report_To_Persona_Flow(page, inputData.reportName);
-                        if (personaCreated) addPersonaReportToTracking(env, inputData.reportName, {
+                        await createPersonaFromReportOrThrow(page, inputData.reportName);
+                        addPersonaReportToTracking(env, inputData.reportName, {
                             uploadAudience: inputData.UploadAudience
                         });
                     }
@@ -350,6 +356,8 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                         Array.isArray(inputData.UploadAudience) &&
                         inputData.UploadAudience.length > 0
                     ) {
+                        const failedUploads = [];
+
                         for (const platform of inputData.UploadAudience) {
                             try {
                                 console.log(
@@ -380,8 +388,11 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                                     logSession(
                                         `⚠️ Could not select report "${DeviceReportName}" for upload: ${err.message}`,
                                         false,
-                                        { flow: "explore_audience_upload", report: DeviceReportName, outcome: "skipped", reason: err.message }
+                                        { flow: "explore_audience_upload", report: DeviceReportName, platform }
                                     );
+
+                                    // The upload never happened for this platform.
+                                    failedUploads.push(`${platform}: could not select report for upload (${err.message.split("\n")[0]})`);
 
                                     continue;
                                 }
@@ -498,10 +509,14 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                                 logSession(
                                     `❌ Upload/Append process failed for platform ${platform}: ${err.message}`,
                                     false,
-                                    { flow: "explore_audience_upload", report: inputData.reportName, platform, outcome: "failure", reason: err.message }
+                                    { flow: "explore_audience_upload", report: inputData.reportName, platform }
                                 );
+
+                                failedUploads.push(`${platform}: ${err.message.split("\n")[0]}`);
                             }
                         }
+
+                        assertAudienceUploadsSucceeded(inputData.reportName, failedUploads);
                     }
                     logSession(`✅ 'device level visits' flow completed successfully: ${inputData.reportName}`, false, { flow: "explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
                 } catch (err) {
@@ -608,8 +623,8 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                             }
                             else {
                                 if (PLVReportInputs.Persona?.toUpperCase() === "YES") {
-                                    const personaCreated = await Report_To_Persona_Flow(page, PLVReportInputs.reportName);
-                                    if (personaCreated) addPersonaReportToTracking(env, PLVReportInputs.reportName, {
+                                    await createPersonaFromReportOrThrow(page, PLVReportInputs.reportName);
+                                    addPersonaReportToTracking(env, PLVReportInputs.reportName, {
                                         uploadAudience: PLVReportInputs.UploadAudience
                                     });
                                 }
@@ -669,8 +684,8 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                             }
                             else {
                                 if (DLVReportInputs.Persona?.toUpperCase() === "YES") {
-                                    const personaCreated = await Report_To_Persona_Flow(page, DLVReportInputs.reportName);
-                                    if (personaCreated) addPersonaReportToTracking(env, DLVReportInputs.reportName, {
+                                    await createPersonaFromReportOrThrow(page, DLVReportInputs.reportName);
+                                    addPersonaReportToTracking(env, DLVReportInputs.reportName, {
                                         uploadAudience: DLVReportInputs.UploadAudience
                                     });
                                 }

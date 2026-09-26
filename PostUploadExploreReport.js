@@ -1,7 +1,7 @@
 const { logSession, beginFlow } = require('./Logger');
 const {
     selectBehaviors, selectAgeRanges, clearSearchBar, uploadAudiences, searchAndClickReport, selectDateRange, clickCreateReportButton, enterReportName,
-    selectExploreReportType, keplerDatasetsFetch, Report_To_Persona_Flow, selectSubCategory, selectBrands, SelectRating, SelectReviewCount,
+    selectExploreReportType, keplerDatasetsFetch, createPersonaFromReportOrThrow, assertAudienceUploadsSucceeded, selectSubCategory, selectBrands, SelectRating, SelectReviewCount,
     SelectVisitDuration, SelectAverageDailyVisits, SelectAverageMonthlyVisits, SelectAverageDailyDevices, SelectAverageMonthlyDevices,
     selectAvailableAttributes, SelectQualityLifeScore, safeWait } = require('./functions');
 
@@ -79,10 +79,11 @@ async function postUploadExploreReportFlow(page, inputData, isForMultilayer = fa
                     }
 
                     if (inputData.Persona?.toUpperCase() === "YES") {
-                        await Report_To_Persona_Flow(page, inputData.reportName);
+                        await createPersonaFromReportOrThrow(page, inputData.reportName);
                     }
 
                     if (Array.isArray(inputData.UploadAudience) && inputData.UploadAudience.length > 0) {
+                        const failedUploads = [];
                         for (const platform of inputData.UploadAudience) {
                             try {
                                 console.log(`--- Starting upload process for platform: ${platform} ---`);
@@ -97,9 +98,11 @@ async function postUploadExploreReportFlow(page, inputData, isForMultilayer = fa
                                 await safeWait(page, 2000);
                             } catch (err) {
                                 console.error(`❌ Upload process failed for platform ${platform}: ${err.message}`);
-                                logSession(`❌ Upload process failed for platform ${platform}: ${err.message}`, false, { flow: "post_upload_explore", report: inputData.reportName, outcome: "failure", reason: err.message });
+                                logSession(`❌ Upload process failed for platform ${platform}: ${err.message}`, false, { flow: "post_upload_explore", report: inputData.reportName, platform });
+                                failedUploads.push(`${platform}: ${err.message.split("\n")[0]}`);
                             }
                         }
+                        assertAudienceUploadsSucceeded(inputData.reportName, failedUploads);
                     }
 
                     logSession(`✅ 'place level visits' flow completed successfully: ${inputData.reportName}`, false, { flow: "post_upload_explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
@@ -166,10 +169,11 @@ async function postUploadExploreReportFlow(page, inputData, isForMultilayer = fa
                     }
 
                     if (inputData.Persona?.toUpperCase() === "YES") {
-                        await Report_To_Persona_Flow(page, inputData.reportName);
+                        await createPersonaFromReportOrThrow(page, inputData.reportName);
                     }
 
                     if (Array.isArray(inputData.UploadAudience) && inputData.UploadAudience.length > 0) {
+                        const failedUploads = [];
                         for (const platform of inputData.UploadAudience) {
                             try {
                                 console.log(`--- Starting upload process for platform: ${platform} ---`);
@@ -181,8 +185,9 @@ async function postUploadExploreReportFlow(page, inputData, isForMultilayer = fa
                                     await safeWait(page, 2000);
                                 } catch (err) {
                                     console.warn(`⚠️ Could not select report "${DeviceReportName}" for upload: ${err.message}`);
-                                    logSession(`⚠️ Could not select report "${DeviceReportName}" for upload: ${err.message}`, false, { flow: "post_upload_explore", report: DeviceReportName, outcome: "skipped", reason: err.message });
-                                    // Skip this platform if report cannot be selected
+                                    logSession(`⚠️ Could not select report "${DeviceReportName}" for upload: ${err.message}`, false, { flow: "post_upload_explore", report: DeviceReportName, platform });
+                                    // Skip this platform if report cannot be selected — the upload never happened
+                                    failedUploads.push(`${platform}: could not select report for upload (${err.message.split("\n")[0]})`);
                                     continue;
                                 }
 
@@ -193,9 +198,11 @@ async function postUploadExploreReportFlow(page, inputData, isForMultilayer = fa
                                 await safeWait(page, 2000);
                             } catch (err) {
                                 console.error(`❌ Upload process failed for platform ${platform}: ${err.message}`);
-                                logSession(`❌ Upload process failed for platform ${platform}: ${err.message}`, false, { flow: "post_upload_explore", report: inputData.reportName, outcome: "failure", reason: err.message });
+                                logSession(`❌ Upload process failed for platform ${platform}: ${err.message}`, false, { flow: "post_upload_explore", report: inputData.reportName, platform });
+                                failedUploads.push(`${platform}: ${err.message.split("\n")[0]}`);
                             }
                         }
+                        assertAudienceUploadsSucceeded(inputData.reportName, failedUploads);
                     }
 
                     logSession(`✅ 'device level visits' flow completed successfully: ${inputData.reportName}`, false, { flow: "post_upload_explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
@@ -292,7 +299,7 @@ async function postUploadExploreReportFlow(page, inputData, isForMultilayer = fa
                             }
                             else {
                                 if (PLVReportInputs.Persona?.toUpperCase() === "YES") {
-                                    await Report_To_Persona_Flow(page, PLVReportInputs.reportName);
+                                    await createPersonaFromReportOrThrow(page, PLVReportInputs.reportName);
                                 }
                             }
 
@@ -350,7 +357,7 @@ async function postUploadExploreReportFlow(page, inputData, isForMultilayer = fa
                             }
                             else {
                                 if (DLVReportInputs.Persona?.toUpperCase() === "YES") {
-                                    await Report_To_Persona_Flow(page, DLVReportInputs.reportName);
+                                    await createPersonaFromReportOrThrow(page, DLVReportInputs.reportName);
                                 }
                             }
                         } catch (err) {

@@ -3,7 +3,7 @@ const {
     keplerDatasetsFetch, safeWait, monitorMultilayerReport,
     checkMultilayerReportStatusOnce, finalizeCompletedMultilayerReport,
     searchAndClickReport, uploadAudiences, verifyAudienceUploadStatus,
-    clearSearchBar, Report_To_Persona_Flow
+    clearSearchBar, createPersonaFromReportOrThrow, assertAudienceUploadsSucceeded
 } = require('./functions');
 const { addPersonaReportToTracking } = require('./PersonaStatusFunctions.js');
 const { logSession, beginFlow } = require('./Logger');
@@ -14,6 +14,8 @@ const { logSession, beginFlow } = require('./Logger');
 // Share/Delete/etc.), so there is no way to re-open and re-trigger an upload.
 async function uploadAudienceFlow(page, reportName, UploadAudience) {
     if (!Array.isArray(UploadAudience) || UploadAudience.length === 0) return;
+
+    const failedUploads = [];
 
     for (const platform of UploadAudience) {
         try {
@@ -50,9 +52,27 @@ async function uploadAudienceFlow(page, reportName, UploadAudience) {
 
         } catch (err) {
             console.error(`❌ Upload process failed for platform ${platform}: ${err.message}`);
-            logSession(`❌ Upload process failed for platform ${platform}: ${err.message}`, false, { flow: "multilayer_audience_upload", report: reportName, platform, outcome: "failure", reason: err.message });
+            logSession(`❌ Upload process failed for platform ${platform}: ${err.message}`, false, { flow: "multilayer_audience_upload", report: reportName, platform });
+            failedUploads.push(`${platform}: ${err.message.split("\n")[0]}`);
         }
     }
+
+    assertAudienceUploadsSucceeded(reportName, failedUploads);
+}
+
+// A multilayer report that completed but whose map doesn't open is a failed
+// report. Previously the map-load result was only logged and the report still
+// ended as success. noRetry: re-running MultilayerFlow would create a whole
+// new merged report rather than re-open this one.
+function assertMultilayerMapOpened(reportName, keplerResult) {
+    if (keplerResult?.status === "success") return;
+
+    const error = new Error(
+        `Multilayer report '${reportName}' completed, but its map did not open ` +
+        `(status: ${keplerResult?.status ?? "unknown"}): ${keplerResult?.text ?? "no details"}`
+    );
+    error.noRetry = true;
+    throw error;
 }
 
 // =============== Layered Merge Flow ===============
@@ -131,13 +151,14 @@ async function layeredMerge(page, reportName, Report_TO_Merge, multilayerReports
     logSession("✅ Clicked 'Create Multilayer' button");
 
     await safeWait(page, 60000);
-    await keplerDatasetsFetch(page, reportName);
+    const keplerResult = await keplerDatasetsFetch(page, reportName);
+    assertMultilayerMapOpened(reportName, keplerResult);
     await safeWait(page, 2000);
 
     // ===== Persona (optional) — reuses the same flow as a plain Explore report =====
     if (Persona?.toUpperCase() === "YES") {
-        const personaCreated = await Report_To_Persona_Flow(page, reportName);
-        if (personaCreated) addPersonaReportToTracking(env, reportName, {
+        await createPersonaFromReportOrThrow(page, reportName);
+        addPersonaReportToTracking(env, reportName, {
             uploadAudience: UploadAudience
         });
     }
@@ -270,10 +291,23 @@ async function unifiedMerge(page, reportName, Report_TO_Merge, multilayerReports
     console.log(multilayerResult);
     logSession(JSON.stringify(multilayerResult, null, 2));
 
+    // Only a completed report has a map to check; a report that never
+    // completed was also silently reported as success before this.
+    if (multilayerResult["Final Status of Multilayer"] !== "Complete") {
+        const error = new Error(
+            `Multilayer report '${reportName}' did not complete ` +
+            `(status: ${multilayerResult["Final Status of Multilayer"]}): ${multilayerResult.Reason ?? "no details"}`
+        );
+        error.noRetry = true;
+        throw error;
+    }
+
+    assertMultilayerMapOpened(reportName, multilayerResult["Status of Maps Loading"]);
+
     // ===== Persona (optional) — reuses the same flow as a plain Explore report =====
     if (Persona?.toUpperCase() === "YES") {
-        const personaCreated = await Report_To_Persona_Flow(page, reportName);
-        if (personaCreated) addPersonaReportToTracking(env, reportName, {
+        await createPersonaFromReportOrThrow(page, reportName);
+        addPersonaReportToTracking(env, reportName, {
             uploadAudience: UploadAudience
         });
     }
@@ -396,9 +430,12 @@ async function finalizeUnifiedBatchItem(page, item, env) {
     console.log(`✅ Map load status for '${finalReportName}':`, keplerResult);
     logSession(`✅ Map load status for '${finalReportName}': ${JSON.stringify(keplerResult)}`);
 
+    // Caught by processUnifiedBatch, which logs outcome=failure for this report.
+    assertMultilayerMapOpened(finalReportName, keplerResult);
+
     if (item.Persona?.toUpperCase() === "YES") {
-        const personaCreated = await Report_To_Persona_Flow(page, finalReportName);
-        if (personaCreated) addPersonaReportToTracking(env, finalReportName, { uploadAudience: item.UploadAudience });
+        await createPersonaFromReportOrThrow(page, finalReportName);
+        addPersonaReportToTracking(env, finalReportName, { uploadAudience: item.UploadAudience });
     }
 
     await uploadAudienceFlow(page, finalReportName, item.UploadAudience);
@@ -638,6 +675,15 @@ async function MultilayerFlow(page, reportName, Report_TO_Merge, MergeType, mult
         } catch (err) {
             console.warn(`⚠️ Flow attempt ${globalAttempt + 1} failed: ${err.message}`);
             logSession(`⚠️ Flow attempt ${globalAttempt + 1} failed: ${err.message}`);
+
+            // The merged report was already created — its map didn't open,
+            // or its persona/audience upload failed. Retrying the full flow
+            // would only create another merged report, so fail this one.
+            if (err.noRetry) {
+                console.error(`❌ Multilayer report '${reportName}' failed: ${err.message}`);
+                logSession(`❌ Multilayer report '${reportName}' failed: ${err.message}`, false, { flow: "multilayer", report: reportName, merge_type: MergeType.toLowerCase(), outcome: "failure", reason: err.message });
+                return;
+            }
 
             if (globalAttempt < MAX_GLOBAL_RETRIES - 1) {
                 console.log(`🔁 Retrying full flow (Attempt ${globalAttempt + 2}/${MAX_GLOBAL_RETRIES}) after wait...`);

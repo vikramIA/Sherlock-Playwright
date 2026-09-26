@@ -1,4 +1,4 @@
-const { logSession, beginFlow } = require('./Logger');
+const { logSession, beginFlow, getReportOutcome } = require('./Logger');
 const {
     MatchRateFetch, VerifyItemExist, PersonaReportName, navigateAndCreatePersonaFlow,
     selectPersonaReportType, selectReportInPersona, selectLocations,
@@ -322,6 +322,18 @@ async function PersonaFlow(page, inputData, env) {
                                 }
 
                                 await postUploadExploreReportFlow(page, report);
+
+                                // postUploadExploreReportFlow catches its own errors and logs
+                                // the report's outcome itself — don't overwrite a failure/skip
+                                // it recorded (e.g. persona or audience upload failed) with success.
+                                const postUploadOutcome = getReportOutcome(report.reportName);
+
+                                if (postUploadOutcome && postUploadOutcome.outcome !== "success") {
+                                    console.error(`❌ Explore Report did not succeed: ${report.reportName} → ${postUploadOutcome.outcome}: ${postUploadOutcome.reason}`);
+                                    logSession(`❌ Explore Report did not succeed: ${report.reportName} → ${postUploadOutcome.outcome}: ${postUploadOutcome.reason}`);
+                                    skipCurrentReport = true;
+                                    continue;
+                                }
 
                                 console.log(`✅ Completed Explore Report: ${report.reportType} - ${report.reportName}`);
                                 logSession(`✅ Completed Explore Report: ${report.reportType} - ${report.reportName}`, false, { flow: "persona_post_upload", report: report.reportName, report_type: report.reportType, outcome: "success" });

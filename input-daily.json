@@ -149,9 +149,9 @@
       "place": "auto.car.dealership",
       "location": "Pune, Maharashtra, India",
       "StartDateRange": "2026-06-01",
-      "EndDateRange": "2026-06-07",
+      "EndDateRange": "2026-06-01",
       "Rating": "2-5",
-      "age": "18-25; 26-35"
+      "age": "18-25"
     },
     {
       "reportType": "Quality of Life Index",

@@ -1536,6 +1536,7 @@ async function Report_To_Persona_Flow(page, reportName) {
             console.log(`✅ Report_To_Persona_Flow completed successfully for ${reportName}`);
             logSession(`✅ Report_To_Persona_Flow completed successfully for ${reportName}`);
         } else {
+            lastPersonaFlowError = `persona report "${reportName}" not found in Explore after initiating the workflow`;
             console.log(`❌ Report_To_Persona_Flow failed — report "${reportName}" not found in Explore.`);
             logSession(`❌ Report_To_Persona_Flow failed — report "${reportName}" not found in Explore.`);
         }
@@ -1543,10 +1544,45 @@ async function Report_To_Persona_Flow(page, reportName) {
         return reportExists;
 
     } catch (error) {
+        lastPersonaFlowError = error.message.split("\n")[0];
         console.error(`❌ Error in Report_To_Persona_Flow: ${error.message}`);
         logSession(`❌ Error in Report_To_Persona_Flow: ${error.message}`);
         return false;
     }
+}
+
+// Why the most recent Report_To_Persona_Flow call returned false.
+let lastPersonaFlowError = null;
+
+// Persona = YES means the persona is part of what the report must deliver,
+// so a persona that wasn't created fails the report it was created from.
+// Throws instead of returning false; noRetry stops the multilayer flow from
+// re-creating the whole merged report just to retry the persona.
+async function createPersonaFromReportOrThrow(page, reportName) {
+    lastPersonaFlowError = null;
+
+    if (await Report_To_Persona_Flow(page, reportName)) return true;
+
+    const error = new Error(
+        `Persona report creation failed for '${reportName}': ${lastPersonaFlowError || "unknown reason"}.`
+    );
+    error.noRetry = true;
+    throw error;
+}
+
+// Audience uploads get retried/polled for a long time inside
+// verifyAudienceUploadStatus, so a platform only lands in failedUploads
+// once its upload has finally failed. Each platform's failure used to be
+// logged as its own outcome=failure and then overwritten by the report's
+// later outcome=success, so it never showed up in the run summary.
+function assertAudienceUploadsSucceeded(reportName, failedUploads) {
+    if (failedUploads.length === 0) return;
+
+    const error = new Error(
+        `Audience upload failed for '${reportName}' — ${failedUploads.join("; ")}`
+    );
+    error.noRetry = true;
+    throw error;
 }
 
 // Function to navigate to Explore and click 'Create Persona Workflow'
@@ -3173,6 +3209,9 @@ async function verifyAggregatedCount(page, reportName) {
         // Check whether we are still on summary page
         // ------------------------------------------
 
+        // A missing Total fails the report. The reason spells out that this
+        // is the Aggregated Count summary page (not the Kepler map) so it
+        // isn't mistaken for a map-load failure.
         if (currentUrl.includes("/explore/summary")) {
 
             console.error(
@@ -3185,20 +3224,25 @@ async function verifyAggregatedCount(page, reportName) {
                 { report: reportName }
             );
 
-        } else {
-
-            console.error(
-                `⚠️ Unexpected page while verifying Aggregated Count.`
-            );
-
-            logSession(
-                `⚠️ Unexpected page while verifying Aggregated Count.`,
-                false,
-                { report: reportName }
+            throw new Error(
+                `Aggregated Count failed: the Aggregated Count summary page loaded (not the map), ` +
+                `but the Total value did not render within 60s (${currentUrl}).`
             );
         }
 
-        return null;
+        console.error(
+            `⚠️ Unexpected page while verifying Aggregated Count.`
+        );
+
+        logSession(
+            `⚠️ Unexpected page while verifying Aggregated Count.`,
+            false,
+            { report: reportName }
+        );
+
+        throw new Error(
+            `Aggregated Count failed: expected the Aggregated Count summary page, but ended on ${currentUrl}.`
+        );
     }
 
     // ==========================================
@@ -3221,7 +3265,10 @@ async function verifyAggregatedCount(page, reportName) {
             { report: reportName }
         );
 
-        return null;
+        throw new Error(
+            `Aggregated Count failed: the Aggregated Count summary page loaded (not the map), ` +
+            `but the Total value was empty (${page.url()}).`
+        );
     }
 
     // ==========================================
@@ -3232,9 +3279,13 @@ async function verifyAggregatedCount(page, reportName) {
         totalValue.replace(/,/g, "")
     );
 
-    expect(numericValue).not.toBeNaN();
+    if (Number.isNaN(numericValue) || numericValue <= 0) {
 
-    expect(numericValue).toBeGreaterThan(0);
+        throw new Error(
+            `Aggregated Count failed: the Aggregated Count summary page loaded (not the map), ` +
+            `but the Total value '${totalValue}' is not a positive number (${page.url()}).`
+        );
+    }
 
     console.log(
         `✅ Aggregated Count verified for '${reportName}' | Total: ${totalValue}`
@@ -4339,6 +4390,8 @@ module.exports = {
     selectPersonaReportType,
     keplerDatasetsFetch,
     Report_To_Persona_Flow,
+    createPersonaFromReportOrThrow,
+    assertAudienceUploadsSucceeded,
     selectSubCategory,
     selectBrands,
     SelectRating,
