@@ -32,9 +32,9 @@ function resolveWebhookUrl(env) {
   return envConfig[env]?.slackWebhookUrl || process.env.SLACK_WEBHOOK_URL;
 }
 
-function statusEmoji({ error, failure }) {
+function statusEmoji({ error, failure, warning }) {
   if (error) return "🔥";
-  if (failure > 0) return "⚠️";
+  if (failure > 0 || warning > 0) return "⚠️";
   return "✅";
 }
 
@@ -88,8 +88,10 @@ async function sendSlackStatus(summary) {
     reportsAttempted,
     reportsNotRun,
     success,
+    warning = 0,
     failure,
     skipped,
+    warnings,
     failures,
     skippedReports,
     error,
@@ -101,13 +103,16 @@ async function sendSlackStatus(summary) {
     return;
   }
 
-  const emoji = statusEmoji({ error, failure });
+  const emoji = statusEmoji({ error, failure, warning });
   const lines = [
     `${emoji} *Sherlock ${env.toUpperCase()}* (${checkType}) — Session ${session}`,
     `Planned: ${reportsPlanned}  Attempted: ${reportsAttempted}  Not Run: ${reportsNotRun}`,
-    `Success: ${success}  Failure: ${failure}  Skipped: ${skipped}`,
+    `Success: ${success}  Warning: ${warning}  Failure: ${failure}  Skipped: ${skipped}`,
   ];
   if (error) lines.push(`Script Error: ${error}`);
+
+  const warningBlock = formatReportList("Warnings", warnings);
+  if (warningBlock) lines.push(warningBlock);
 
   const failureBlock = formatReportList("Failures", failures);
   if (failureBlock) lines.push(failureBlock);
