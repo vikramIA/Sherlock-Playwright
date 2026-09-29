@@ -32,10 +32,13 @@ function resolveWebhookUrl(env) {
   return envConfig[env]?.slackWebhookUrl || process.env.SLACK_WEBHOOK_URL;
 }
 
-function statusEmoji({ error, failure, warning }) {
-  if (error) return "🔥";
-  if (failure > 0 || warning > 0) return "⚠️";
-  return "✅";
+// Overall run status shown in the header. Warnings don't fail a run — a
+// report that loaded with data is a success — they only soften the status.
+function runStatus({ error, failure, successWithWarnings }) {
+  if (error) return { emoji: "🔥", label: "Script error" };
+  if (failure > 0) return { emoji: "🔴", label: "Failures found" };
+  if (successWithWarnings > 0) return { emoji: "🟡", label: "Passed with warnings" };
+  return { emoji: "🟢", label: "All passed" };
 }
 
 // Splunk is fed from the fixed log path on the VM that runs these checks
@@ -65,18 +68,37 @@ function buildSplunkUrl(env) {
 // Caps how many individual reports get named per outcome so a run with a lot
 // of failures doesn't blow up into a wall of text — the Splunk link covers the rest.
 const MAX_LISTED_REPORTS = 10;
+// Reasons can carry a whole WatsonAI reply or a Playwright call log; keep the
+// first line and trim it so each report stays on one readable line.
+const MAX_REASON_LENGTH = 120;
 
-function formatReportList(label, items) {
+// Slack mrkdwn treats &, < and > as control characters.
+function escapeSlack(text) {
+  return String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function shortenReason(reason) {
+  const oneLine = String(reason).split("\n")[0].replace(/\s+/g, " ").trim();
+  return oneLine.length > MAX_REASON_LENGTH
+    ? `${oneLine.slice(0, MAX_REASON_LENGTH - 1)}…`
+    : oneLine;
+}
+
+function formatReportList(title, items) {
   if (!items || items.length === 0) return null;
 
-  const shown = items
-    .slice(0, MAX_LISTED_REPORTS)
-    .map(({ report, reason }) => `• ${report}${reason ? ` — ${reason}` : ""}`);
+  const shown = items.slice(0, MAX_LISTED_REPORTS).map(({ report, reason }) => {
+    const name = `\`${escapeSlack(report)}\``;
+    return reason ? `• ${name}\n      _${escapeSlack(shortenReason(reason))}_` : `• ${name}`;
+  });
 
   const remaining = items.length - shown.length;
-  const lines = [`*${label} (${items.length}):*`, ...shown];
-  if (remaining > 0) lines.push(`…and ${remaining} more`);
-  return lines.join("\n");
+  if (remaining > 0) shown.push(`_…and ${remaining} more (see Splunk)_`);
+
+  return {
+    type: "section",
+    text: { type: "mrkdwn", text: `*${title} (${items.length})*\n${shown.join("\n")}` },
+  };
 }
 
 async function sendSlackStatus(summary) {
@@ -88,12 +110,13 @@ async function sendSlackStatus(summary) {
     reportsAttempted,
     reportsNotRun,
     success,
-    warning = 0,
+    successWithWarnings = 0,
     failure,
     skipped,
     warnings,
     failures,
     skippedReports,
+    totalDuration,
     error,
   } = summary;
 
@@ -103,27 +126,71 @@ async function sendSlackStatus(summary) {
     return;
   }
 
-  const emoji = statusEmoji({ error, failure, warning });
-  const lines = [
-    `${emoji} *Sherlock ${env.toUpperCase()}* (${checkType}) — Session ${session}`,
-    `Planned: ${reportsPlanned}  Attempted: ${reportsAttempted}  Not Run: ${reportsNotRun}`,
-    `Success: ${success}  Warning: ${warning}  Failure: ${failure}  Skipped: ${skipped}`,
+  const status = runStatus({ error, failure, successWithWarnings });
+  const envLabel = env.toUpperCase();
+  const unixNow = Math.floor(Date.now() / 1000);
+
+  const passedText = successWithWarnings > 0
+    ? `✅ *${success}* passed _(${successWithWarnings} with warnings)_`
+    : `✅ *${success}* passed`;
+
+  const contextParts = [
+    `Session *${session}*`,
+    `<!date^${unixNow}^{date_short_pretty} {time}|${new Date().toISOString()}>`,
   ];
-  if (error) lines.push(`Script Error: ${error}`);
+  if (totalDuration) contextParts.push(`⏱️ ${totalDuration}`);
 
-  const warningBlock = formatReportList("Warnings", warnings);
-  if (warningBlock) lines.push(warningBlock);
+  const blocks = [
+    {
+      type: "header",
+      text: { type: "plain_text", text: `${status.emoji} Sherlock ${envLabel} · ${checkType} — ${status.label}`, emoji: true },
+    },
+    { type: "context", elements: [{ type: "mrkdwn", text: contextParts.join("  ·  ") }] },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text:
+          `${passedText}    ❌ *${failure}* failed    ⏭️ *${skipped}* skipped\n` +
+          `Ran *${reportsAttempted}* of *${reportsPlanned}* planned` +
+          (reportsNotRun > 0 ? `  ·  🚫 *${reportsNotRun}* not run` : ""),
+      },
+    },
+  ];
 
-  const failureBlock = formatReportList("Failures", failures);
-  if (failureBlock) lines.push(failureBlock);
+  if (error) {
+    blocks.push({
+      type: "section",
+      text: { type: "mrkdwn", text: `🔥 *Script error*\n\`\`\`${escapeSlack(shortenReason(error))}\`\`\`` },
+    });
+  }
 
-  const skippedBlock = formatReportList("Skipped", skippedReports);
-  if (skippedBlock) lines.push(skippedBlock);
+  // Most actionable first: what broke, what didn't get to run, then minor issues.
+  const lists = [
+    formatReportList("❌ Failed", failures),
+    formatReportList("⏭️ Skipped", skippedReports),
+    formatReportList("⚠️ Passed with warnings", warnings),
+  ].filter(Boolean);
 
-  lines.push(`<${buildSplunkUrl(env)}|View full logs in Splunk>`);
+  if (lists.length > 0) {
+    blocks.push({ type: "divider" });
+    blocks.push(...lists);
+  }
+
+  blocks.push({
+    type: "actions",
+    elements: [{
+      type: "button",
+      text: { type: "plain_text", text: "View logs in Splunk", emoji: true },
+      url: buildSplunkUrl(env),
+    }],
+  });
+
+  // Plain-text fallback used for the push notification / channel preview.
+  const text = `${status.emoji} Sherlock ${envLabel} (${checkType}) — ${success} passed, ${failure} failed, ${skipped} skipped`;
 
   try {
-    await axios.post(webhookUrl, { text: lines.join("\n") }, { timeout: 10000 });
+    await axios.post(webhookUrl, { text, blocks }, { timeout: 10000 });
     console.log("📣 Slack notification sent.");
   } catch (err) {
     console.error("❌ Failed to send Slack notification:", err.message);

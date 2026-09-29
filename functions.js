@@ -2581,6 +2581,26 @@ async function searchAndClickInRepository(page, reportName) {
     return false; // <-- Already correct (timeout)
 }
 
+// Brings the page to the Explore report list (/explore exactly — an opened
+// report lives at /explore/<id>, which has no search bar). Tries the sidebar
+// link first; if it isn't there (e.g. a heavy report view that never rendered
+// the sidebar), navigates by URL so callers don't stay stuck on that page.
+async function goToExploreList(page) {
+    if (new URL(page.url()).pathname === "/explore") return;
+
+    try {
+        const exploreBtn = page.locator("//a[@href='/explore' and @data-sidebar='menu-button']");
+        await exploreBtn.click({ timeout: 10000 });
+        await page.waitForURL("**/explore", { timeout: 15000 });
+    } catch (err) {
+        console.warn(`⚠️ Sidebar Explore link not usable (${err.message.split("\n")[0]}). Navigating by URL instead.`);
+        logSession(`⚠️ Sidebar Explore link not usable. Navigating to /explore by URL instead.`);
+        await page.goto(`${new URL(page.url()).origin}/explore`, { waitUntil: "domcontentloaded", timeout: 60000 });
+    }
+
+    await page.waitForTimeout(2000);
+}
+
 // Function to search and click on a report by name in Explore if it is completed for Multilayer Reports
 async function searchReportWithRetry(page, reportName) {
 
@@ -2591,13 +2611,9 @@ async function searchReportWithRetry(page, reportName) {
 
         try {
 
-            // Ensure we are in /explore
-            if (!page.url().includes("/explore")) {
-                const exploreBtn = page.locator("//a[@href='/explore' and @data-sidebar='menu-button']");
-                await exploreBtn.click({ timeout: 10000 });
-                await page.waitForURL("**/explore", { timeout: 15000 });
-                await page.waitForTimeout(2000);
-            }
+            // Ensure we are on the /explore list, not inside an opened
+            // report (/explore/<id>), which has no search bar.
+            await goToExploreList(page);
 
             const searchInput = page.locator("//input[@placeholder='Search for a file']");
             await searchInput.waitFor({ state: "visible", timeout: 15000 });
@@ -4438,6 +4454,7 @@ module.exports = {
     clearSearchBar,
     uploadAudiences,
     searchReportWithRetry,
+    goToExploreList,
     monitorMultilayerReport,
     checkMultilayerReportStatusOnce,
     finalizeCompletedMultilayerReport,

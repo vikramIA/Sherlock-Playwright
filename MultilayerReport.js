@@ -2,7 +2,7 @@ const { performance } = require('perf_hooks');
 const {
     keplerDatasetsFetch, safeWait, monitorMultilayerReport,
     checkMultilayerReportStatusOnce, finalizeCompletedMultilayerReport,
-    searchAndClickReport, uploadAudiences, verifyAudienceUploadStatus,
+    searchAndClickReport, uploadAudiences, goToExploreList, verifyAudienceUploadStatus,
     clearSearchBar, createPersonaFromReportOrThrow, assertAudienceUploadsSucceeded
 } = require('./functions');
 const { addPersonaReportToTracking } = require('./PersonaStatusFunctions.js');
@@ -163,10 +163,7 @@ async function layeredMerge(page, reportName, Report_TO_Merge, multilayerReports
         });
     }
 
-    const exploreXPath = "//a[@href='/explore' and @data-sidebar='menu-button']";
-    const exploreBtn = page.locator(`xpath=${exploreXPath}`);
-    await exploreBtn.click({ timeout: 10000 });
-    await page.waitForURL('**/explore', { timeout: 10000 });
+    await goToExploreList(page);
     await safeWait(page, 2000);
 
     const endTime = performance.now();
@@ -312,10 +309,7 @@ async function unifiedMerge(page, reportName, Report_TO_Merge, multilayerReports
         });
     }
 
-    const exploreXPath = "//a[@href='/explore' and @data-sidebar='menu-button']";
-    const exploreBtn = page.locator(`xpath=${exploreXPath}`);
-    await exploreBtn.click({ timeout: 10000 });
-    await page.waitForURL('**/explore', { timeout: 10000 });
+    await goToExploreList(page);
     await safeWait(page, 2000);
 
     const endTime = performance.now();
@@ -331,9 +325,7 @@ async function unifiedMerge(page, reportName, Report_TO_Merge, multilayerReports
 // happens later, once, for the whole batch. Throws on any failure so the
 // caller can log it and exclude this report from the batch's status check.
 async function triggerUnifiedMultilayerReport(page, reportName, Report_TO_Merge, multilayerReportsMap) {
-    const exploreXPath = "//a[@href='/explore' and @data-sidebar='menu-button']";
-    await page.locator(`xpath=${exploreXPath}`).click({ timeout: 10000 });
-    await page.waitForURL('**/explore', { timeout: 10000 });
+    await goToExploreList(page);
     await safeWait(page, 3000);
 
     const multilayerBtn = page
@@ -589,6 +581,9 @@ async function MultilayerBatchFlow(page, multilayerConfigs, multilayerReportsMap
 // =============== Main Flow ===============
 async function MultilayerFlow(page, reportName, Report_TO_Merge, MergeType, multilayerReportsMap, UploadAudience, Persona, env) {
     const MAX_GLOBAL_RETRIES = 5;
+    // Each attempt gets a fresh suffix on the original name, not on the
+    // previous attempt's already-suffixed name.
+    const baseReportName = reportName;
     beginFlow("multilayer");
 
     for (let globalAttempt = 0; globalAttempt < MAX_GLOBAL_RETRIES; globalAttempt++) {
@@ -607,7 +602,7 @@ async function MultilayerFlow(page, reportName, Report_TO_Merge, MergeType, mult
 
             const startTime = performance.now();
             const randomSuffix = () => Math.random().toString(36).substring(2, 7);
-            reportName = `${reportName}_${randomSuffix()}`;
+            reportName = `${baseReportName}_${randomSuffix()}`;
 
             for (const num of Report_TO_Merge) {
                 console.log(`✅ Found report ${num}: ${multilayerReportsMap.get(Number(num))}`);
@@ -618,10 +613,7 @@ async function MultilayerFlow(page, reportName, Report_TO_Merge, MergeType, mult
             logSession(`🔄 Starting Multilayer Flow | MergeType: ${MergeType}`);
 
             // ===== Navigation to Explore =====
-            const exploreXPath = "//a[@href='/explore' and @data-sidebar='menu-button']";
-            const exploreBtn = page.locator(`xpath=${exploreXPath}`);
-            await exploreBtn.click({ timeout: 10000 });
-            await page.waitForURL('**/explore', { timeout: 10000 });
+            await goToExploreList(page);
             await safeWait(page, 3000);
             console.log(`✅ Navigated to Explore for report: ${reportName}`);
             logSession(`✅ Navigated to Explore for report: ${reportName}`);

@@ -56,10 +56,11 @@ function beginFlow(flow) {
     currentReportStartedAt = Date.now();
 }
 
-// outcome=warning: the report itself was created and verified, but something
-// around it is off (e.g. WatsonAI never posted its summary, or a prefilled
-// field didn't match). Counted on its own so it's neither hidden inside
-// success nor inflating failure.
+// outcome=warning: the report itself was created and loaded with data, but
+// something around it is off (e.g. WatsonAI never posted its summary, or a
+// prefilled field didn't match). A loaded report is a success, so warnings
+// count toward success; success_with_warnings says how many of those
+// successes carry a warning (named individually in getRunDetails().warnings).
 function getRunSummary() {
     const counts = { success: 0, warning: 0, failure: 0, skipped: 0 };
     for (const { outcome } of runStats.byReport.values()) {
@@ -67,8 +68,8 @@ function getRunSummary() {
     }
     return {
         total_reports: runStats.byReport.size,
-        success: counts.success,
-        warning: counts.warning,
+        success: counts.success + counts.warning,
+        success_with_warnings: counts.warning,
         failure: counts.failure,
         skipped: counts.skipped,
     };
