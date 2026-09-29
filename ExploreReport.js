@@ -100,12 +100,12 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                         });
                     }
 
-                    const total = await verifyAggregatedCount(
-                        page,
-                        inputData.reportName,
-                    );
-
-                    console.log(total);
+                    if (inputData.AggregatedCount?.toUpperCase() === "YES") {
+                        const total = await verifyAggregatedCount(page, inputData.reportName);
+                        console.log(total);
+                    } else {
+                        console.log(`[${inputData.reportName}] ⏭️ Skipping Aggregated Count (AggregatedCount flag not YES)`);
+                    }
 
                     if (
                         Array.isArray(inputData.UploadAudience) &&
@@ -344,12 +344,12 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                         });
                     }
 
-                    const total = await verifyAggregatedCount(
-                        page,
-                        inputData.reportName,
-                    );
-
-                    console.log(total);
+                    if (inputData.AggregatedCount?.toUpperCase() === "YES") {
+                        const total = await verifyAggregatedCount(page, inputData.reportName);
+                        console.log(total);
+                    } else {
+                        console.log(`[${inputData.reportName}] ⏭️ Skipping Aggregated Count (AggregatedCount flag not YES)`);
+                    }
 
 
                     if (
@@ -702,12 +702,12 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                         }
                     }
 
-                    const total = await verifyAggregatedCount(
-                        page,
-                        inputData.reportName
-                    );
-
-                    console.log(total);
+                    if (inputData.AggregatedCount?.toUpperCase() === "YES") {
+                        const total = await verifyAggregatedCount(page, inputData.reportName);
+                        console.log(total);
+                    } else {
+                        console.log(`[${inputData.reportName}] ⏭️ Skipping Aggregated Count (AggregatedCount flag not YES)`);
+                    }
 
                     logSession(`✅ 'places' flow completed successfully: ${inputData.reportName}`, false, { flow: "explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
                 } catch (err) {
@@ -894,12 +894,12 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                         inputData.reportName,
                     );
 
-                    const total = await verifyAggregatedCount(
-                        page,
-                        inputData.reportName,
-                    );
-
-                    console.log(total);
+                    if (inputData.AggregatedCount?.toUpperCase() === "YES") {
+                        const total = await verifyAggregatedCount(page, inputData.reportName);
+                        console.log(total);
+                    } else {
+                        console.log(`[${inputData.reportName}] ⏭️ Skipping Aggregated Count (AggregatedCount flag not YES)`);
+                    }
 
                     console.log(`✅ 'places internal' flow completed successfully for '${inputData.reportName}'.`);
                     logSession(`✅ 'places internal' flow completed successfully for '${inputData.reportName}'.`, false, { flow: "explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });

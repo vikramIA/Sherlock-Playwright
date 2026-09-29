@@ -681,15 +681,38 @@ async function selectDateRange(page, startDate, endDate) {
 
     try {
 
+        const toDayKey = (year, month, day) =>
+            `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+        const startKey = toDayKey(startYear, startMonth, startDay);
+        const endKey = toDayKey(endYear, endMonth, endDay);
+
         await navigateToMonth(startYear, startMonth);
         await selectDay(startYear, startMonth, startDay);
 
         await page.waitForTimeout(300);
 
-        await navigateToMonth(endYear, endMonth);
-        await selectDay(endYear, endMonth, endDay);
+        // The first click already selects a one-day range (from = to = that
+        // day); clicking the same day again toggles the selection off and
+        // leaves the field empty. So for a single-day range, click only once.
+        if (startKey !== endKey) {
+            await navigateToMonth(endYear, endMonth);
+            await selectDay(endYear, endMonth, endDay);
 
-        await page.waitForTimeout(300);
+            await page.waitForTimeout(300);
+        }
+
+        // Verify the picker actually kept the selection — otherwise the form
+        // is submitted with an empty date range, Create Report does nothing,
+        // and Kepler polling waits on the form page.
+        const isDaySelected = async (key) => {
+            const cell = page.locator(`td[data-day="${key}"]`).first();
+            return (await cell.getAttribute("aria-selected")) === "true" ||
+                (await cell.getAttribute("data-selected")) === "true";
+        };
+
+        if (!(await isDaySelected(startKey)) || !(await isDaySelected(endKey))) {
+            throw new Error(`Date range ${startDate} → ${endDate} was not applied in the picker`);
+        }
 
         // Close picker if still open. The range picker renders two
         // .rdp-root panels at once (both visible months), so this must

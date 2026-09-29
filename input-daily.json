@@ -8,7 +8,8 @@
       "StartDateRange": "2026-06-01",
       "EndDateRange": "2026-06-07",
       "attributes": "Lunch",
-      "Persona": "YES"
+      "Persona": "YES",
+      "AggregatedCount": "YES"
     },
     {
       "reportType": "Device Level Visits",
@@ -151,7 +152,9 @@
       "StartDateRange": "2026-06-01",
       "EndDateRange": "2026-06-01",
       "Rating": "2-5",
-      "age": "18-25"
+      "age": "18-25",
+      "AggregatedCount": "YES"
+      
     },
     {
       "reportType": "Quality of Life Index",
@@ -163,7 +166,7 @@
     {
       "reportType": "Places",
       "reportName": "Daily_Places_For_Multilayer",
-      "ReportNumber": 5,
+      "ReportNumber": 4,
       "place": "facility.education.university",
       "location": "Pune, Maharashtra, India",
       "StartDateRange": "2026-06-01",
@@ -191,7 +194,7 @@
       "MergeType": "Unified",
       "reportName": "Daily_Places-QLI-Unified",
       "Report_TO_Merge": [
-        5,
+        4,
         3
       ]
     },
@@ -215,7 +218,7 @@
       "MergeType": "Layered",
       "reportName": "Daily_Places-QLI-Layered",
       "Report_TO_Merge": [
-        5,
+        4,
         3
       ]
     }
