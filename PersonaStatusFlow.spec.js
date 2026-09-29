@@ -1,6 +1,7 @@
 const { chromium } = require("@playwright/test");
 const { loginAndNavigate } = require("./functions");
 const { runPersonaStatusCheckFlow } = require("./PersonaStatusFlow.js");
+const { initPersonaTracking } = require("./PersonaStatusFunctions.js");
 const input = require("./input.json");
 const envConfig = require("./Environments.json");
 const { initLogger, getSessionHeader, getLastSessionNumber, logSession } = require("./Logger");
@@ -20,6 +21,8 @@ if (!envConfig[env]) {
 
 const { baseUrl, email, password, secret } = envConfig[env];
 initLogger(env);
+// Detail runs only - daily runs check (and clean up) their own entries inside HomeDashboard.spec.js
+initPersonaTracking("detail");
 
 async function main() {
   const newSession = getLastSessionNumber() + 1;

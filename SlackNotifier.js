@@ -101,6 +101,58 @@ function formatReportList(title, items) {
   };
 }
 
+const OUTCOME_ICONS = { success: "✅", warning: "⚠️", failure: "❌", skipped: "⏭️" };
+
+// Rolls one report's per-category upload rows up to one mark per platform
+// (e.g. "Meta ✓ · Google pending"): any failed category fails the platform,
+// otherwise any still-Pending one leaves it pending.
+function summarizeUploadsByPlatform(uploads) {
+  const byPlatform = new Map();
+  for (const { platform, status } of uploads) {
+    if (!byPlatform.has(platform)) byPlatform.set(platform, []);
+    byPlatform.get(platform).push(String(status).toLowerCase());
+  }
+
+  return Array.from(byPlatform, ([platform, statuses]) => {
+    if (statuses.some(s => s === "unsuccessful" || s === "error")) return `${platform} ✗`;
+    if (statuses.some(s => s !== "successful" && s !== "completed")) return `${platform} pending`;
+    return `${platform} ✓`;
+  }).join(" · ");
+}
+
+function describePersonaStatus(result) {
+  const status = String(result.status).toLowerCase();
+  if (status === "not_found") return "Not found in Explore";
+  if (status !== "complete") return result.reason?.startsWith("status_check_error") ? "Status check error" : `Still ${result.status}`;
+
+  const parts = [result.validation === "passed" ? "Complete · validated" : `Complete · validation ${result.validation}`];
+  if (result.audienceExport === "failed") parts.push("audience export failed");
+  if (result.audienceUploadStatus?.length > 0) parts.push(summarizeUploadsByPlatform(result.audienceUploadStatus));
+  return parts.join(" · ");
+}
+
+// The Persona reports a daily run checked from the previous run. They get their own section
+// because a Persona report shares its source report's name, so in the general lists yesterday's
+// Persona check can't be told apart from today's report. Passes are listed too, so it's visible
+// which reports were checked (and dropped from tracking).
+function formatPersonaStatusList(results) {
+  if (!results || results.length === 0) return null;
+
+  const shown = results.slice(0, MAX_LISTED_REPORTS).map(result => {
+    const icon = OUTCOME_ICONS[result.outcome] || "•";
+    const line = `• ${icon} \`${escapeSlack(result.reportName)}\` — ${escapeSlack(describePersonaStatus(result))}`;
+    return result.reason ? `${line}\n      _${escapeSlack(shortenReason(result.reason))}_` : line;
+  });
+
+  const remaining = results.length - shown.length;
+  if (remaining > 0) shown.push(`_…and ${remaining} more (see Splunk)_`);
+
+  return {
+    type: "section",
+    text: { type: "mrkdwn", text: `*🧬 Persona reports from previous run (${results.length})*\n${shown.join("\n")}` },
+  };
+}
+
 async function sendSlackStatus(summary) {
   const {
     env,
@@ -116,6 +168,7 @@ async function sendSlackStatus(summary) {
     warnings,
     failures,
     skippedReports,
+    personaStatusResults = [],
     totalDuration,
     error,
   } = summary;
@@ -165,11 +218,16 @@ async function sendSlackStatus(summary) {
     });
   }
 
+  // Persona status checks still count in the totals above, but are listed only in their own section.
+  const personaReportNames = new Set(personaStatusResults.map(r => r.reportName));
+  const withoutPersonaChecks = items => (items || []).filter(({ report }) => !personaReportNames.has(report));
+
   // Most actionable first: what broke, what didn't get to run, then minor issues.
   const lists = [
-    formatReportList("❌ Failed", failures),
-    formatReportList("⏭️ Skipped", skippedReports),
-    formatReportList("⚠️ Passed with warnings", warnings),
+    formatReportList("❌ Failed", withoutPersonaChecks(failures)),
+    formatReportList("⏭️ Skipped", withoutPersonaChecks(skippedReports)),
+    formatPersonaStatusList(personaStatusResults),
+    formatReportList("⚠️ Passed with warnings", withoutPersonaChecks(warnings)),
   ].filter(Boolean);
 
   if (lists.length > 0) {

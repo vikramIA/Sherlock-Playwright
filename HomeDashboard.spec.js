@@ -12,6 +12,8 @@ const { initLogger, getSessionHeader, getLastSessionNumber, logSession, getRunSu
 const NetworkLogger = require("./networkLogger.js");
 const RecordingManager = require("./Recording.js");
 const { sendSlackStatus } = require("./SlackNotifier");
+const { initPersonaTracking, loadTracking } = require("./PersonaStatusFunctions.js");
+const { runDailyPersonaStatusCheck } = require("./PersonaStatusFlow.js");
 
 const { exec } = require("child_process");
 
@@ -56,6 +58,7 @@ const input = require(inputFile);
 
 const { baseUrl, email, password, secret } = envConfig[env];
 initLogger(env); // ✅ initialize env-based logging
+initPersonaTracking(checkType); // Persona reports tracked per env + check type (personaTracking/<env>_<checkType>.json)
 
 
 function cleanupOldSessions(baseDir, keepLast = 5, foldersList = null) {
@@ -92,7 +95,7 @@ function formatDuration(ms) {
   return `${s}s`;
 }
 
-function countPlannedReports(input) {
+function countPlannedReports(input, personaStatusChecks = 0) {
   const explore = input.explore?.length || 0;
   const persona = input.Persona?.length || 0;
   const personaPostUpload = (input.Persona || []).reduce(
@@ -115,9 +118,10 @@ function countPlannedReports(input) {
   const csAgent = input.CSAgent?.length > 0 ? input.CSAgent.length : 0;
 
   const totalReportsPlanned =
-    explore + persona + personaPostUpload + reportForMultilayer + multilayer + watsonAI + csAgent;
+    explore + persona + personaPostUpload + reportForMultilayer + multilayer + watsonAI + csAgent + personaStatusChecks;
 
   return {
+    persona_status_check: personaStatusChecks,
     explore,
     persona,
     persona_post_upload: personaPostUpload,
@@ -150,7 +154,9 @@ async function main() {
   const newSession = getLastSessionNumber() + 1;
   logSession(getSessionHeader(newSession), true);
 
-  const plannedReports = countPlannedReports(input);
+  // Daily runs also check the Persona reports earlier daily runs created (see runDailyPersonaStatusCheck)
+  const personaStatusChecks = checkType === "daily" ? loadTracking(env).length : 0;
+  const plannedReports = countPlannedReports(input, personaStatusChecks);
   logSession("Planned run scope", false, {
     flow: "run_plan",
     check_type: checkType,
@@ -161,6 +167,7 @@ async function main() {
 
   let browser, context, page, recording;
   let scriptError = null;
+  let personaStatusResults = [];
   const sessionDir = createSessionFolder();
   const tracePath = path.join(sessionDir, 'trace.zip');
 
@@ -224,6 +231,20 @@ async function main() {
       throw err;
     }
 
+    // Daily only: check (and drop from tracking) the Persona reports earlier daily runs created,
+    // before today's flows add new entries. Detail runs use PersonaStatusFlow.spec.js instead.
+    if (checkType === "daily") {
+      try {
+        personaStatusResults = await runDailyPersonaStatusCheck(page, env);
+      } catch (err) {
+        console.error(`❌ Daily Persona status check failed: ${err.message}`);
+        logSession(`❌ Daily Persona status check failed: ${err.message}`);
+      }
+
+      // The check can leave the page on a Persona report or in Settings - start today's flows from home
+      await page.goto(baseUrl, { waitUntil: "networkidle", timeout: 60000 }).catch(() => { });
+      await safeWait(page, 5000);
+    }
 
 
     // Explore Flow
@@ -316,12 +337,14 @@ async function main() {
       reportsAttempted,
       reportsNotRun,
       success: summary.success,
-      warning: summary.warning,
+      successWithWarnings: summary.success_with_warnings,
       failure: summary.failure,
       skipped: summary.skipped,
       warnings: runDetails.warnings,
       failures: runDetails.failures,
       skippedReports: runDetails.skipped,
+      personaStatusResults,
+      totalDuration: formatDuration(totalDurationMs),
       error: scriptError,
     });
   }

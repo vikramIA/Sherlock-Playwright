@@ -2,7 +2,21 @@ const fs = require('fs');
 const path = require('path');
 const { logSession, beginFlow } = require('./Logger');
 
-const TRACKING_FILE = path.join(__dirname, 'personaTracking.json');
+// One tracking file per env + check type (e.g. personaTracking/qa_daily.json). dev/qa/prod runs go
+// in parallel, and each process rewrites its whole file - sharing one file between them lost entries.
+// Keeping daily and detail apart means the daily cleanup never deletes a detail run's entries.
+const TRACKING_DIR = path.join(__dirname, 'personaTracking');
+let trackingCheckType = 'detail';
+
+// Call once at startup, like initLogger(env), so the report flows that call
+// addPersonaReportToTracking(env, ...) write to the file for the current check type.
+function initPersonaTracking(checkType) {
+    trackingCheckType = checkType;
+}
+
+function getTrackingFile(env) {
+    return path.join(TRACKING_DIR, `${env}_${trackingCheckType}.json`);
+}
 
 // App reports exactly 4 statuses: Queued, In Progress, Incomplete, Complete.
 // Only Queued/In Progress still have a chance of reaching Complete - Incomplete is terminal (won't complete).
@@ -68,43 +82,48 @@ async function locatePersonaReportRow(page, reportName) {
 }
 
 // === Tracking store helpers ===
-// Structure: { [env]: [ { reportName, status, createdAt, lastCheckedAt, reason, validation } ] }
+// Structure (per file): [ { reportName, status, createdAt, lastCheckedAt, reason, validation } ]
 
-function loadTracking() {
-    if (!fs.existsSync(TRACKING_FILE)) return {};
+function loadTracking(env) {
+    const trackingFile = getTrackingFile(env);
+    if (!fs.existsSync(trackingFile)) return [];
     try {
-        return JSON.parse(fs.readFileSync(TRACKING_FILE, 'utf-8'));
+        const data = JSON.parse(fs.readFileSync(trackingFile, 'utf-8'));
+        if (!Array.isArray(data)) throw new Error('expected an array of tracked reports');
+        return data;
     } catch (err) {
         // Don't silently treat a corrupt file as empty - the next save would then
         // permanently overwrite it, discarding whatever was tracked before. Back it up first.
-        const backupPath = `${TRACKING_FILE}.corrupted-${Date.now()}`;
+        const backupPath = `${trackingFile}.corrupted-${Date.now()}`;
         try {
-            fs.copyFileSync(TRACKING_FILE, backupPath);
+            fs.copyFileSync(trackingFile, backupPath);
         } catch { /* best-effort backup */ }
 
-        console.error(`❌ personaTracking.json is corrupted (${err.message}). Backed up to ${backupPath} and starting fresh.`);
-        logSession(`❌ personaTracking.json is corrupted (${err.message}). Backed up to ${backupPath} and starting fresh.`);
-        return {};
+        console.error(`❌ ${path.basename(trackingFile)} is corrupted (${err.message}). Backed up to ${backupPath} and starting fresh.`);
+        logSession(`❌ ${path.basename(trackingFile)} is corrupted (${err.message}). Backed up to ${backupPath} and starting fresh.`);
+        return [];
     }
 }
 
-function saveTracking(data) {
+function saveTracking(env, entries) {
+    const trackingFile = getTrackingFile(env);
+    fs.mkdirSync(TRACKING_DIR, { recursive: true });
+
     // Write to a temp file and rename over the real one, so a process interrupted mid-write
     // (Ctrl+C, crash) leaves the previous valid file intact instead of a truncated/corrupt one.
-    const tempPath = `${TRACKING_FILE}.tmp`;
-    fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), 'utf-8');
-    fs.renameSync(tempPath, TRACKING_FILE);
+    const tempPath = `${trackingFile}.tmp`;
+    fs.writeFileSync(tempPath, JSON.stringify(entries, null, 2), 'utf-8');
+    fs.renameSync(tempPath, trackingFile);
 }
 
 // Called right after a Persona report is confirmed created, so its completion can be checked later.
 // options.uploadAudience carries the trigger-time input.json "UploadAudience": ["META", "GOOGLE"]
-// value forward into personaTracking.json, since the status-check run happens much later in a
+// value forward into the tracking file, since the status-check run happens much later in a
 // separate process invocation with no access to input.json.
 function addPersonaReportToTracking(env, reportName, options = {}) {
-    const data = loadTracking();
-    if (!data[env]) data[env] = [];
+    const entries = loadTracking(env);
 
-    const alreadyTracked = data[env].some(
+    const alreadyTracked = entries.some(
         r => r.reportName === reportName && !isTerminalStatus(r.status)
     );
 
@@ -114,7 +133,7 @@ function addPersonaReportToTracking(env, reportName, options = {}) {
         return;
     }
 
-    data[env].push({
+    entries.push({
         reportName,
         status: 'pending',
         createdAt: new Date().toISOString(),
@@ -122,10 +141,10 @@ function addPersonaReportToTracking(env, reportName, options = {}) {
         uploadAudience: Array.isArray(options.uploadAudience) ? options.uploadAudience : []
     });
 
-    saveTracking(data);
+    saveTracking(env, entries);
 
-    console.log(`📌 Persona report '${reportName}' added to tracking for status check (env: ${env}).`);
-    logSession(`📌 Persona report '${reportName}' added to tracking for status check (env: ${env}).`, false, { report: reportName, env });
+    console.log(`📌 Persona report '${reportName}' added to tracking for status check (env: ${env}, ${trackingCheckType}).`);
+    logSession(`📌 Persona report '${reportName}' added to tracking for status check (env: ${env}, ${trackingCheckType}).`, false, { report: reportName, env });
 }
 
 // Single status check for one Persona report (no long polling - meant to be called once per run)
@@ -667,9 +686,8 @@ async function exportPersonaAudience(page, reportName, uploadAudience) {
 //
 // Rows can sit in "Pending" for a while after the upload is triggered, so this polls the table
 // (same 1-minute recheck cadence as the existing verifyAudienceUploadStatus in functions.js) until
-// every category/platform combo resolves to a terminal status, up to maxWaitMinutes - capped at
-// 15 min by default here (shorter than that function's 30, since a partial per-run wait is enough
-// to catch the common case and this covers up to 8 rows per call, not just one).
+// every category/platform combo resolves to a terminal status, up to maxWaitMinutes (30 by default;
+// the daily run passes a shorter wait so it doesn't hold up the rest of the daily check).
 async function checkPersonaAudienceUploadStatus(page, reportName, categoryNames, platforms, maxWaitMinutes = 30) {
     const startTime = Date.now();
     const MAX_WAIT_MS = maxWaitMinutes * 60 * 1000;
@@ -856,6 +874,7 @@ async function validatePersonaReport(page, reportName, reportContainer) {
 }
 
 module.exports = {
+    initPersonaTracking,
     isTerminalStatus,
     loadTracking,
     saveTracking,
