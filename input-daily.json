@@ -226,7 +226,7 @@
   "WatsonAI": [
     {
       "reportType": "Quality of Life Index",
-      "query": "Analyze QLI distribution across Maharashtra",
+      "query": "Create a report of QLI distribution across Maharashtra",
       "verification": {
         "location": "[State] Maharashtra, India"
       },
