@@ -1425,15 +1425,32 @@ async function keplerDatasetsFetch(page, reportName) {
                 });
             }
 
-            // 2️⃣ Summary Page (Large dataset detected)
+            // 2️⃣ Summary Page (Large dataset detected) — validated the same way as Aggregated Count:
+            // success if the Total value renders as a positive number
             if (currentURL.includes("/explore/summary?id=") || (await summaryMsg.isVisible())) {
+                const summary = await readSummaryPageTotal(page);
+                const doneSec = Math.floor((Date.now() - startTime) / 1000);
+                const doneMin = ((Date.now() - startTime) / 60000).toFixed(2);
+
+                let text, status;
+                if (summary.total > 0) {
+                    text = `Summary Page loaded with data | Total: ${summary.raw}`;
+                    status = "success";
+                } else if (summary.raw) {
+                    text = `Summary Page loaded but Total is '${summary.raw}' (no data)`;
+                    status = "no_data";
+                } else {
+                    text = "Summary Page detected but its Total value never rendered. Please verify manually.";
+                    status = "summary";
+                }
+
                 return log({
                     reportName,
-                    url: currentURL,
-                    text: "Summary Page detected (likely large dataset). Please verify manually.",
-                    status: "summary",
-                    timeMinutes: elapsedMin,
-                    timeSeconds: elapsedSec
+                    url: page.url(),
+                    text,
+                    status,
+                    timeMinutes: doneMin,
+                    timeSeconds: doneSec
                 });
             }
 
@@ -1505,6 +1522,22 @@ async function keplerDatasetsFetch(page, reportName) {
             timeSeconds: elapsedSec
         });
     }
+}
+
+// Summary page (large dataset / Aggregated Count) renders its Total in this element.
+const SUMMARY_TOTAL_VALUE_SELECTOR = 'div.truncate.text-left.font-medium.leading-tight.false:visible';
+
+// Waits for the summary page's Total value (same check as verifyAggregatedCount) and
+// returns { raw, total }: raw is the title text ('' if it never rendered), total its number.
+async function readSummaryPageTotal(page, timeoutMs = 5 * 60 * 1000) {
+    const totalValueLocator = page.locator(SUMMARY_TOTAL_VALUE_SELECTOR).first();
+    try {
+        await totalValueLocator.waitFor({ state: 'visible', timeout: timeoutMs });
+    } catch {
+        return { raw: '', total: NaN };
+    }
+    const raw = ((await totalValueLocator.getAttribute('title')) || '').trim();
+    return { raw, total: Number(raw.replace(/,/g, '')) };
 }
 
 //Report to Persona Workflow
@@ -1881,18 +1914,42 @@ async function selectCountry(page, countryInput, reportName) {
         await input.waitFor({ state: 'visible', timeout: 10000 });
         await input.fill(countryInput);
 
-        // Attempt to click exact match in autocomplete dropdown
-        const dropdownOption = page.locator(`//div[contains(@class,'autocomplete')]//div[text()='${countryInput}']`);
-        if (await dropdownOption.isVisible()) {
+        // Wait for the exact match in the autocomplete dropdown — isVisible() doesn't wait,
+        // so checking it right after fill() raced the filtering and fell through to
+        // ArrowDown+Enter, which picked whatever was first (e.g. Australia instead of India).
+        const expected = countryInput.trim().toLowerCase();
+        const dropdownOption = page.getByRole('option', { name: countryInput, exact: true })
+            .or(page.locator(`//div[contains(@class,'autocomplete')]//div[text()='${countryInput}']`))
+            .first();
+        let selectionMethod;
+        try {
+            await dropdownOption.waitFor({ state: 'visible', timeout: 10000 });
             await dropdownOption.click();
-        } else {
-            // fallback: ArrowDown + Enter
+            selectionMethod = 'dropdown option';
+        } catch {
+            // fallback: ArrowDown + Enter — by now the list has had time to filter to the typed country
             await input.press('ArrowDown');
             await input.press('Enter');
+            selectionMethod = 'ArrowDown+Enter';
         }
 
-        console.log(`[${reportName}] ✅ Country selected: '${countryInput}'`);
-        logSession(`[${reportName}] ✅ Country selected: '${countryInput}'`);
+        // Verify what actually got selected. The input is cleared after a pick and the chosen
+        // country is rendered elsewhere in the field, so check the input value and the field's text.
+        await page.waitForTimeout(500);
+        const inputValue = ((await input.inputValue().catch(() => '')) || '').trim();
+        const fieldText = ((await countryLabel.locator('xpath=..').innerText().catch(() => '')) || '')
+            .replace(/select country/i, '').replace(/\s+/g, ' ').trim();
+
+        if (inputValue && inputValue.toLowerCase() !== expected) {
+            throw new Error(`Expected country '${countryInput}' but '${inputValue}' was selected`);
+        }
+        if (!inputValue && !fieldText.toLowerCase().includes(expected)) {
+            throw new Error(`Expected country '${countryInput}' but field shows '${fieldText || '(empty)'}'`);
+        }
+
+        const shown = inputValue || countryInput;
+        console.log(`[${reportName}] ✅ Country selected: '${shown}' (via ${selectionMethod})`);
+        logSession(`[${reportName}] ✅ Country selected: '${shown}' (via ${selectionMethod})`);
     } catch (err) {
         console.error(`[${reportName}] ❌ Failed to select Country: ${err.message}`);
         logSession(`[${reportName}] ❌ Failed to select Country: ${err.message}`);

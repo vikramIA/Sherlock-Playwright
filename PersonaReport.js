@@ -156,6 +156,20 @@ async function PersonaFlow(page, inputData, env) {
 
             let matchRateValue = null;
             let skipCurrentReport = false;
+            // Set when the uploaded report itself is broken (failed status, missing, 0% / no match rate).
+            // The upload report is then a failure and its postUploadReports are logged as skipped.
+            let failureReason = null;
+
+            // Reports that depend on this upload can't run once it fails — log each one as
+            // skipped so it shows up in the summary instead of silently counting as "not run".
+            const skipDependentReports = (reason) => {
+                for (const dependent of inputData.postUploadReports || []) {
+                    if (!dependent?.reportName) continue;
+                    const msg = `⏭️ Skipping dependent report "${dependent.reportName}" — upload report "${inputData.reportName}" failed (${reason}).`;
+                    console.log(msg);
+                    logSession(msg, false, { flow: "persona_post_upload", report: dependent.reportName, report_type: dependent.reportType, outcome: "skipped", reason: `parent_failed: ${reason}` });
+                }
+            };
 
             try {
                 console.log(`✅ Selected ${type} report type`);
@@ -204,27 +218,31 @@ async function PersonaFlow(page, inputData, env) {
                                 // Search & click report
                                 const repoClicked = await searchAndClickInRepository(page, inputData.reportName);
                                 if (!repoClicked) {
-                                    const msg = `❌ Skipping report "${inputData.reportName}" because searchAndClickInRepository returned false.`;
+                                    // Report failed / never completed — there's no Details panel, so don't wait on Match Rate.
+                                    failureReason = "upload_report_failed";
+                                    const msg = `❌ Upload report "${inputData.reportName}" failed or did not complete in repository.`;
                                     console.error(msg);
-                                    logSession(msg, false, { flow: "persona", report: inputData.reportName, outcome: "skipped", reason: "repository_click_failed" });
+                                    logSession(msg, false, { flow: "persona", report: inputData.reportName, outcome: "failure", reason: failureReason });
                                     skipCurrentReport = true;
-                                }
+                                } else {
+                                    // Extract Match Rate
+                                    matchRateValue = await MatchRateFetch(page, inputData.reportName);
 
-                                // Extract Match Rate
-                                matchRateValue = await MatchRateFetch(page, inputData.reportName);
+                                    if (matchRateValue === null) {
+                                        failureReason = "match_rate_fetch_failed";
+                                        const msg = `⛔ Match Rate fetch failed for "${inputData.reportName}".`;
+                                        console.error(msg);
+                                        logSession(msg, false, { flow: "persona", report: inputData.reportName, outcome: "failure", reason: failureReason });
+                                        skipCurrentReport = true;
+                                    }
 
-                                if (matchRateValue === null) {
-                                    const msg = `⛔ Match Rate fetch failed for "${inputData.reportName}". Skipping this report.`;
-                                    console.error(msg);
-                                    logSession(msg, false, { flow: "persona", report: inputData.reportName, outcome: "skipped", reason: "match_rate_fetch_failed" });
-                                    skipCurrentReport = true;
-                                }
-
-                                if (matchRateValue === 0) {
-                                    const msg = `⛔ Match Rate is 0 for "${inputData.reportName}". Skipping further actions.`;
-                                    console.log(msg);
-                                    logSession(msg, false, { flow: "persona", report: inputData.reportName, outcome: "skipped", reason: "match_rate_zero", match_rate: matchRateValue });
-                                    skipCurrentReport = true;
+                                    if (matchRateValue === 0) {
+                                        failureReason = "match_rate_zero";
+                                        const msg = `⛔ Match Rate is 0 for "${inputData.reportName}".`;
+                                        console.error(msg);
+                                        logSession(msg, false, { flow: "persona", report: inputData.reportName, outcome: "failure", reason: failureReason, match_rate: matchRateValue });
+                                        skipCurrentReport = true;
+                                    }
                                 }
 
 
@@ -233,18 +251,21 @@ async function PersonaFlow(page, inputData, env) {
                         } catch (err) {
                             console.error(`❌ Match Rate extraction failed: ${err.message}`);
                             logSession(`❌ Match Rate extraction failed: ${err.message}`, false, { flow: "persona", report: inputData.reportName, outcome: "failure", reason: err.message });
+                            failureReason = err.message;
                             skipCurrentReport = true;
                         }
 
                     } else {
                         console.log(`❌ Report NOT found in repository: ${inputData.reportName}`);
-                        logSession(`❌ Report NOT found in repository: ${inputData.reportName}`, false, { flow: "persona", report: inputData.reportName, outcome: "skipped", reason: "not_found_in_repository" });
+                        failureReason = "not_found_in_repository";
+                        logSession(`❌ Report NOT found in repository: ${inputData.reportName}`, false, { flow: "persona", report: inputData.reportName, outcome: "failure", reason: failureReason });
                         skipCurrentReport = true;
                     }
 
                 } catch (err) {
                     console.error(`❌ Repository check failed: ${err.message}`);
                     logSession(`❌ Repository check failed: ${err.message}`, false, { flow: "persona", report: inputData.reportName, outcome: "failure", reason: err.message });
+                    failureReason = err.message;
                     skipCurrentReport = true;
                 }
 
@@ -351,7 +372,11 @@ async function PersonaFlow(page, inputData, env) {
                     }
                 }
 
-                if (skipCurrentReport) {
+                if (failureReason) {
+                    console.error(`❌ ${type} flow failed for '${inputData.reportName}': ${failureReason}`);
+                    logSession(`❌ ${type} flow failed for '${inputData.reportName}': ${failureReason}`, false, { flow: "persona", report: inputData.reportName, report_type: type, outcome: "failure", reason: failureReason });
+                    skipDependentReports(failureReason);
+                } else if (skipCurrentReport) {
                     console.log(`⏭️ ${type} flow ended without completing downstream steps for '${inputData.reportName}'.`);
                     logSession(`⏭️ ${type} flow ended without completing downstream steps for '${inputData.reportName}'.`, false, { flow: "persona", report: inputData.reportName, report_type: type, outcome: "skipped" });
                 } else {
@@ -362,6 +387,8 @@ async function PersonaFlow(page, inputData, env) {
             } catch (err) {
                 console.error(`❌ Error in PostUploadExploreReport Creation flow: ${err.message}`);
                 logSession(`❌ Error in PostUploadExploreReport Creation flow: ${err.message}`, false, { flow: "persona", report: inputData.reportName, report_type: type, outcome: "failure", reason: err.message });
+                // Upload never got going (e.g. wrong country, form error) — dependents can't run.
+                if (!getReportOutcome(inputData.postUploadReports?.[0]?.reportName)) skipDependentReports(err.message);
                 return;
             }
         }
