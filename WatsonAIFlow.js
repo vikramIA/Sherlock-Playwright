@@ -14,7 +14,7 @@ const {
     watsonAIKeplerValidation
 } = require("./WatsonAIFunctions.js");
 
-const { verifyDefaultBentoCharts } = require("./functions.js");
+const { verifyDefaultBentoCharts, SummaryPageReportError } = require("./functions.js");
 const { logSession, beginFlow } = require("./Logger");
 
 
@@ -22,9 +22,39 @@ async function watsonAIFlow(page, reports) {
 
     // =====================================================
     // OPEN WATSONAI ONCE
+    // If it can't be opened (e.g. the previous flow left the tab frozen on
+    // a heavy report), retry once from the home page; if it still fails,
+    // mark each WatsonAI report failed and return — throwing here used to
+    // abort the whole run and skip CS Agent.
     // =====================================================
 
-    await openWatsonAI(page);
+    try {
+        await openWatsonAI(page);
+    } catch (firstError) {
+        console.error(`⚠️ Opening WatsonAI failed, retrying from home page: ${firstError.message}`);
+        logSession(`⚠️ Opening WatsonAI failed, retrying from home page: ${firstError.message.split("\n")[0]}`);
+
+        try {
+            await page.goto(new URL("/", page.url()).href, { waitUntil: "domcontentloaded", timeout: 60000 });
+            await page.waitForTimeout(5000);
+            await openWatsonAI(page);
+        } catch (retryError) {
+            const reason = `watsonai_not_opened: ${retryError.message.split("\n")[0]}`;
+
+            for (const inputData of reports) {
+                beginFlow("watson_ai");
+                logSession(
+                    `❌ WatsonAI ${inputData.reportType} failed — WatsonAI could not be opened.`,
+                    false,
+                    { flow: "watson_ai", report: `WatsonAI ${inputData.reportType} (name not generated)`, report_type: inputData.reportType, outcome: "failure", reason }
+                );
+            }
+
+            console.error(`❌ WatsonAI could not be opened. Skipping WatsonAI reports and continuing the run.`);
+            logSession(`❌ WatsonAI could not be opened. Skipping WatsonAI reports and continuing the run.`);
+            return;
+        }
+    }
 
 
     // =====================================================
@@ -115,7 +145,7 @@ async function watsonAIFlow(page, reports) {
             // SUBMIT REPORT
             // =================================================
 
-            const previousOpenReportCount =
+            const submitBaseline =
                 await clickWatsonAISubmit(page);
 
 
@@ -128,7 +158,7 @@ async function watsonAIFlow(page, reports) {
                     page,
                     inputData.expectedMessage,
                     inputData.reportType,
-                    previousOpenReportCount
+                    submitBaseline
                 );
 
             // At this point Open Report was clicked
@@ -245,11 +275,17 @@ async function watsonAIFlow(page, reports) {
             // BENTO VALIDATION
             // =================================================
 
-            await verifyDefaultBentoCharts(
-                page,
-                inputData.reportType,
-                actualReportName
-            );
+            try {
+                await verifyDefaultBentoCharts(
+                    page,
+                    inputData.reportType,
+                    actualReportName
+                );
+            } catch (bentoError) {
+                // Large report on the summary page with data: loaded, just no Bento.
+                if (!(bentoError instanceof SummaryPageReportError)) throw bentoError;
+                reportWarnings.push(`summary_page_with_data: Total ${bentoError.totalRaw}`);
+            }
 
 
             // =================================================

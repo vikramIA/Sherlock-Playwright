@@ -3,7 +3,7 @@ const {
     selectBehaviors, selectAgeRanges, clearSearchBar, uploadAudiences, searchAndClickReport, selectDateRange, clickCreateReportButton, enterReportName,
     selectExploreReportType, keplerDatasetsFetch, createPersonaFromReportOrThrow, assertAudienceUploadsSucceeded, selectSubCategory, selectBrands, SelectRating, SelectReviewCount,
     SelectVisitDuration, SelectAverageDailyVisits, SelectAverageMonthlyVisits, SelectAverageDailyDevices, SelectAverageMonthlyDevices,
-    selectAvailableAttributes, SelectQualityLifeScore, safeWait } = require('./functions');
+    selectAvailableAttributes, SelectQualityLifeScore, safeWait, logExploreFlowError } = require('./functions');
 
 
 async function postUploadExploreReportFlow(page, inputData, isForMultilayer = false, multilayerReportsMap = false) {
@@ -107,8 +107,7 @@ async function postUploadExploreReportFlow(page, inputData, isForMultilayer = fa
 
                     logSession(`✅ 'place level visits' flow completed successfully: ${inputData.reportName}`, false, { flow: "post_upload_explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
                 } catch (err) {
-                    console.error(`❌ Error in 'place level visits' flow: ${err.message}`);
-                    logSession(`❌ Error in 'place level visits' flow: ${err.message}`, false, { flow: "post_upload_explore", report: inputData.reportName, outcome: "failure", reason: err.message });
+                    logExploreFlowError(`'place level visits' flow`, err, { flow: "post_upload_explore", report: inputData.reportName });
                 }
             }
 
@@ -207,8 +206,7 @@ async function postUploadExploreReportFlow(page, inputData, isForMultilayer = fa
 
                     logSession(`✅ 'device level visits' flow completed successfully: ${inputData.reportName}`, false, { flow: "post_upload_explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
                 } catch (err) {
-                    console.error(`❌ Error in 'device level visits' flow: ${err.message}`);
-                    logSession(`❌ Error in 'device level visits' flow: ${err.message}`, false, { flow: "post_upload_explore", report: inputData.reportName, outcome: "failure", reason: err.message });
+                    logExploreFlowError(`'device level visits' flow`, err, { flow: "post_upload_explore", report: inputData.reportName });
                 }
             }
 
@@ -304,8 +302,7 @@ async function postUploadExploreReportFlow(page, inputData, isForMultilayer = fa
                             }
 
                         } catch (err) {
-                            console.error(`❌ Error in 'places' flow for ${PlaceReportName}: ${err.message}`);
-                            logSession(`❌ Error in 'places' flow for ${PlaceReportName}: ${err.message}`, false, { flow: "post_upload_explore", report: PLVReportInputs.reportName, linked_report: PlaceReportName, outcome: "failure", reason: err.message });
+                            logExploreFlowError(`'places' flow for ${PlaceReportName}`, err, { flow: "post_upload_explore", report: PLVReportInputs.reportName, linked_report: PlaceReportName });
                         } finally {
                             // Always clear search bar and continue safely
                             await safeWait(page, 2000);
@@ -361,8 +358,7 @@ async function postUploadExploreReportFlow(page, inputData, isForMultilayer = fa
                                 }
                             }
                         } catch (err) {
-                            console.error(`❌ Error in 'places' flow for ${PlaceReportName}: ${err.message}`);
-                            logSession(`❌ Error in 'places' flow for ${PlaceReportName}: ${err.message}`, false, { flow: "post_upload_explore", report: DLVReportInputs.reportName, linked_report: PlaceReportName, outcome: "failure", reason: err.message });
+                            logExploreFlowError(`'places' flow for ${PlaceReportName}`, err, { flow: "post_upload_explore", report: DLVReportInputs.reportName, linked_report: PlaceReportName });
                         } finally {
                             // Always clear search bar and continue safely
                             await safeWait(page, 2000);
@@ -374,8 +370,7 @@ async function postUploadExploreReportFlow(page, inputData, isForMultilayer = fa
 
                     logSession(`✅ 'places' flow completed successfully: ${inputData.reportName}`, false, { flow: "post_upload_explore", report: inputData.reportName, report_type: inputData.reportType, outcome: "success" });
                 } catch (err) {
-                    console.error(`❌ Error in 'places' flow: ${err.message}`);
-                    logSession(`❌ Error in 'places' flow: ${err.message}`, false, { flow: "post_upload_explore", report: inputData.reportName, outcome: "failure", reason: err.message });
+                    logExploreFlowError(`'places' flow`, err, { flow: "post_upload_explore", report: inputData.reportName });
                 }
             }
         } catch (err) {

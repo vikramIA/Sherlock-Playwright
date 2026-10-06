@@ -22,6 +22,10 @@ const { getLatestWatsonAIReplyText } = require("./WatsonAIFunctions.js");
 const CS_AGENT_DISCONNECT_PATTERN =
     /CS agent is having trouble connecting|CS agent disconnected/;
 
+// Old and current (Oct 2026 dev) wording of the "start cs agent" reply.
+const CS_AGENT_ACTIVATED_PATTERN =
+    /Agent mode activated\.|customer-success agent is on/i;
+
 // Races a target check against a disconnect-banner check over the same
 // window, WITHOUT waiting for both to fully settle (Promise.allSettled
 // would block for the full timeout on whichever one loses, even if the
@@ -80,15 +84,16 @@ async function waitForCSAgentElementOrDisconnect(page, targetLocator, timeout) {
     }
 }
 
-// Same idea, for the count-based waits used by the Phase 3 pipeline
-// (`expect(locator).toHaveCount(...)`), which don't fit the plain
-// waitFor() shape above.
+// Same idea, for the count-based waits used by the Phase 3 pipeline, which
+// don't fit the plain waitFor() shape above. "At least" rather than an exact
+// count: a live run saw the multilayer count jump past i+1 between polls,
+// which an exact toHaveCount() can miss and then time out on.
 async function expectCSAgentCountOrDisconnect(page, targetLocator, count, timeout) {
 
     const disconnectLocator = page.getByText(CS_AGENT_DISCONNECT_PATTERN).last();
 
     const result = await raceCSAgentSignal(
-        () => expect(targetLocator).toHaveCount(count, { timeout }),
+        () => expect.poll(() => targetLocator.count(), { timeout }).toBeGreaterThanOrEqual(count),
         disconnectLocator,
         timeout
     );
@@ -125,7 +130,13 @@ async function activateCSAgent(page) {
         console.log(`✅ Sent 'start cs agent' command.`);
         logSession(`✅ Sent 'start cs agent' command.`);
 
-        const activatedText = page.getByText("Agent mode activated.").last();
+        // The activation reply was reworded on dev (Oct 2026) from "Agent
+        // mode activated." to "The customer-success agent is on. I'll take
+        // you through onboarding — ...". Accept either wording, or the phase
+        // selector itself, so a further rewording doesn't break activation.
+        const activatedText = page.getByText(CS_AGENT_ACTIVATED_PATTERN)
+            .or(page.getByPlaceholder("Select one phase selection"))
+            .last();
 
         try {
             await waitForCSAgentElementOrDisconnect(page, activatedText, 30000);
@@ -140,7 +151,7 @@ async function activateCSAgent(page) {
             const replyText = await getLatestWatsonAIReplyText(page);
 
             throw new Error(
-                `CS Agent did not activate ('Agent mode activated.' not shown within 30s). WatsonAI replied: '${replyText}'`
+                `CS Agent did not activate (no activation message or phase selector within 30s). WatsonAI replied: '${replyText}'`
             );
         }
 
@@ -240,9 +251,13 @@ async function selectCSAgentSavedRun(page, savedRunName) {
         await waitForCSAgentElementOrDisconnect(page, runCombobox, 30000);
         await runCombobox.click();
 
+        // Case-insensitive: the session is created as e.g.
+        // "old_world_hospitality_2026-10-06" but listed here as
+        // "Old_world_hospitality_2026-10-06".
+        const escapedRunName = savedRunName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
         const runOption = page.getByRole("option", {
-            name: savedRunName,
-            exact: true
+            name: new RegExp(`^${escapedRunName}$`, "i")
         }).last();
 
         await runOption.waitFor({ state: "visible", timeout: 15000 });

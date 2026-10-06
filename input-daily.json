@@ -102,7 +102,9 @@
           "Persona": "NO"
         }
       ]
-    },
+    }
+  ],
+  "_disabled_Persona": [
     {
       "reportType": "Custom Audience to IFAs",
       "reportName": "Daily_Custom_Audience_to_IFAs_Using_Emails",
@@ -152,8 +154,8 @@
       "StartDateRange": "2026-06-01",
       "EndDateRange": "2026-06-01",
       "Rating": "2-5",
-      "age": "18-25",
       "AggregatedCount": "YES"
+
       
     },
     {

@@ -100,42 +100,93 @@ async function waitForWatsonAIChatReady(page, timeout = 30000) {
 // Close icon of a report opened in Focus Mode.
 const WATSONAI_REPORT_CLOSE_ICON = "svg.cursor-pointer.fill-button-destructive-base";
 
-// Every WatsonAI-generated report is expected to get a summary. DLV/PLV
-// summaries land ~3-60s after the report finishes loading; QLI currently
-// gets none (no summary request is made — confirmed in the dev network log),
-// which is an app bug. A missing summary makes the report outcome=warning
-// in WatsonAIFlow rather than hiding it inside success.
-const WATSONAI_SUMMARY_TIMEOUT_MS = 60 * 1000;
+// Every WatsonAI-generated report is expected to get a summary. A missing
+// summary makes the report outcome=warning in WatsonAIFlow rather than
+// hiding it inside success.
+//
+// Since the Oct 2026 dev update the summary no longer waits for Open Report.
+// Right after Submit, WatsonAI posts 'Your report "X" is ready.' and either:
+//   - inlines the summary into that same reply (seen for QLI), or
+//   - adds "I'm loading its data now — the summary will appear here as soon
+//     as it lands." and posts the summary as a separate reply later (seen
+//     ~30-70s after Submit for DLV/PLV), whether or not the report is opened.
+// So the summary is looked for in every reply since Submit, not as a new
+// reply after Open Report (which never arrives now and timed out as a false
+// "summary_missing" warning).
+const WATSONAI_SUMMARY_TIMEOUT_MS = 120 * 1000;
 
-async function waitForWatsonAIReportSummary(page, copyCountBeforeOpen, timeout = WATSONAI_SUMMARY_TIMEOUT_MS) {
+const WATSONAI_REPORT_READY_PATTERN = /Your report\s+["“][^"”]*["”]\s+is ready\.?/i;
+const WATSONAI_SUMMARY_PENDING_PATTERN = /I['’]m loading its data now[^.]*\./i;
+
+// Texts of the WatsonAI replies from index `fromIndex` on (same
+// "message block that owns the Copy response button" as
+// getLatestWatsonAIReplyText).
+async function getWatsonAIReplyTexts(page, fromIndex) {
+    return watsonAICopyResponseButtons(page).evaluateAll((buttons, from) =>
+        buttons.slice(from).map(button => {
+            let block = button.parentElement;
+            while (block && !(block.tagName === "DIV" && block.querySelector("p"))) {
+                block = block.parentElement;
+            }
+            return block ? block.innerText.replace(/\s+/g, " ").trim() : "";
+        }),
+        fromIndex
+    );
+}
+
+// The reply text once the "is ready" / "loading its data" boilerplate is
+// removed — anything substantial left over is the actual summary.
+function stripWatsonAIReadyBoilerplate(text) {
+    return text
+        .replace(WATSONAI_REPORT_READY_PATTERN, "")
+        .replace(WATSONAI_SUMMARY_PENDING_PATTERN, "")
+        .trim();
+}
+
+async function waitForWatsonAIReportSummary(page, copyCountBeforeSubmit, timeout = WATSONAI_SUMMARY_TIMEOUT_MS) {
 
     console.log("⏳ Waiting for WatsonAI report summary...");
     logSession("⏳ Waiting for WatsonAI report summary...");
 
-    try {
-        await expect(watsonAICopyResponseButtons(page)).toHaveCount(
-            copyCountBeforeOpen + 1,
-            { timeout }
-        );
+    const MIN_SUMMARY_LENGTH = 80;
+    const deadline = Date.now() + timeout;
 
-        // The Copy button renders with the first chunk of the summary;
-        // give the rest of the stream a moment to finish scrolling the chat.
-        await page.waitForTimeout(3000);
+    while (Date.now() < deadline) {
 
-        const summaryText = await getLatestWatsonAIReplyText(page, 200);
+        const replies = await getWatsonAIReplyTexts(page, copyCountBeforeSubmit).catch(() => []);
 
-        console.log(`✅ WatsonAI report summary received: '${summaryText}'`);
-        logSession(`✅ WatsonAI report summary received: '${summaryText}'`);
+        // Only look from the "is ready" reply on, so the (long) form reply
+        // can never pass as the summary even if its Copy button rendered
+        // after the baseline was taken. Falls back to every reply since
+        // Submit if that wording ever changes.
+        const readyIndex = replies.findIndex(text => WATSONAI_REPORT_READY_PATTERN.test(text));
 
-        return true;
+        const summary = replies
+            .slice(Math.max(readyIndex, 0))
+            .map(stripWatsonAIReadyBoilerplate)
+            .find(text => text.length >= MIN_SUMMARY_LENGTH);
 
-    } catch {
+        if (summary) {
 
-        console.log(`⚠️ WatsonAI report summary did not appear within ${Math.round(timeout / 1000)}s. Continuing — report will be marked as a warning.`);
-        logSession(`⚠️ WatsonAI report summary did not appear within ${Math.round(timeout / 1000)}s. Continuing — report will be marked as a warning.`);
+            // The summary streams in; give the rest of it a moment to
+            // finish scrolling the chat before Focus Mode is clicked.
+            await page.waitForTimeout(3000);
 
-        return false;
+            const summaryText = summary.slice(0, 200);
+
+            console.log(`✅ WatsonAI report summary received: '${summaryText}'`);
+            logSession(`✅ WatsonAI report summary received: '${summaryText}'`);
+
+            return true;
+        }
+
+        await page.waitForTimeout(2000);
     }
+
+    console.log(`⚠️ WatsonAI report summary did not appear within ${Math.round(timeout / 1000)}s. Continuing — report will be marked as a warning.`);
+    logSession(`⚠️ WatsonAI report summary did not appear within ${Math.round(timeout / 1000)}s. Continuing — report will be marked as a warning.`);
+
+    return false;
 }
 
 // Closes a report left open in Focus Mode and confirms the chat prompt is
@@ -857,6 +908,11 @@ async function clickWatsonAISubmit(page) {
             exact: true
         }).count();
 
+        // Baseline for the report summary, which now starts arriving
+        // right after Submit (see waitForWatsonAIReportSummary).
+        const copyCountBeforeSubmit =
+            await watsonAICopyResponseButtons(page).count();
+
         await submitButton.click();
 
         console.log(
@@ -867,7 +923,7 @@ async function clickWatsonAISubmit(page) {
             "✅ WatsonAI Submit button clicked."
         );
 
-        return previousOpenReportCount;
+        return { previousOpenReportCount, copyCountBeforeSubmit };
 
     } catch (error) {
 
@@ -888,7 +944,7 @@ async function clickWatsonAISubmit(page) {
 // 6. VERIFY REPORT CREATION SUCCESS
 // =========================================================
 
-async function verifyWatsonAISuccess(page, expectedMessage, expectedReportType, previousOpenReportCount = 0) {
+async function verifyWatsonAISuccess(page, expectedMessage, expectedReportType, { previousOpenReportCount = 0, copyCountBeforeSubmit = 0 } = {}) {
 
     const reportTypeMap = {
         "place level visits": 9,
@@ -1101,10 +1157,6 @@ async function verifyWatsonAISuccess(page, expectedMessage, expectedReportType, 
         // CLICK OPEN REPORT
         // =========================================================
 
-        // Baseline for the post-open summary reply (see below).
-        const copyCountBeforeOpen =
-            await watsonAICopyResponseButtons(page).count();
-
         await openReportButton.click();
 
         console.log(
@@ -1311,16 +1363,15 @@ async function verifyWatsonAISuccess(page, expectedMessage, expectedReportType, 
         // WAIT FOR THE POST-OPEN WATSONAI SUMMARY
         // =========================================================
 
-        // After Open Report, WatsonAI now streams a data summary (tables +
-        // "You could ask: ...") into the chat below the report card. While
-        // it streams, the chat keeps auto-scrolling, so the Focus Mode
-        // button never holds still long enough to be clicked — that is
-        // what left Focus Mode half-open, the close icon unclickable and
-        // the prompt unusable for the next query. Wait for the summary
-        // reply first. A missing summary doesn't stop the Kepler/Bento
-        // checks — WatsonAIFlow turns it into outcome=warning.
+        // WatsonAI streams a data summary (tables + "You could ask: ...")
+        // into the chat. While it streams, the chat keeps auto-scrolling,
+        // so the Focus Mode button never holds still long enough to be
+        // clicked — that is what left Focus Mode half-open, the close icon
+        // unclickable and the prompt unusable for the next query. Wait for
+        // the summary first. A missing summary doesn't stop the
+        // Kepler/Bento checks — WatsonAIFlow turns it into outcome=warning.
         reportTypeValidation.summaryReceived =
-            await waitForWatsonAIReportSummary(page, copyCountBeforeOpen);
+            await waitForWatsonAIReportSummary(page, copyCountBeforeSubmit);
 
 
         // =========================================================
