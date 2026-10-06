@@ -3033,6 +3033,41 @@ async function finalizeCompletedMultilayerReport(page, reportName, reportContain
 
 // Function to verify default Bento charts for a given report type and name
 
+// Thrown by verifyDefaultBentoCharts when the platform sent a large report to
+// its summary page (/explore/summary?id=...) and that page shows a positive
+// Total. The report DID load with data — there is just no Bento layout to
+// validate — so flows record it as success-with-warning, not failure.
+class SummaryPageReportError extends Error {
+    constructor(reportName, url, totalRaw) {
+        super(`Report '${reportName}' loaded on the large-dataset summary page (${url}) with Total ${totalRaw} — Bento validation and later report-page steps were skipped.`);
+        this.name = "SummaryPageReportError";
+        this.url = url;
+        this.totalRaw = totalRaw;
+    }
+}
+
+// Throws SummaryPageReportError if the page is the summary page with data.
+async function throwIfSummaryPageWithData(page, reportName, timeoutMs) {
+    const url = page.url();
+    if (!url.includes("/explore/summary?id=")) return;
+    const summary = await readSummaryPageTotal(page, timeoutMs);
+    if (summary.total > 0) {
+        throw new SummaryPageReportError(reportName, url, summary.raw);
+    }
+}
+
+// Logs the outcome of a failed explore report flow: success-with-warning for
+// a summary-page report that loaded with data, failure for everything else.
+function logExploreFlowError(label, err, meta) {
+    if (err instanceof SummaryPageReportError) {
+        console.log(`⚠️ ${label} completed with warnings: ${err.message}`);
+        logSession(`⚠️ ${label} completed with warnings: ${err.message}`, false, { ...meta, outcome: "warning", reason: `summary_page_with_data: Total ${err.totalRaw}` });
+        return;
+    }
+    console.error(`❌ Error in ${label}: ${err.message}`);
+    logSession(`❌ Error in ${label}: ${err.message}`, false, { ...meta, outcome: "failure", reason: err.message });
+}
+
 async function verifyDefaultBentoCharts(
     page,
     reportType,
@@ -3104,6 +3139,10 @@ async function verifyDefaultBentoCharts(
         `🔍 Starting Bento validation for '${reportName}'...`
     );
 
+    // Already on the summary page: no Bento will ever render, so don't wait
+    // 120s for it — the Kepler step has already read its Total.
+    await throwIfSummaryPageWithData(page, reportName, 30000);
+
 
     // =====================================================
     // 1. WAIT FOR DEFAULT BENTO CARD
@@ -3134,6 +3173,8 @@ async function verifyDefaultBentoCharts(
         let diagnosedStatus = "bento_render_timeout";
 
         if (currentUrl.includes("/explore/summary?id=")) {
+            // Redirected late — still a loaded report if the Total has data.
+            await throwIfSummaryPageWithData(page, reportName, 30000);
             diagnosedReason = `Report redirected to the large-dataset summary page (${currentUrl}) instead of the normal report view — this page does not render the standard Bento layout.`;
             diagnosedStatus = "report_redirected_to_summary";
         } else {
@@ -4622,5 +4663,7 @@ module.exports = {
     verifyDefaultBentoCharts,
     verifyAggregatedCount,
     verifyAudienceUploadStatus,
-    verifyAppendAudience
+    verifyAppendAudience,
+    SummaryPageReportError,
+    logExploreFlowError
 }

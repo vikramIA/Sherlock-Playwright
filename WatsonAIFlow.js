@@ -14,7 +14,7 @@ const {
     watsonAIKeplerValidation
 } = require("./WatsonAIFunctions.js");
 
-const { verifyDefaultBentoCharts } = require("./functions.js");
+const { verifyDefaultBentoCharts, SummaryPageReportError } = require("./functions.js");
 const { logSession, beginFlow } = require("./Logger");
 
 
@@ -275,11 +275,17 @@ async function watsonAIFlow(page, reports) {
             // BENTO VALIDATION
             // =================================================
 
-            await verifyDefaultBentoCharts(
-                page,
-                inputData.reportType,
-                actualReportName
-            );
+            try {
+                await verifyDefaultBentoCharts(
+                    page,
+                    inputData.reportType,
+                    actualReportName
+                );
+            } catch (bentoError) {
+                // Large report on the summary page with data: loaded, just no Bento.
+                if (!(bentoError instanceof SummaryPageReportError)) throw bentoError;
+                reportWarnings.push(`summary_page_with_data: Total ${bentoError.totalRaw}`);
+            }
 
 
             // =================================================
