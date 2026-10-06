@@ -22,9 +22,39 @@ async function watsonAIFlow(page, reports) {
 
     // =====================================================
     // OPEN WATSONAI ONCE
+    // If it can't be opened (e.g. the previous flow left the tab frozen on
+    // a heavy report), retry once from the home page; if it still fails,
+    // mark each WatsonAI report failed and return — throwing here used to
+    // abort the whole run and skip CS Agent.
     // =====================================================
 
-    await openWatsonAI(page);
+    try {
+        await openWatsonAI(page);
+    } catch (firstError) {
+        console.error(`⚠️ Opening WatsonAI failed, retrying from home page: ${firstError.message}`);
+        logSession(`⚠️ Opening WatsonAI failed, retrying from home page: ${firstError.message.split("\n")[0]}`);
+
+        try {
+            await page.goto(new URL("/", page.url()).href, { waitUntil: "domcontentloaded", timeout: 60000 });
+            await page.waitForTimeout(5000);
+            await openWatsonAI(page);
+        } catch (retryError) {
+            const reason = `watsonai_not_opened: ${retryError.message.split("\n")[0]}`;
+
+            for (const inputData of reports) {
+                beginFlow("watson_ai");
+                logSession(
+                    `❌ WatsonAI ${inputData.reportType} failed — WatsonAI could not be opened.`,
+                    false,
+                    { flow: "watson_ai", report: `WatsonAI ${inputData.reportType} (name not generated)`, report_type: inputData.reportType, outcome: "failure", reason }
+                );
+            }
+
+            console.error(`❌ WatsonAI could not be opened. Skipping WatsonAI reports and continuing the run.`);
+            logSession(`❌ WatsonAI could not be opened. Skipping WatsonAI reports and continuing the run.`);
+            return;
+        }
+    }
 
 
     // =====================================================

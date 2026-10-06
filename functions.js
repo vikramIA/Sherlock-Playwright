@@ -514,15 +514,132 @@ async function navigateAndCreateExploreReport(page, inputData, maxRetries = 5) {
             if (attempt >= maxRetries) {
                 console.error(`❌ All ${maxRetries} attempts failed for report: ${inputData.reportName}`);
                 logSession(`❌ All ${maxRetries} attempts failed for report: ${inputData.reportName}`, false, { report: inputData.reportName });
-                return;
+                // Throw so the caller marks this report failed right away instead of
+                // carrying on into report-type selection on a page that never opened.
+                throw new Error(`Could not open Explore 'Create Report' after ${maxRetries} attempts: ${err.message.split("\n")[0]}`);
             } else {
                 console.log(`🔄 Retrying...`);
                 logSession(`🔄 Retrying...`);
-                await page.reload();
-                await page.waitForTimeout(2000); // Give the page time to reload
+                // Go straight to /explore instead of reload(): reload() re-opens whatever
+                // page we're stuck on — e.g. a heavy report that froze the tab, which then
+                // freezes again on every retry.
+                try {
+                    const exploreUrl = new URL("/explore", page.url()).href;
+                    await page.goto(exploreUrl, { waitUntil: "domcontentloaded", timeout: 60000 });
+                } catch (gotoErr) {
+                    logSession(`⚠️ Navigation to /explore failed: ${gotoErr.message.split("\n")[0]}`);
+                }
+                await page.waitForTimeout(2000); // Give the page time to load
             }
         }
     }
+}
+
+// =========================================================
+// Shared picker for the cmdk multi-select fields on the Explore/Persona
+// forms (Locations, Sub Category, Brands, Behaviors, Age Range).
+//
+// Verified live on qa: after typing, the dropdown keeps showing the OLD
+// unfiltered list for ~0.5-2s before the search result arrives, and cmdk
+// auto-highlights its first item. The old fill -> ArrowDown -> Enter
+// therefore picked the 2nd item of the stale list (Brands "McDonald's"
+// became "A Burger", Age "18-25" became "26-35"), and once the filtered
+// list had arrived nothing was highlighted, so Enter picked nothing (prod:
+// brand typed but never applied -> unfiltered 304K report hung the page).
+//
+// So: wait for an option whose text/title matches the value, click that
+// exact option, then verify a chip with that value exists. Never fall back
+// to "first option" — a wrong filter silently produces wrong data.
+// =========================================================
+const normalizeOptionText = (text) => (text || "")
+    .replace(/[’‘]/g, "'")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+
+// Options/chips can carry a type prefix ("[District] Pune, ..."). Ignore it
+// only when the input value doesn't specify one itself.
+const LOCATION_TYPE_PREFIX = /^\[[^\]]*\]\s*/;
+function optionTextMatches(candidate, value) {
+    const expected = normalizeOptionText(value);
+    const actual = normalizeOptionText(candidate);
+    if (actual === expected) return true;
+    return !LOCATION_TYPE_PREFIX.test(expected) && actual.replace(LOCATION_TYPE_PREFIX, "") === expected;
+}
+
+async function waitForFieldEnabled(inputField, fieldLabel, timeout = 30000) {
+    // A disabled field is wrapped in a "cursor-not-allowed" div (e.g. Brands
+    // stays disabled until Places is picked).
+    const disabledWrapper = inputField.locator("xpath=ancestor::div[contains(@class,'cursor-not-allowed')]");
+    const deadline = Date.now() + timeout;
+    while (await disabledWrapper.count() > 0) {
+        if (Date.now() > deadline) {
+            throw new Error(`'${fieldLabel}' field stayed disabled for ${timeout / 1000}s`);
+        }
+        await inputField.page().waitForTimeout(500);
+    }
+}
+
+async function getMultiselectChips(inputField) {
+    const container = inputField.locator("xpath=ancestor::div[@id='multiselect-input-container'][1]");
+    return container.locator("p").evaluateAll(els =>
+        els.map(e => ({ title: e.getAttribute("title") || "", text: e.innerText || "" }))
+    );
+}
+
+async function selectMultiselectOption(page, inputField, value, fieldLabel, reportName, timeout = 20000) {
+    const chipMatches = chip => optionTextMatches(chip.title, value) || optionTextMatches(chip.text, value);
+
+    await inputField.waitFor({ state: "visible", timeout: 10000 });
+    await waitForFieldEnabled(inputField, fieldLabel);
+
+    if ((await getMultiselectChips(inputField)).some(chipMatches)) {
+        console.log(`[${reportName}] ${fieldLabel} '${value}' already selected.`);
+        logSession(`[${reportName}] ${fieldLabel} '${value}' already selected.`);
+        return;
+    }
+
+    await inputField.click();
+    await inputField.fill(value);
+
+    // Options live in the listbox the input points at via aria-controls.
+    const listId = await inputField.getAttribute("aria-controls");
+    const items = listId
+        ? page.locator(`[id="${listId}"] [cmdk-item]`)
+        : page.locator("[cmdk-item]");
+
+    let matchIndex = -1;
+    let lastSeen = [];
+    const deadline = Date.now() + timeout;
+    while (Date.now() < deadline) {
+        const options = await items.evaluateAll(els =>
+            els.map(e => ({ title: e.getAttribute("title") || "", text: e.innerText || "" }))
+        ).catch(() => []);
+        lastSeen = options.map(o => o.text.trim());
+        matchIndex = options.findIndex(chipMatches);
+        if (matchIndex !== -1) break;
+        await page.waitForTimeout(300);
+    }
+
+    if (matchIndex === -1) {
+        throw new Error(
+            `${fieldLabel} option '${value}' not found in dropdown after ${timeout / 1000}s. ` +
+            `Options shown: ${lastSeen.slice(0, 10).join(", ") || "(none)"}`
+        );
+    }
+
+    const option = items.nth(matchIndex);
+    const pickedText = (await option.innerText()).trim();
+    await option.click();
+
+    // Verify the chip was actually added — this is what reaches the backend.
+    await expect.poll(
+        async () => (await getMultiselectChips(inputField)).some(chipMatches),
+        { timeout: 5000, message: `${fieldLabel} chip for '${value}' did not appear after selecting it` }
+    ).toBe(true);
+
+    console.log(`[${reportName}] ${fieldLabel} '${value}' selected (option: '${pickedText}').`);
+    logSession(`[${reportName}] ${fieldLabel} '${value}' selected (option: '${pickedText}').`, false, { report: reportName, field: fieldLabel, value, option: pickedText });
 }
 
 // Adds multiple locations
@@ -546,13 +663,9 @@ async function selectLocations(page, locationString, reportName) {
         await locationInput.waitFor({ state: 'visible', timeout: 10000 });
 
         // Step 4: Enter each location
-        const locations = locationString.split(';').map(loc => loc.trim());
+        const locations = locationString.split(';').map(loc => loc.trim()).filter(Boolean);
         for (const loc of locations) {
-            await locationInput.fill(loc);
-            await page.waitForTimeout(5000); // wait for the dropdown to appear and select the location
-            await locationInput.press('ArrowDown');
-            await page.waitForTimeout(2000);
-            await locationInput.press('Enter');
+            await selectMultiselectOption(page, locationInput, loc, "Location", reportName, 30000);
 
             console.log(`✅ Location '${loc}' selected successfully for report '${reportName}'.`);
             logSession(`✅ Location '${loc}' selected successfully for report '${reportName}'.`, false, { report: reportName, location: loc });
@@ -585,12 +698,20 @@ async function selectPlaces(page, placeString, reportName) {
             .first();
 
         const places = placeString.split(';').map(p => p.trim()).filter(Boolean);
+        // Selected places render as ant-select tags (e.g. "food.restaurant.american" -> "American")
+        const selectedTags = placesLabel.locator("xpath=following-sibling::div").first().locator(".ant-select-selection-item");
 
         for (const place of places) {
+            const tagsBefore = await selectedTags.count();
             await searchInput.fill(place);   // Playwright auto-waits
             await searchInput.press('Enter'); // Hit Enter to select
-            console.log(`✅ Place '${place}' selected for report '${reportName}'.`);
-            logSession(`✅ Place '${place}' selected for report '${reportName}'.`);
+            await expect.poll(() => selectedTags.count(), {
+                timeout: 5000,
+                message: `Place '${place}' was not added (no new tag after Enter)`
+            }).toBeGreaterThan(tagsBefore);
+            const added = (await selectedTags.last().innerText()).trim();
+            console.log(`✅ Place '${place}' selected for report '${reportName}' (tag: '${added}').`);
+            logSession(`✅ Place '${place}' selected for report '${reportName}' (tag: '${added}').`);
         }
 
         // Close the dropdown
@@ -599,6 +720,7 @@ async function selectPlaces(page, placeString, reportName) {
     } catch (err) {
         console.error(`❌ Error selecting Places for report '${reportName}': ${err.message}`);
         logSession(`❌ Error selecting Places for report '${reportName}': ${err.message}`);
+        throw err; // without a place the report runs unfiltered
     }
 }
 
@@ -754,10 +876,20 @@ async function selectAvailableAttributes(page, attributeString, reportName) {
         const searchInput = dropdown.locator("input[role='combobox']");
 
         // Type each attribute and hit Enter
+        const selectedTags = dropdown.locator(".ant-select-selection-item");
         const attributes = attributeString.split(';').map(a => a.trim()).filter(Boolean);
         for (const attr of attributes) {
+            const tagsBefore = await selectedTags.count();
             await searchInput.fill(attr);       // type the attribute
             await searchInput.press('Enter');   // hit Enter to select
+            await expect.poll(() => selectedTags.count(), {
+                timeout: 5000,
+                message: `Attribute '${attr}' was not added (no new tag after Enter)`
+            }).toBeGreaterThan(tagsBefore);
+            const added = (await selectedTags.last().innerText()).trim();
+            if (normalizeOptionText(added) !== normalizeOptionText(attr)) {
+                throw new Error(`Attribute '${attr}' expected but '${added}' was selected`);
+            }
             console.log(`✅ Attribute '${attr}' selected for report '${reportName}'.`);
             logSession(`✅ Attribute '${attr}' selected for report '${reportName}'.`);
         }
@@ -765,6 +897,7 @@ async function selectAvailableAttributes(page, attributeString, reportName) {
     } catch (err) {
         console.error(`❌ Error selecting Available Attributes for '${reportName}': ${err.message}`);
         logSession(`❌ Error selecting Available Attributes for '${reportName}': ${err.message}`);
+        throw err; // a missing filter silently produces a wrong report
     }
 }
 
@@ -781,28 +914,20 @@ async function selectSubCategory(page, SubcategoryString, reportName) {
         const label = page.locator("//label[contains(text(), 'Sub Category')]");
         await label.scrollIntoViewIfNeeded();
 
-        // Click the container specific to this label
-        const container = page.locator(
-            "//label[contains(normalize-space(.),'Sub Category')]/following::div[@id='multiselect-input-container'][1]"
-        );
-        await container.first().click({ force: true });
-
-        // Input inside container
-        const inputField = container.first().locator("input[name='sub_category']");
+        const inputField = page.locator("input[name='sub_category']");
 
         const subcategories = SubcategoryString.split(';').map(s => s.trim()).filter(Boolean);
         for (const subcat of subcategories) {
-            await inputField.fill(subcat);
-            await page.waitForTimeout(200);      // wait for dropdown suggestions
-            await inputField.press('Enter');     // select
-            console.log(`[${reportName}] Sub Category '${subcat}' selected.`);
-            logSession(`[${reportName}] Sub Category '${subcat}' selected.`);
+            await selectMultiselectOption(page, inputField, subcat, "Sub Category", reportName);
         }
+
+        await inputField.press('Escape'); // close dropdown
 
     } catch (err) {
         const errMsg = `❌ Error selecting Sub Category for report '${reportName}': ${err.message}`;
         console.error(errMsg);
         logSession(errMsg);
+        throw err; // a missing filter silently produces a wrong (often huge) report
     }
 }
 
@@ -822,16 +947,11 @@ async function selectBrands(page, BrandsString, reportName) {
 
         // Locate input field
         const inputField = page.locator("//input[@name='brands']");
-        await inputField.click(); // Playwright auto-waits for visibility
 
         // Split brands and select each
         const brands = BrandsString.split(';').map(b => b.trim()).filter(Boolean);
         for (const brand of brands) {
-            await inputField.fill(brand);          // type brand
-            await inputField.press('ArrowDown');   // select dropdown suggestion
-            await inputField.press('Enter');       // confirm selection
-            console.log(`[${reportName}] Brand '${brand}' selected via dropdown.`);
-            logSession(`[${reportName}] Brand '${brand}' selected via dropdown.`);
+            await selectMultiselectOption(page, inputField, brand, "Brand", reportName);
         }
 
         // Exit the dropdown gracefully
@@ -841,6 +961,7 @@ async function selectBrands(page, BrandsString, reportName) {
         const errMsg = `❌ Error selecting Brands for report '${reportName}': ${err.message}`;
         console.error(errMsg);
         logSession(errMsg);
+        throw err; // a missing filter silently produces a wrong (often huge) report
     }
 }
 
@@ -1738,24 +1859,15 @@ async function selectBehaviors(page, behaviorsString, reportName) {
     // Try locating Behavior(s) input field
     let inputField = page.locator("//label[normalize-space(text())='Behavior(s)']//following::input[1]");
 
-    await inputField.waitFor({ state: 'visible' });
-    await inputField.click();
-
     const behaviors = behaviorsString.split(';').map(b => b.trim()).filter(Boolean);
 
     for (const behavior of behaviors) {
         try {
-            await inputField.type(behavior);
-            await page.waitForTimeout(500); // Optional
-            await inputField.press('ArrowDown');
-            await page.waitForTimeout(500); // Optional
-            await inputField.press('Enter');
-
-            console.log(`[${reportName}] Behavior '${behavior}' selected via dropdown.`);
-            logSession(`[${reportName}] Behavior '${behavior}' selected via dropdown.`);
+            await selectMultiselectOption(page, inputField, behavior, "Behavior", reportName);
         } catch (err) {
             console.log(`[${reportName}] Error selecting behavior '${behavior}': ${err.message}`);
             logSession(`[${reportName}] Error selecting behavior '${behavior}': ${err.message}`);
+            throw err; // a missing filter silently produces a wrong report
         }
     }
 
@@ -1782,24 +1894,16 @@ async function selectAgeRanges(page, ageRangeString, reportName) {
         inputField = page.locator("//input[@name='age']");
     }
 
-    await inputField.waitFor({ state: 'visible' });
-    await inputField.click();
-
     // Split age ranges
     const ageRanges = ageRangeString.split(';').map(a => a.trim()).filter(Boolean);
 
     for (const age of ageRanges) {
         try {
-            await inputField.type(age);   // type directly
-            // Select first dropdown item with ArrowDown + Enter
-            await inputField.press('ArrowDown');
-            await inputField.press('Enter');
-
-            console.log(`[${reportName}] Age Range '${age}' selected via dropdown.`);
-            logSession(`[${reportName}] Age Range '${age}' selected via dropdown.`);
+            await selectMultiselectOption(page, inputField, age, "Age Range", reportName);
         } catch (err) {
             console.log(`[${reportName}] Error selecting Age Range '${age}': ${err.message}`);
             logSession(`[${reportName}] Error selecting Age Range '${age}': ${err.message}`);
+            throw err; // a missing filter silently produces a wrong report
         }
     }
 
