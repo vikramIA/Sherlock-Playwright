@@ -145,7 +145,7 @@ async function watsonAIFlow(page, reports) {
             // SUBMIT REPORT
             // =================================================
 
-            const previousOpenReportCount =
+            const submitBaseline =
                 await clickWatsonAISubmit(page);
 
 
@@ -158,7 +158,7 @@ async function watsonAIFlow(page, reports) {
                     page,
                     inputData.expectedMessage,
                     inputData.reportType,
-                    previousOpenReportCount
+                    submitBaseline
                 );
 
             // At this point Open Report was clicked
