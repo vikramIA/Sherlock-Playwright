@@ -389,6 +389,15 @@ async function triggerUnifiedMultilayerReport(page, reportName, Report_TO_Merge,
     const createButtonXPath = "//div[normalize-space()='Create Multilayer']";
     await page.locator(`xpath=${createButtonXPath}`).click({ timeout: 10000 });
 
+    // Confirm the click actually submitted: the modal (and its Create button)
+    // closes on success. On prod session 42 it never closed, the report was
+    // never created, yet this logged "Triggered" and every later step failed.
+    try {
+        await page.locator(`xpath=${createButtonXPath}`).waitFor({ state: 'hidden', timeout: 60000 });
+    } catch {
+        throw new Error("'Create Multilayer' was clicked but the modal did not close within 60s — the report was not submitted");
+    }
+
     // Let the creation submission settle before navigating off to trigger the
     // next report in the batch — without this, immediately clicking back to
     // Explore for the next item can interrupt this report's creation before

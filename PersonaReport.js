@@ -159,6 +159,9 @@ async function PersonaFlow(page, inputData, env) {
             // Set when the uploaded report itself is broken (failed status, missing, 0% / no match rate).
             // The upload report is then a failure and its postUploadReports are logged as skipped.
             let failureReason = null;
+            // Post-upload Explore reports that failed or were skipped. They log their
+            // own outcome; the upload report itself still counts as a success.
+            const downstreamIssues = [];
 
             // Reports that depend on this upload can't run once it fails — log each one as
             // skipped so it shows up in the summary instead of silently counting as "not run".
@@ -186,8 +189,11 @@ async function PersonaFlow(page, inputData, env) {
                     console.log("✅ Data uploaded successfully verified.");
                     logSession("✅ Data uploaded successfully verified.");
                 } catch (err) {
-                    console.error(`❌ Upload success message NOT found: ${err.message}`);
-                    logSession(`❌ Upload success message NOT found: ${err.message}`);
+                    // Toast can be missed/slow even when the upload worked — the repository
+                    // status check below is the real pass/fail signal.
+                    const firstLine = err.message.split("\n")[0];
+                    console.warn(`⚠️ Upload success message not seen (continuing to repository check): ${firstLine}`);
+                    logSession(`⚠️ Upload success message not seen (continuing to repository check): ${firstLine}`);
                 }
 
                 // STEP 3: Redirect to repository
@@ -339,7 +345,10 @@ async function PersonaFlow(page, inputData, env) {
                                     const msg = `❌ Cannot open main report in repository for "${inputData.reportName}". Skipping this Explore report.`;
                                     console.error(msg);
                                     logSession(msg, false, { flow: "persona_post_upload", report: report.reportName, outcome: "skipped", reason: "repository_click_failed" });
-                                    skipCurrentReport = true;
+                                    downstreamIssues.push(report.reportName);
+                                    // Without this the child report still ran from the wrong page and
+                                    // its own outcome overwrote this skip.
+                                    continue;
                                 }
 
                                 await postUploadExploreReportFlow(page, report);
@@ -352,7 +361,7 @@ async function PersonaFlow(page, inputData, env) {
                                 if (postUploadOutcome && postUploadOutcome.outcome !== "success") {
                                     console.error(`❌ Explore Report did not succeed: ${report.reportName} → ${postUploadOutcome.outcome}: ${postUploadOutcome.reason}`);
                                     logSession(`❌ Explore Report did not succeed: ${report.reportName} → ${postUploadOutcome.outcome}: ${postUploadOutcome.reason}`);
-                                    skipCurrentReport = true;
+                                    downstreamIssues.push(report.reportName);
                                     continue;
                                 }
 
@@ -363,7 +372,7 @@ async function PersonaFlow(page, inputData, env) {
 
                                 console.error(`❌ Failed Explore Report: ${report.reportName} → ${err.message}`);
                                 logSession(`❌ Failed Explore Report: ${report.reportName} → ${err.message}`, false, { flow: "persona_post_upload", report: report.reportName, report_type: report.reportType, outcome: "failure", reason: err.message });
-                                skipCurrentReport = true;
+                                downstreamIssues.push(report.reportName);
                             }
                         }
                     } catch (error) {
@@ -379,6 +388,13 @@ async function PersonaFlow(page, inputData, env) {
                 } else if (skipCurrentReport) {
                     console.log(`⏭️ ${type} flow ended without completing downstream steps for '${inputData.reportName}'.`);
                     logSession(`⏭️ ${type} flow ended without completing downstream steps for '${inputData.reportName}'.`, false, { flow: "persona", report: inputData.reportName, report_type: type, outcome: "skipped" });
+                } else if (downstreamIssues.length > 0) {
+                    // The upload itself worked (completed + match rate). Only its
+                    // post-upload report(s) didn't succeed, and those already carry
+                    // their own failure/skip — so don't also list the upload as skipped.
+                    const msg = `✅ ${type} upload completed for '${inputData.reportName}'. Post-upload report(s) did not succeed (see their own result): ${downstreamIssues.join(", ")}`;
+                    console.log(msg);
+                    logSession(msg, false, { flow: "persona", report: inputData.reportName, report_type: type, outcome: "success" });
                 } else {
                     console.log(`✅ ${type} flow completed successfully for '${inputData.reportName}'.`);
                     logSession(`✅ ${type} flow completed successfully for '${inputData.reportName}'.`, false, { flow: "persona", report: inputData.reportName, report_type: type, outcome: "success" });
