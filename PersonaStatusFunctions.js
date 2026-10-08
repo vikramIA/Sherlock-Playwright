@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { logSession, beginFlow } = require('./Logger');
+const { detectErrorToast } = require('./ToastCheck');
 
 // One tracking file per env + check type (e.g. personaTracking/qa_daily.json). dev/qa/prod runs go
 // in parallel, and each process rewrites its whole file - sharing one file between them lost entries.
@@ -458,11 +459,11 @@ async function validateLayeredDatasetMapViewTab(page, reportName, tabLabel = 'La
             await page.getByRole('button', { name: viewName, exact: true }).click();
             await page.waitForTimeout(2000);
 
-            const toastDivs = page.locator("div:has-text('No Data'), div:has-text('Failed')");
+            const toast = await detectErrorToast(page);
 
-            if (await toastDivs.count() > 0) {
+            if (toast) {
                 viewResult.passed = false;
-                viewResult.reason = `Toast detected: ${(await toastDivs.first().innerText()).split('\n')[0].trim()}`;
+                viewResult.reason = toast.text;
             } else {
                 // The count briefly shows as plain "Datasets" (no number) while switching
                 // views, before settling to "Datasets(N)" - poll until the number appears.

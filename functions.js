@@ -3,6 +3,7 @@ const path = require("path");
 const { logSession } = require('./Logger');
 const { authenticator } = require('otplib');
 const { expect } = require("@playwright/test");
+const { detectErrorToast } = require("./ToastCheck");
 
 // Function to detect and accept the Auth0 "Authorize App" consent screen
 // (sometimes shown after password entry or after OTP submission)
@@ -1505,19 +1506,42 @@ async function keplerDatasetsFetch(page, reportName) {
     const startTime = Date.now();
 
     try {
+        // This class is on the loader AND on the Create Report form's sticky footer,
+        // so this wait effectively means "until the form closes and the report opens"
+        // — keep it (skipping .sticky made every Explore report check the URL too early).
         const overlay = page.locator("div.bg-surface-container-backdrop");
         const keplerArrow = page.locator("button.side-bar__close");
         const datasetsSpan = page.locator("//button[.//text()[normalize-space()='Add Data']]/preceding-sibling::span");
-        const toastDivs = page.locator("div:has-text('No Data'), div:has-text('Failed')");
         const summaryMsg = page.locator("div:has-text('Large dataset detected')");
-
+        // A report page is /explore/<id> or the summary page; if the app never
+        // gets there (e.g. stays on /repository/matchRate after Create Report),
+        // stop after this long instead of waiting the full 30 min (dev session 42).
+        const NOT_ON_REPORT_PAGE_LIMIT_MS = 3 * 60 * 1000;
+        const OVERLAY_MAX_WAIT_MS = 30 * 60 * 1000;
+        const notOnReportPage = () => !page.url().includes("/explore");
+        const neverOpened = () => {
+            const mins = ((Date.now() - startTime) / 60000).toFixed(2);
+            return log({
+                reportName,
+                url: page.url(),
+                text: `Report page never opened after Create Report — still on ${new URL(page.url()).pathname} after ${mins} min`,
+                status: "error",
+                timeMinutes: mins,
+                timeSeconds: Math.floor((Date.now() - startTime) / 1000)
+            });
+        };
 
         if (await overlay.count() > 0) {
             console.log("⏳ Waiting for loader overlay to disappear...");
-            await overlay.first().waitFor({
-                state: "hidden",
-                timeout: 30 * 60 * 1000
-            });
+            while (await overlay.first().isVisible().catch(() => false)) {
+                if (notOnReportPage() && Date.now() - startTime > NOT_ON_REPORT_PAGE_LIMIT_MS) {
+                    return neverOpened();
+                }
+                if (Date.now() - startTime > OVERLAY_MAX_WAIT_MS) {
+                    throw new Error("Loader overlay did not disappear within 30 min");
+                }
+                await page.waitForTimeout(1000);
+            }
         }
 
 
@@ -1531,19 +1555,22 @@ async function keplerDatasetsFetch(page, reportName) {
             const elapsedMin = ((Date.now() - startTime) / 60000).toFixed(2);
             const elapsedSec = Math.floor((Date.now() - startTime) / 1000);
 
-            // 1️⃣ Always check for toast first
-            if (await toastDivs.count() > 0) {
-                const rawText = await toastDivs.first().innerText();
-                const toastText = rawText.split("\n")[0].trim();  // only first line
-                const status = toastText.toLowerCase().includes("no data") ? "no_data" : "error";
+            // 1️⃣ Always check for toast first (also catches a lost WebGL context)
+            const toast = await detectErrorToast(page);
+            if (toast) {
                 return log({
                     reportName,
                     url: currentURL,
-                    text: `Toast detected: ${toastText}`,
-                    status,
+                    text: toast.text,
+                    status: toast.status,
                     timeMinutes: elapsedMin,
                     timeSeconds: elapsedSec
                 });
+            }
+
+            // 1️⃣b Never reached a report page (no /explore, no summary page)
+            if (notOnReportPage() && Date.now() - startTime > NOT_ON_REPORT_PAGE_LIMIT_MS) {
+                return neverOpened();
             }
 
             // 2️⃣ Summary Page (Large dataset detected) — validated the same way as Aggregated Count:
@@ -2657,8 +2684,13 @@ async function searchAndClickInRepository(page, reportName) {
 
 
             // 2️⃣ Search report
-            const searchInput = page.locator("xpath=//input[@placeholder='Search']");
-            if (await searchInput.isVisible()) {
+            // The Repository search box's placeholder is "Search for a file" — the old
+            // exact match on 'Search' never found it, so the search was always skipped
+            // and the row was only found while it was still near the top of the list.
+            // Wait for it, but carry on unfiltered if the page ever renders without it.
+            const searchInput = page.locator("xpath=//input[starts-with(@placeholder, 'Search')]").first();
+            const searchReady = await searchInput.waitFor({ state: 'visible', timeout: 15000 }).then(() => true).catch(() => false);
+            if (searchReady) {
                 await searchInput.fill(reportName);
                 await searchInput.press('Enter');
             }
@@ -2731,11 +2763,21 @@ async function searchAndClickInRepository(page, reportName) {
             return false; // <-- FIXED
 
         } catch (err) {
-            const msg = `❌ Error on attempt ${attempt}/${MAX_RETRIES}: ${err.message}`;
+            // A transient UI miss (slow repository load, search box late) must not end
+            // the whole poll — retry until MAX_RETRIES, only fail on the last attempt.
+            const firstLine = err.message.split("\n")[0];
+            if (attempt === MAX_RETRIES) {
+                const msg = `❌ Error on final attempt ${attempt}/${MAX_RETRIES}: ${firstLine}`;
+                console.log(msg);
+                logSession(msg);
+                return false;
+            }
+
+            const msg = `⚠️ Attempt ${attempt}/${MAX_RETRIES} could not read status (${firstLine}). Retrying in 1 minute...`;
             console.log(msg);
             logSession(msg);
-
-            return false; // <-- FIXED
+            await page.waitForTimeout(REFRESH_DELAY);
+            continue;
         }
     }
 
@@ -2747,7 +2789,22 @@ async function searchAndClickInRepository(page, reportName) {
 // link first; if it isn't there (e.g. a heavy report view that never rendered
 // the sidebar), navigates by URL so callers don't stay stuck on that page.
 async function goToExploreList(page) {
-    if (new URL(page.url()).pathname === "/explore") return;
+    if (new URL(page.url()).pathname === "/explore") {
+        // Already on the list — but a Multilayer modal left open by an earlier
+        // step (e.g. a "Create Multilayer" that never went through) sits on top
+        // of it and breaks every later step (prod session 42: 1 stuck modal → 6
+        // failures). Reload to clear it. Both locators exist only inside the modal.
+        const staleModal = page.locator(
+            "xpath=//div[normalize-space()='Create Multilayer'] | //input[contains(@placeholder, 'report a memorable name')]"
+        );
+        if (!(await staleModal.first().isVisible().catch(() => false))) return;
+
+        console.warn("⚠️ Multilayer modal was left open — reloading Explore to clear it.");
+        logSession("⚠️ Multilayer modal was left open — reloading Explore to clear it.");
+        await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 });
+        await page.waitForTimeout(2000);
+        return;
+    }
 
     try {
         const exploreBtn = page.locator("//a[@href='/explore' and @data-sidebar='menu-button']");
@@ -3179,16 +3236,14 @@ async function verifyDefaultBentoCharts(
             diagnosedStatus = "report_redirected_to_summary";
         } else {
             try {
-                const toastDivs = page.locator("div:has-text('No Data'), div:has-text('Failed')");
-                if (await toastDivs.count() > 0) {
-                    const rawText = await toastDivs.first().innerText();
-                    const toastText = rawText.split("\n")[0].trim();
-                    if (toastText.toLowerCase().includes("no data")) {
-                        diagnosedReason = `Report returned no data ("${toastText}") — there is no Bento content to validate.`;
+                const toast = await detectErrorToast(page);
+                if (toast) {
+                    if (toast.status === "no_data") {
+                        diagnosedReason = `Report returned no data ("${toast.text}") — there is no Bento content to validate.`;
                         diagnosedStatus = "report_no_data";
                     } else {
-                        diagnosedReason = `Report failed to load ("${toastText}") — there is no Bento content to validate.`;
-                        diagnosedStatus = "report_load_failed";
+                        diagnosedReason = `Report failed to load ("${toast.text}") — there is no Bento content to validate.`;
+                        diagnosedStatus = toast.webglLost ? "browser_webgl_lost" : "report_load_failed";
                     }
                 }
             } catch {

@@ -1,5 +1,6 @@
 const { logSession } = require("./Logger");
 const { expect } = require("@playwright/test");
+const { detectErrorToast } = require("./ToastCheck");
 
 
 // =========================================================
@@ -205,8 +206,8 @@ async function closeWatsonAIReport(page, reportName, { onlyIfOpen = false } = {}
 
         if (isOpen) {
 
-            console.log(`❌ Closing WatsonAI report: '${reportName}'`);
-            logSession(`❌ Closing WatsonAI report: '${reportName}'`);
+            console.log(`🔙 Closing WatsonAI report: '${reportName}'`);
+            logSession(`🔙 Closing WatsonAI report: '${reportName}'`);
 
             await closeIcon.click({ timeout: 15000 })
                 .catch(() => closeIcon.click({ force: true, timeout: 15000 }));
@@ -1503,10 +1504,6 @@ async function watsonAIKeplerValidation(page, reportName, reportOpenSeconds) {
         const keplerArrow =
             page.locator("button.side-bar__close");
 
-        const toastDivs =
-            page.locator(
-                "div:has-text('No Data'), div:has-text('Failed')"
-            );
 
 
         // =====================================================
@@ -1533,32 +1530,11 @@ async function watsonAIKeplerValidation(page, reportName, reportOpenSeconds) {
             // 1️⃣ CHECK FOR ERROR / NO DATA TOAST
             // =================================================
 
-            if (await toastDivs.count() > 0) {
+            // detectErrorToast reads with allTextContents() (no waiting),
+            // since "No Data"/"Failed" toasts auto-dismiss after a few seconds.
+            const toast = await detectErrorToast(page);
 
-                // NOTE: "No Data"/"Failed" toasts auto-dismiss after a
-                // few seconds. Using .innerText() here can time out
-                // (30s) if the toast vanishes between this count()
-                // check and the read — .allTextContents() reads
-                // whatever is currently in the DOM without waiting
-                // for the element to stay visible.
-                const rawTexts =
-                    await toastDivs.allTextContents();
-
-                const rawText = rawTexts[0] || "";
-
-                const toastText =
-                    rawText
-                        .split("\n")[0]
-                        .trim();
-
-
-                const status =
-                    toastText
-                        .toLowerCase()
-                        .includes("no data")
-                        ? "no_data"
-                        : "error";
-
+            if (toast) {
 
                 return log({
 
@@ -1566,10 +1542,9 @@ async function watsonAIKeplerValidation(page, reportName, reportOpenSeconds) {
 
                     url: currentURL,
 
-                    text:
-                        `Toast detected: ${toastText}`,
+                    text: toast.text,
 
-                    status,
+                    status: toast.status,
 
                     reportOpenSeconds
                 });
