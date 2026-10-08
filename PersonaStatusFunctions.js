@@ -255,38 +255,51 @@ async function validateSubTabContent(page) {
     return result;
 }
 
-// Shared by tabs with the "All Audience + segments" pattern and no category dropdown
-// (Journeys, Touchpoints, ...) - each sub-tab's content is checked via validateSubTabContent.
-async function validateTabSubTabs(page, tabLabel, tablistName) {
-    const subTabs = await page.getByRole('tablist', { name: tablistName }).getByRole('tab').all();
-    const subTabNames = [];
-    for (const tab of subTabs) {
-        subTabNames.push((await tab.textContent())?.trim());
-    }
-
+// Clicks and validates every sub-tab of one tablist (All Audience + each segment).
+// Tabs are clicked by position, not by name: segment names can repeat (QA session 43:
+// Journeys had 16 segments under 8 names), and getByRole('tab', { name }) then matched 2
+// elements, threw a strict-mode error, and the catch logged the tab as empty in ~15 ms —
+// failing validation on a report that rendered fine. Repeated names get a "(2)" suffix in
+// the log, and any error is now logged instead of being hidden behind stats={}.
+async function validateSubTabsOfTablist(page, tablistName, logPrefix) {
+    const tabs = page.getByRole('tablist', { name: tablistName }).getByRole('tab');
+    const tabCount = await tabs.count();
+    const nameCounts = {};
     const results = [];
 
-    for (const subTabName of subTabNames) {
-        let subTabResult;
+    for (let i = 0; i < tabCount; i++) {
+        const tab = tabs.nth(i);
+        const baseName = (await tab.textContent().catch(() => null))?.trim() || `tab_${i + 1}`;
+        nameCounts[baseName] = (nameCounts[baseName] || 0) + 1;
+        const subTabName = nameCounts[baseName] > 1 ? `${baseName} (${nameCounts[baseName]})` : baseName;
 
+        let subTabResult;
         try {
-            await page.getByRole('tab', { name: subTabName, exact: true }).click();
+            await tab.click();
             await page.waitForTimeout(1500);
             subTabResult = await validateSubTabContent(page);
         } catch (err) {
-            subTabResult = { statTiles: {}, charts: [], passed: false, error: err.message };
+            subTabResult = { statTiles: {}, charts: [], passed: false, error: err.message.split("\n")[0] };
         }
 
         subTabResult.subTab = subTabName;
 
         const icon = subTabResult.passed ? '✅' : '❌';
-        const msg = `${icon} [${tabLabel}/${subTabName}] stats=${JSON.stringify(subTabResult.statTiles)} charts=${JSON.stringify(subTabResult.charts)}`;
+        const errorPart = subTabResult.error ? ` error=${subTabResult.error}` : '';
+        const msg = `${icon} [${logPrefix}/${subTabName}] stats=${JSON.stringify(subTabResult.statTiles)} charts=${JSON.stringify(subTabResult.charts)}${errorPart}`;
         console.log(msg);
         logSession(msg);
 
         results.push(subTabResult);
     }
 
+    return results;
+}
+
+// Shared by tabs with the "All Audience + segments" pattern and no category dropdown
+// (Journeys, Touchpoints, ...) - each sub-tab's content is checked via validateSubTabContent.
+async function validateTabSubTabs(page, tabLabel, tablistName) {
+    const results = await validateSubTabsOfTablist(page, tablistName, tabLabel);
     return { tab: tabLabel, passed: results.length > 0 && results.every(r => r.passed), subTabs: results };
 }
 
@@ -321,17 +334,10 @@ async function validateLifestylesTab(page, reportName) {
     const categoryResults = [];
 
     for (const categoryName of categoryNames) {
-        let subTabNames;
         try {
             await categoryDropdown.click();
             await page.getByRole('option', { name: categoryName, exact: true }).click();
             await page.waitForTimeout(1500);
-
-            const subTabs = await page.getByRole('tablist', { name: 'Poi Tabs' }).getByRole('tab').all();
-            subTabNames = [];
-            for (const tab of subTabs) {
-                subTabNames.push((await tab.textContent())?.trim());
-            }
         } catch (err) {
             console.error(`❌ Failed to select Lifestyles category '${categoryName}': ${err.message}`);
             logSession(`❌ Failed to select Lifestyles category '${categoryName}': ${err.message}`);
@@ -339,28 +345,7 @@ async function validateLifestylesTab(page, reportName) {
             continue;
         }
 
-        const subTabResults = [];
-
-        for (const subTabName of subTabNames) {
-            let subTabResult;
-
-            try {
-                await page.getByRole('tab', { name: subTabName, exact: true }).click();
-                await page.waitForTimeout(1500);
-                subTabResult = await validateSubTabContent(page);
-            } catch (err) {
-                subTabResult = { statTiles: {}, charts: [], passed: false, error: err.message };
-            }
-
-            subTabResult.subTab = subTabName;
-
-            const icon = subTabResult.passed ? '✅' : '❌';
-            const msg = `${icon} [Lifestyles/${categoryName}/${subTabName}] stats=${JSON.stringify(subTabResult.statTiles)} charts=${JSON.stringify(subTabResult.charts)}`;
-            console.log(msg);
-            logSession(msg);
-
-            subTabResults.push(subTabResult);
-        }
+        const subTabResults = await validateSubTabsOfTablist(page, 'Poi Tabs', `Lifestyles/${categoryName}`);
 
         categoryResults.push({
             category: categoryName,
