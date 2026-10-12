@@ -112,13 +112,18 @@ async function loginAndNavigate(
             // STEP 2 : Email Screen
             // ==========================
 
+            // isVisible() ignores its timeout and checks only once, so on a
+            // cold page load it missed the next screen and skipped a step:
+            // attempt 1 then waited 20s for an OTP box that never came
+            // (every local run, Oct 2026). waitFor() actually waits.
             const emailInput =
                 page.locator("#username");
 
             if (
-                await emailInput.isVisible({
-                    timeout: 3000
-                }).catch(() => false)
+                await emailInput.waitFor({
+                    state: "visible",
+                    timeout: 10000
+                }).then(() => true, () => false)
             ) {
 
                 console.log(
@@ -146,10 +151,31 @@ async function loginAndNavigate(
             const passwordInput =
                 page.locator("#password");
 
+            // Wait for whichever screen comes next — password, or straight
+            // to MFA — instead of a one-shot check right after Continue.
+            await passwordInput
+                .or(page.locator("//input[@autocomplete='one-time-code']"))
+                .first()
+                .waitFor({ state: "visible", timeout: 15000 })
+                .catch(() => { });
+
+            // Auth0 bot detection sometimes answers the email step with a
+            // CAPTCHA ("Enter the code shown above") — seen on prod, Oct
+            // 2026, after many logins in a day. Automation can't pass it;
+            // a fresh attempt usually isn't challenged. Say so instead of
+            // timing out on an OTP box that never comes.
             if (
-                await passwordInput.isVisible({
-                    timeout: 3000
-                }).catch(() => false)
+                await page.getByText(/Enter the code shown above/i)
+                    .isVisible()
+                    .catch(() => false)
+            ) {
+                throw new Error(
+                    "Auth0 showed a CAPTCHA after the email step (bot detection) — restarting the login."
+                );
+            }
+
+            if (
+                await passwordInput.isVisible().catch(() => false)
             ) {
 
                 console.log(

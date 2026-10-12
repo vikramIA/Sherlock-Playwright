@@ -10,6 +10,7 @@ const { loginAndNavigate, safeWait } = require("./functions");
 const envConfig = require("./Environments.json");
 const { initLogger, getSessionHeader, getLastSessionNumber, logSession, getRunSummary, getRunDetails } = require("./Logger");
 const NetworkLogger = require("./networkLogger.js");
+const { setArtifactsDir, watchBrowserHealth, markExpectedShutdown, getBrowserCloseReason } = require("./FailureDiagnostics.js");
 const RecordingManager = require("./Recording.js");
 const { sendSlackStatus } = require("./SlackNotifier");
 const { initPersonaTracking, loadTracking } = require("./PersonaStatusFunctions.js");
@@ -212,6 +213,8 @@ async function main() {
     });
 
     new NetworkLogger(page, sessionDir);
+    setArtifactsDir(sessionDir);
+    watchBrowserHealth(browser, page);
 
     try {
       await loginAndNavigate(
@@ -291,12 +294,20 @@ async function main() {
     logSession(`❌ SCRIPT FAILED: ${err.message}\n${err.stack}`);
     scriptError = err.message;
   } finally {
+    // If the browser died mid-run, every step below would throw ("browser has
+    // been closed") and the run summary + Slack message were never sent.
+    if (!scriptError && getBrowserCloseReason()) scriptError = `Browser stopped mid-run: ${getBrowserCloseReason()}`;
+    markExpectedShutdown();
+
     if (context && page) {
-      await context.tracing.stop({ path: tracePath });
+      await context.tracing.stop({ path: tracePath }).catch(err => {
+        console.error(`⚠️ Could not save trace: ${err.message}`);
+        logSession(`⚠️ Could not save trace: ${err.message.split("\n")[0]}`);
+      });
 
       const videoPath = await recording.stop("session_recording.webm");
 
-      await context.close();
+      await context.close().catch(() => { });
       console.log("📦 Session Artifacts Saved:");
       console.log(`   TRACE: ${tracePath}`);
       console.log(`   VIDEO: ${videoPath}`);
@@ -308,7 +319,7 @@ async function main() {
       logSession(`   Network Log: ${path.join(sessionDir, 'network.log')}`);
     }
 
-    if (browser) await browser.close();
+    if (browser) await browser.close().catch(() => { });
     console.log("✅ Browser closed, session complete.");
     logSession("✅ Browser closed, session complete.");
 

@@ -17,6 +17,7 @@ const {
 
 const { openWatsonAI } = require("./WatsonAIFunctions.js");
 const { logSession, beginFlow } = require("./Logger");
+const { captureFailureScreenshot, explainError } = require("./FailureDiagnostics.js");
 
 
 // =========================================================
@@ -173,7 +174,9 @@ async function csAgentFlow(page, testCases = []) {
             console.error(`❌ CS Agent test case '${testCase.mode}' failed.`);
             console.error(`❌ Error: ${error.message}`);
 
-            logSession(`❌ CS Agent test case '${testCase.mode}' failed.`, false, { flow: "cs_agent", report: caseId, mode: testCase.mode, outcome: "failure", reason: error.message });
+            const screenshot = await captureFailureScreenshot(page, `cs_agent_${caseId}`);
+
+            logSession(`❌ CS Agent test case '${testCase.mode}' failed.`, false, { flow: "cs_agent", report: caseId, mode: testCase.mode, outcome: "failure", reason: explainError(error), screenshot });
             logSession(`❌ Error: ${error.message}`);
 
             console.log(`➡️ Continuing with next CS Agent test case...`);

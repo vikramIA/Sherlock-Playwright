@@ -19,8 +19,24 @@ const { getLatestWatsonAIReplyText } = require("./WatsonAIFunctions.js");
 // already-visible-on-screen cause goes unreported.
 // =========================================================
 
+// Also the generic chat error seen on prod (Oct 2026) ~6 min into
+// onboarding generation: "Error occurred while processing your request.
+// Please try again." — the run then sat out the rest of the 15-min wait
+// and only ever logged "browser has been closed".
 const CS_AGENT_DISCONNECT_PATTERN =
-    /CS agent is having trouble connecting|CS agent disconnected/;
+    /CS agent is having trouble connecting|CS agent disconnected|Error occurred while processing your request/;
+
+// Errors thrown by csAgentStoppedError — callers that treat a timeout as a
+// normal outcome must still rethrow these.
+const CS_AGENT_STOPPED_ERROR = /^CS Agent (disconnected|showed an error):/;
+
+function csAgentStoppedError(message) {
+    return new Error(
+        /disconnected|trouble connecting/i.test(message)
+            ? `CS Agent disconnected: '${message}'`
+            : `CS Agent showed an error: '${message}'`
+    );
+}
 
 // Old and current (Oct 2026 dev) wording of the "start cs agent" reply.
 const CS_AGENT_ACTIVATED_PATTERN =
@@ -75,7 +91,7 @@ async function waitForCSAgentElementOrDisconnect(page, targetLocator, timeout) {
 
         const message = (await disconnectLocator.innerText()).trim();
 
-        throw new Error(`CS Agent disconnected: '${message}'`);
+        throw csAgentStoppedError(message);
     }
 
     if (result.type === "neither") {
@@ -102,7 +118,7 @@ async function expectCSAgentCountOrDisconnect(page, targetLocator, count, timeou
 
         const message = (await disconnectLocator.innerText()).trim();
 
-        throw new Error(`CS Agent disconnected: '${message}'`);
+        throw csAgentStoppedError(message);
     }
 
     if (result.type === "neither") {
@@ -142,7 +158,7 @@ async function activateCSAgent(page) {
             await waitForCSAgentElementOrDisconnect(page, activatedText, 30000);
         } catch (error) {
 
-            if (error.message.startsWith("CS Agent disconnected:")) throw error;
+            if (CS_AGENT_STOPPED_ERROR.test(error.message)) throw error;
 
             // Currently seen on qa: WatsonAI answers the command like a
             // normal question ("Tell me a little more — which brand or
@@ -190,7 +206,7 @@ async function selectCSAgentPhase(page, phaseKey, { optional = false } = {}) {
         await waitForCSAgentElementOrDisconnect(page, phaseCombobox, 30000);
     } catch (error) {
 
-        if (optional && !error.message.startsWith("CS Agent disconnected:")) {
+        if (optional && !CS_AGENT_STOPPED_ERROR.test(error.message)) {
 
             console.log(`ℹ️ No phase selector shown — treating as a new user with no prior CS Agent run, skipping straight to company name.`);
             logSession(`ℹ️ No phase selector shown — treating as a new user with no prior CS Agent run, skipping straight to company name.`);
@@ -422,7 +438,7 @@ async function runCSAgentQuestionnaire(page, answers = []) {
 
                 const message = (await disconnectLocator.innerText()).trim();
 
-                throw new Error(`CS Agent disconnected during questionnaire: '${message}'`);
+                throw new Error(`CS Agent stopped during questionnaire: '${message}'`);
             }
 
             const hasQuestion = questionCheck.type === "target";
@@ -558,6 +574,86 @@ async function waitForCSAgentPhaseComplete(page, phaseNumber, fileExtension) {
 
 
 // =========================================================
+// 8A. ONLYOFFICE VIEWER HELPERS (shared by docx + xlsx)
+// Verified live on QA after the OnlyOffice 9.2.1 upgrade (Oct 2026):
+//   - The status bar already reads "Page 1 of 1" while "Loading
+//     document" is still on screen over a grey placeholder page, so the
+//     page count alone passed a document that had not loaded.
+//   - The header Close button only exists once the file has loaded
+//     (count 0 while loading), which makes it the "loaded" signal.
+//   - Closing the spreadsheet now asks "All unsaved changes in this
+//     spreadsheet will be lost" (OK / Cancel) — nothing answered it, so
+//     the editor iframe never detached (dev Phase 2 failure).
+// =========================================================
+
+const ONLYOFFICE_FRAME_SELECTOR = 'iframe[name="frameEditor"]';
+
+async function waitForOnlyOfficeLoaded(page, timeout) {
+
+    const editorFrame = page.frameLocator(ONLYOFFICE_FRAME_SELECTOR);
+
+    await expect(
+        editorFrame.getByRole("button", { name: "Close", exact: true })
+    ).toBeEnabled({ timeout });
+
+    await expect(
+        editorFrame.getByText(/^Loading (document|spreadsheet)/i).filter({ visible: true })
+    ).toHaveCount(0, { timeout });
+
+    return editorFrame;
+}
+
+// Closes the viewer and confirms the iframe is gone. The file was only
+// viewed, so the "unsaved changes will be lost" warning is answered with
+// OK (discard) — never Save, which would modify the generated output.
+async function closeOnlyOfficeViewer(page, label) {
+
+    const editorFrame = page.frameLocator(ONLYOFFICE_FRAME_SELECTOR);
+    const iframe = page.locator(ONLYOFFICE_FRAME_SELECTOR);
+    const closeButton = editorFrame.getByRole("button", { name: "Close", exact: true });
+    const unsavedWarning = editorFrame
+        .getByText(/unsaved changes in this \w+ will be lost/i)
+        .filter({ visible: true });
+    const discardButton = editorFrame
+        .getByRole("button", { name: "OK", exact: true })
+        .filter({ visible: true })
+        .last();
+
+    for (let attempt = 1; attempt <= 2; attempt++) {
+
+        // A busy renderer can stall click() even on a visible, enabled
+        // button (QA Phase 1, Oct 2026) — a DOM click doesn't wait on it.
+        await closeButton.click({ timeout: 15000 })
+            .catch(() => closeButton.evaluate(button => button.click(), null, { timeout: 5000 }))
+            .catch(() => { });
+
+        const outcome = await Promise.race([
+            iframe.waitFor({ state: "detached", timeout: 15000 }).then(() => "closed"),
+            unsavedWarning.first().waitFor({ state: "visible", timeout: 15000 }).then(() => "warning")
+        ]).catch(() => "still_open");
+
+        if (outcome === "warning") {
+
+            console.log(`ℹ️ ${label}: OnlyOffice asked about unsaved changes — discarding (the file was only viewed).`);
+            logSession(`ℹ️ ${label}: OnlyOffice asked about unsaved changes — discarding (the file was only viewed).`);
+
+            await discardButton.click({ timeout: 10000 });
+        }
+
+        if (outcome === "closed" ||
+            await iframe.waitFor({ state: "detached", timeout: 15000 }).then(() => true, () => false)) {
+            return;
+        }
+
+        console.log(`⚠️ ${label} viewer still open after Close (attempt ${attempt}).`);
+        logSession(`⚠️ ${label} viewer still open after Close (attempt ${attempt}).`);
+    }
+
+    throw new Error(`${label} viewer did not close: the OnlyOffice editor was still open after clicking Close twice.`);
+}
+
+
+// =========================================================
 // 8B. OPEN + VALIDATE THE PHASE 1 DOCX OUTPUT
 // (Verified live: clicking "Open ....docx" does NOT trigger a
 // browser download — it opens a real embedded OnlyOffice editor
@@ -579,11 +675,12 @@ async function validateCSAgentDocxOutput(page, timeout = 60000) {
         console.log(`📄 Opened Phase 1 document for validation.`);
         logSession(`📄 Opened Phase 1 document for validation.`);
 
-        const editorFrame = page.frameLocator('iframe[name="frameEditor"]');
+        // Page count is only meaningful once the document has loaded (see 8A).
+        const editorFrame = await waitForOnlyOfficeLoaded(page, timeout);
 
         const pageCountText = editorFrame.getByText(/^Page \d+ of \d+$/).first();
 
-        await pageCountText.waitFor({ state: "visible", timeout });
+        await pageCountText.waitFor({ state: "visible", timeout: 15000 });
 
         const pageCountLabel = (await pageCountText.innerText()).trim();
 
@@ -600,20 +697,10 @@ async function validateCSAgentDocxOutput(page, timeout = 60000) {
         console.log(`✅ Phase 1 document validated: ${pageCountLabel}.`);
         logSession(`✅ Phase 1 document validated: ${pageCountLabel}.`);
 
-        const closeButton = editorFrame.getByRole("button", {
-            name: "Close",
-            exact: true
-        });
-
-        await closeButton.click();
-
-        // Confirm the viewer actually closed before returning, so the
+        // Confirms the viewer actually closed before returning, so the
         // caller isn't left racing a chat prompt still hidden behind
         // a not-yet-dismissed editor overlay.
-        await page.locator('iframe[name="frameEditor"]').waitFor({
-            state: "detached",
-            timeout: 15000
-        });
+        await closeOnlyOfficeViewer(page, "Phase 1 document");
 
         console.log(`✅ Closed Phase 1 document viewer.`);
         logSession(`✅ Closed Phase 1 document viewer.`);
@@ -660,11 +747,11 @@ async function validateCSAgentXlsxOutput(page, timeout = 60000) {
         console.log(`📊 Opened Phase 2 spreadsheet for validation.`);
         logSession(`📊 Opened Phase 2 spreadsheet for validation.`);
 
-        const editorFrame = page.frameLocator('iframe[name="frameEditor"]');
+        const editorFrame = await waitForOnlyOfficeLoaded(page, timeout);
 
         const sheetTabs = editorFrame.locator("#statusbar_bottom li.list-item");
 
-        await sheetTabs.first().waitFor({ state: "visible", timeout });
+        await sheetTabs.first().waitFor({ state: "visible", timeout: 15000 });
 
         const sheetNames = await sheetTabs.evaluateAll(
             elements => elements
@@ -682,17 +769,7 @@ async function validateCSAgentXlsxOutput(page, timeout = 60000) {
         console.log(`✅ Phase 2 spreadsheet validated: ${sheetNames.length} sheet(s) — ${sheetNames.join(", ")}.`);
         logSession(`✅ Phase 2 spreadsheet validated: ${sheetNames.length} sheet(s) — ${sheetNames.join(", ")}.`);
 
-        const closeButton = editorFrame.getByRole("button", {
-            name: "Close",
-            exact: true
-        });
-
-        await closeButton.click();
-
-        await page.locator('iframe[name="frameEditor"]').waitFor({
-            state: "detached",
-            timeout: 15000
-        });
+        await closeOnlyOfficeViewer(page, "Phase 2 spreadsheet");
 
         console.log(`✅ Closed Phase 2 spreadsheet viewer.`);
         logSession(`✅ Closed Phase 2 spreadsheet viewer.`);

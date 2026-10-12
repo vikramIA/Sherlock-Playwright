@@ -16,6 +16,7 @@ const {
 
 const { verifyDefaultBentoCharts, SummaryPageReportError } = require("./functions.js");
 const { logSession, beginFlow } = require("./Logger");
+const { captureFailureScreenshot, explainError } = require("./FailureDiagnostics.js");
 
 
 async function watsonAIFlow(page, reports) {
@@ -68,6 +69,8 @@ async function watsonAIFlow(page, reports) {
         // shared "Unknown" merged every early failure into one.
         let actualReportName = `WatsonAI ${inputData.reportType} (name not generated)`;
         let reportOpened = false;
+        // Set once Submit is clicked — from then on a report may be open.
+        let submitClicked = false;
         // Problems that don't fail the report (it was still created and
         // verified) but must not be reported as a clean success either —
         // they turn the final outcome into "warning".
@@ -99,7 +102,7 @@ async function watsonAIFlow(page, reports) {
             // stay in the chat DOM forever, so the wait below needs this
             // to tell "THIS query got a reply/error" apart from "an old
             // one is still sitting there".
-            const chatBaseline = await getWatsonAIChatBaseline(page);
+            const chatBaseline = await getWatsonAIChatBaseline(page, inputData.query);
 
             const searchResponse = watchWatsonAISearchRequest(page);
 
@@ -148,6 +151,8 @@ async function watsonAIFlow(page, reports) {
             const submitBaseline =
                 await clickWatsonAISubmit(page);
 
+            submitClicked = true;
+
 
             // =================================================
             // VERIFY REPORT CREATION + OPEN REPORT
@@ -158,7 +163,7 @@ async function watsonAIFlow(page, reports) {
                     page,
                     inputData.expectedMessage,
                     inputData.reportType,
-                    submitBaseline
+                    { ...submitBaseline, query: inputData.query }
                 );
 
             // At this point Open Report was clicked
@@ -342,10 +347,18 @@ async function watsonAIFlow(page, reports) {
                 `❌ Error: ${error.message}`
             );
 
+            // Prefilled-field problems found before the failure are often
+            // its cause (e.g. empty Location -> Submit creates nothing).
+            const reason = reportWarnings.length > 0
+                ? `${explainError(error)} [earlier: ${reportWarnings.join("; ")}]`
+                : explainError(error);
+
+            const screenshot = await captureFailureScreenshot(page, `watson_${inputData.reportType}`);
+
             logSession(
                 `❌ WatsonAI ${inputData.reportType} failed.`,
                 false,
-                { flow: "watson_ai", report: actualReportName, report_type: inputData.reportType, outcome: "failure", reason: error.message }
+                { flow: "watson_ai", report: actualReportName, report_type: inputData.reportType, outcome: "failure", reason, screenshot }
             );
 
             logSession(
@@ -357,7 +370,13 @@ async function watsonAIFlow(page, reports) {
             // TRY TO CLOSE REPORT IF IT IS OPEN + RETURN TO CHAT
             // =================================================
 
-            if (reportOpened) {
+            // Not only when reportOpened: a failure inside
+            // verifyWatsonAISuccess (e.g. at Focus Mode) happens after
+            // Open Report was clicked but before reportOpened is set. The
+            // prompt stays editable under a Focus Mode report, so the
+            // chat-ready check alone missed it — on QA the QLI report was
+            // left open and every click of the next two reports timed out.
+            if (reportOpened || submitClicked) {
 
                 await closeWatsonAIReport(page, actualReportName, { onlyIfOpen: true });
 
