@@ -1537,6 +1537,37 @@ async function selectExploreReportType(page, reportTypeRaw) {
 }
 
 // Function to fetch Kepler rows and handle data extraction
+// Datasets loaded into the report's Kepler map, read from kepler's own
+// state through the React fiber of the deck.gl canvas — the same
+// approach as getOccasionIndexMapState() in OccasionIndexFunctions.js.
+// Doesn't depend on any panel being open, so it works on the old report
+// UI and the new one (QA, Oct 2026) without the "Datasets (N)" label.
+// Verified live (QA, /explore/56477): [] for ~2s after the page opens,
+// then [{ label: "<report name>", rows: 28 }]. These are kepler
+// internals — if a kepler upgrade renames them, update them here.
+async function getKeplerDatasets(page) {
+    return page.evaluate(() => {
+        const canvas = document.querySelector("#default-deckgl-overlay");
+        const fiberKey = canvas && Object.keys(canvas).find(key => key.startsWith("__reactFiber"));
+        if (!fiberKey) return { found: false, datasets: [] };
+
+        for (let fiber = canvas[fiberKey], depth = 0; fiber && depth < 80; fiber = fiber.return, depth++) {
+            const visState = fiber.memoizedProps?.visState;
+            if (visState?.datasets) {
+                return {
+                    found: true,
+                    datasets: Object.values(visState.datasets).map(dataset => ({
+                        label: dataset.label,
+                        rows: dataset.dataContainer?.numRows?.() ?? 0,
+                    })),
+                };
+            }
+        }
+
+        return { found: false, datasets: [] };
+    }).catch(() => ({ found: false, datasets: [] }));
+}
+
 async function keplerDatasetsFetch(page, reportName) {
     const log = (result) => {
         console.log("\n🧾 Kepler Report Result");
@@ -1596,6 +1627,8 @@ async function keplerDatasetsFetch(page, reportName) {
                 }
                 await page.waitForTimeout(1000);
             }
+            console.log("✅ Loader overlay gone — waiting for report data...");
+            logSession(`✅ Loader overlay gone for '${reportName}' — waiting for report data...`);
         }
 
 
@@ -1603,11 +1636,20 @@ async function keplerDatasetsFetch(page, reportName) {
         const MAX_WAIT_MS = 30 * 60 * 1000; // 30 minutes
         const POLL_INTERVAL = 1000; // 1 second
         const startPoll = Date.now();
+        const KEPLER_EMPTY_GRACE_MS = 30 * 1000;
+        let emptyDatasetsSince = null;
+        let lastProgressLogAt = Date.now();
 
         while (true) {
             const currentURL = page.url();
             const elapsedMin = ((Date.now() - startTime) / 60000).toFixed(2);
             const elapsedSec = Math.floor((Date.now() - startTime) / 1000);
+
+            // A line a minute, so a long wait never looks like a hang.
+            if (Date.now() - lastProgressLogAt > 60 * 1000) {
+                lastProgressLogAt = Date.now();
+                console.log(`⏳ Still waiting for report data for '${reportName}' (${elapsedMin} min, ${new URL(currentURL).pathname})...`);
+            }
 
             // 1️⃣ Always check for toast first (also catches a lost WebGL context)
             const toast = await detectErrorToast(page);
@@ -1671,15 +1713,41 @@ async function keplerDatasetsFetch(page, reportName) {
                     });
                 }
 
-                // Proceed if we have a proper /explore/{id} report page
-                let clicked = false;
-                for (let i = 0; i < 3 && !clicked; i++) {
-                    try {
-                        await keplerArrow.click();
-                        clicked = true;
-                    } catch {
-                        await page.waitForTimeout(500);
+                // Proceed if we have a proper /explore/{id} report page.
+                // Old report UI only: open Kepler's side panel to show the
+                // "Datasets (N)" label. QA (Oct 2026) removed that panel —
+                // clicking a missing arrow waited out the default timeout 3x
+                // on every poll — so only click when it's actually there.
+                if (await keplerArrow.count() > 0) {
+                    let clicked = false;
+                    for (let i = 0; i < 3 && !clicked; i++) {
+                        try {
+                            await keplerArrow.click({ timeout: 5000 });
+                            clicked = true;
+                        } catch {
+                            await page.waitForTimeout(500);
+                        }
                     }
+                }
+
+                // New report UI (QA, Oct 2026): no side panel or "Datasets (N)"
+                // label, so read the loaded datasets from Kepler's own state.
+                // Empty datasets only count as no_data once they've stayed
+                // empty for a while, in case rows land after the dataset.
+                const keplerData = await getKeplerDatasets(page);
+                const totalRows = keplerData.datasets.reduce((sum, dataset) => sum + dataset.rows, 0);
+                if (keplerData.datasets.length > 0 && totalRows === 0) {
+                    emptyDatasetsSince = emptyDatasetsSince ?? Date.now();
+                }
+                if (keplerData.datasets.length > 0 && (totalRows > 0 || Date.now() - emptyDatasetsSince > KEPLER_EMPTY_GRACE_MS)) {
+                    return log({
+                        reportName,
+                        url: currentURL,
+                        text: `Datasets (${keplerData.datasets.length}): ${keplerData.datasets.map(dataset => `${dataset.label} = ${dataset.rows} rows`).join(", ")}`,
+                        status: totalRows > 0 ? "success" : "no_data",
+                        timeMinutes: elapsedMin,
+                        timeSeconds: elapsedSec
+                    });
                 }
 
                 if (await datasetsSpan.isVisible()) {
@@ -4739,6 +4807,7 @@ module.exports = {
     selectExploreReportType,
     selectPersonaReportType,
     keplerDatasetsFetch,
+    getKeplerDatasets,
     Report_To_Persona_Flow,
     createPersonaFromReportOrThrow,
     assertAudienceUploadsSucceeded,
