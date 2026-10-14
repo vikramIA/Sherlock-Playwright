@@ -153,11 +153,39 @@ async function loginAndNavigate(
 
             // Wait for whichever screen comes next — password, or straight
             // to MFA — instead of a one-shot check right after Continue.
+            // A persistent profile with a passkey enrolled gets Auth0's
+            // "Use fingerprint or face recognition" screen instead (QA, Oct
+            // 2026). Automation can't answer the passkey prompt, so take its
+            // "Use password" link back to the normal password + OTP flow.
+            const usePasswordLink = page.getByRole("link", { name: "Use password" })
+                .or(page.getByRole("button", { name: "Use password" }));
+
             await passwordInput
                 .or(page.locator("//input[@autocomplete='one-time-code']"))
+                .or(usePasswordLink)
                 .first()
                 .waitFor({ state: "visible", timeout: 15000 })
                 .catch(() => { });
+
+            if (
+                await usePasswordLink.first().isVisible().catch(() => false)
+            ) {
+
+                console.log(
+                    "➡ Passkey screen detected — choosing 'Use password'."
+                );
+
+                logSession(
+                    "➡ Passkey screen detected — choosing 'Use password'."
+                );
+
+                await usePasswordLink.first().click();
+
+                await passwordInput.waitFor({
+                    state: "visible",
+                    timeout: 15000
+                });
+            }
 
             // Auth0 bot detection sometimes answers the email step with a
             // CAPTCHA ("Enter the code shown above") — seen on prod, Oct

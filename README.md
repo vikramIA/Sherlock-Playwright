@@ -72,6 +72,15 @@ Add a `headless` key to [input.json](input.json):
 
 Anything other than `"YES"` (or omitting the key) runs with the browser visible.
 
+### Reuse a saved browser profile
+By default every run starts a fresh, empty browser. Add `"persistentProfile": "YES"` to the input JSON to reuse a saved profile per env in `browser_profiles/<env>` instead (git-ignored — it holds login cookies). The app keeps loaded report data in site storage, so this avoids the very slow first Occasion Index data load on every run.
+
+Seed the profile once by hand, then close the window:
+
+```bash
+node openBrowserProfile.js dev
+```
+
 ### Choose which reports run
 [input.json](input.json) drives everything — comment out/remove entries or trim arrays to run a subset:
 
