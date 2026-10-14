@@ -351,7 +351,7 @@ async function PersonaFlow(page, inputData, env) {
                                     continue;
                                 }
 
-                                await postUploadExploreReportFlow(page, report);
+                                await postUploadExploreReportFlow(page, report, false, false, env);
 
                                 // postUploadExploreReportFlow catches its own errors and logs
                                 // the report's outcome itself — don't overwrite a failure/skip

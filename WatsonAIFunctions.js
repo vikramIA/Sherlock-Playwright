@@ -1,6 +1,7 @@
 const { logSession } = require("./Logger");
 const { expect } = require("@playwright/test");
 const { detectErrorToast } = require("./ToastCheck");
+const { getKeplerDatasets } = require("./functions");
 
 
 // =========================================================
@@ -2006,6 +2007,60 @@ async function watsonAIKeplerValidation(page, reportName, reportOpenSeconds) {
                     logSession(
                         "⏳ Kepler sidebar element exists but is not visible yet. Continuing to wait..."
                     );
+                }
+            }
+
+            // =================================================
+            // 3️⃣b NO KEPLER SIDEBAR — READ KEPLER'S STATE
+            // =================================================
+            // QA (Oct 2026) removed the Kepler side panel from
+            // Explore report pages; WatsonAI's Focus Mode still had
+            // it then. If it's gone here too, read the loaded
+            // datasets from kepler's own state instead of polling
+            // for a sidebar that never comes (see getKeplerDatasets()
+            // in functions.js — verified live on WatsonAI Focus Mode:
+            // one map, rows match the report).
+
+            else {
+
+                const keplerData =
+                    await getKeplerDatasets(page);
+
+                const totalRows =
+                    keplerData.datasets.reduce((sum, dataset) => sum + dataset.rows, 0);
+
+                const datasetsText =
+                    `Datasets (${keplerData.datasets.length}): ` +
+                    keplerData.datasets.map(dataset => `${dataset.label} = ${dataset.rows} rows`).join(", ");
+
+                if (keplerData.datasets.length > 0 && totalRows > 0) {
+
+                    console.log(`✅ Datasets confirmed from Kepler state: '${datasetsText}'.`);
+                    logSession(`✅ Datasets confirmed from Kepler state: '${datasetsText}'.`);
+
+                    return log({
+                        reportName,
+                        url: currentURL,
+                        text: `WatsonAI generated report opened successfully with real data (${datasetsText}).`,
+                        status: "success",
+                        reportOpenSeconds
+                    });
+                }
+
+                if (keplerData.datasets.length > 0) {
+
+                    firstEmptyDatasetsAt ??= Date.now();
+
+                    if (Date.now() - firstEmptyDatasetsAt >= NO_DATA_GRACE_MS) {
+
+                        return log({
+                            reportName,
+                            url: currentURL,
+                            text: `Kepler map loaded, but its datasets have no rows — report likely has no data (${datasetsText}).`,
+                            status: "no_data",
+                            reportOpenSeconds
+                        });
+                    }
                 }
             }
 

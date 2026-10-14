@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { logSession, beginFlow } = require('./Logger');
 const { detectErrorToast } = require('./ToastCheck');
+const { getKeplerDatasets } = require('./functions');
 
 // One tracking file per env + check type (e.g. personaTracking/qa_daily.json). dev/qa/prod runs go
 // in parallel, and each process rewrites its whole file - sharing one file between them lost entries.
@@ -389,6 +390,11 @@ async function selectMainTab(page, tabName) {
 // Kepler side panel (if not already open - it stays open across Visits/Places switches once
 // opened) and checks it reports at least one dataset loaded, with no "No Data"/"Failed" toast.
 async function validateLayeredDatasetMapViewTab(page, reportName, tabLabel = 'Layered Dataset Map View') {
+    // QA (Oct 2026) removed Kepler's side panel from Explore report pages (this tab still had
+    // it then). If it's gone here too, read the datasets from kepler's own state instead of
+    // failing on a panel that can't be opened (see getKeplerDatasets() in functions.js).
+    let useKeplerState = false;
+
     try {
         await page.waitForTimeout(1000);
 
@@ -409,7 +415,11 @@ async function validateLayeredDatasetMapViewTab(page, reportName, tabLabel = 'La
             return { tab: tabLabel, passed: false, reason: 'table_rendered_instead_of_map', views: [] };
         }
 
-        if ((await page.locator(ADD_DATA_BUTTON_XPATH).count()) === 0) {
+        if ((await page.locator(ADD_DATA_BUTTON_XPATH).count()) === 0 && (await page.locator('button.side-bar__close').count()) === 0) {
+            useKeplerState = true;
+            console.log(`ℹ️ [${tabLabel}] No Kepler side panel on this page - reading datasets from Kepler's state.`);
+            logSession(`ℹ️ [${tabLabel}] No Kepler side panel on this page - reading datasets from Kepler's state.`);
+        } else if ((await page.locator(ADD_DATA_BUTTON_XPATH).count()) === 0) {
             // The overlay can also appear *after* the check above but before the click lands, so
             // re-check it on every retry rather than just once up front (same overlay/wait pattern
             // as keplerDatasetsFetch in functions.js).
@@ -449,6 +459,19 @@ async function validateLayeredDatasetMapViewTab(page, reportName, tabLabel = 'La
             if (toast) {
                 viewResult.passed = false;
                 viewResult.reason = toast.text;
+            } else if (useKeplerState) {
+                // Same 15s window the "Datasets(N)" label gets below for the view switch to land.
+                let keplerData = { datasets: [] };
+                const deadline = Date.now() + 15000;
+                do {
+                    keplerData = await getKeplerDatasets(page);
+                    if (keplerData.datasets.some(dataset => dataset.rows > 0)) break;
+                    await page.waitForTimeout(500);
+                } while (Date.now() < deadline);
+
+                viewResult.datasetsText = keplerData.datasets.map(dataset => `${dataset.label} = ${dataset.rows} rows`).join(', ');
+                viewResult.datasetsCount = keplerData.datasets.length;
+                viewResult.passed = keplerData.datasets.some(dataset => dataset.rows > 0);
             } else {
                 // The count briefly shows as plain "Datasets" (no number) while switching
                 // views, before settling to "Datasets(N)" - poll until the number appears.

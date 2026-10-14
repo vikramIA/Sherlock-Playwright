@@ -1,6 +1,6 @@
 {
   "dev": {
-    "baseUrl": "http://dev.thesherlock.ai/",
+    "baseUrl": "https://dev.thesherlock.ai/",
     "email": "selenium@ia.com",
     "password": "^Gar4&P@.ifCMu7",
     "secret": "NQXIORMD3SHMO75BBCGCNXU6GKDFHFAF"

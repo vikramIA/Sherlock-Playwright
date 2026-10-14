@@ -214,7 +214,8 @@ async function main() {
 
     new NetworkLogger(page, sessionDir);
     setArtifactsDir(sessionDir);
-    watchBrowserHealth(browser, page);
+    watchBrowserHealth(browser, context, page);
+
 
     try {
       await loginAndNavigate(

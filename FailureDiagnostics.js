@@ -39,7 +39,9 @@ async function captureFailureScreenshot(page, label) {
 // Records why the browser/tab went away. Without this, every step after it
 // just fails with "Target page, context or browser has been closed" and
 // nothing says whether the tab crashed or the browser was closed externally.
-function watchBrowserHealth(browser, page) {
+// `browser` is undefined for a persistent profile (launchPersistentContext
+// has no Browser object), so the context's close event is watched instead.
+function watchBrowserHealth(browser, context, page) {
     // Only the first event is the cause — a crash or a closed tab is
     // followed by the browser disconnecting too.
     const record = reason => {
@@ -57,9 +59,12 @@ function watchBrowserHealth(browser, page) {
         "the browser tab was closed while the run was still in progress (not by a test step — closed manually or by the OS/scheduler)"
     ));
 
-    browser.on("disconnected", () => record(
+    const browserExited = () => record(
         "the browser process exited while the run was still in progress (closed manually, killed, or crashed)"
-    ));
+    );
+
+    if (browser) browser.on("disconnected", browserExited);
+    else context.on("close", browserExited);
 }
 
 // Call right before the script closes the browser itself, so that close is

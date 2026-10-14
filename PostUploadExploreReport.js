@@ -1,4 +1,5 @@
 const { logSession, beginFlow } = require('./Logger');
+const { addPersonaReportToTracking } = require('./PersonaStatusFunctions.js');
 const {
     selectBehaviors, selectAgeRanges, clearSearchBar, uploadAudiences, searchAndClickReport, selectDateRange, clickCreateReportButton, enterReportName,
     selectExploreReportType, keplerDatasetsFetch, createPersonaFromReportOrThrow, assertAudienceUploadsSucceeded, selectSubCategory, selectBrands, SelectRating, SelectReviewCount,
@@ -6,7 +7,7 @@ const {
     selectAvailableAttributes, SelectQualityLifeScore, safeWait, logExploreFlowError } = require('./functions');
 
 
-async function postUploadExploreReportFlow(page, inputData, isForMultilayer = false, multilayerReportsMap = false) {
+async function postUploadExploreReportFlow(page, inputData, isForMultilayer = false, multilayerReportsMap = false, env) {
     const randomSuffix = () => Math.random().toString(36).substring(2, 7);
     inputData.reportName = `${inputData.reportName}: ${randomSuffix()}`;
     beginFlow("post_upload_explore");
@@ -80,6 +81,9 @@ async function postUploadExploreReportFlow(page, inputData, isForMultilayer = fa
 
                     if (inputData.Persona?.toUpperCase() === "YES") {
                         await createPersonaFromReportOrThrow(page, inputData.reportName);
+                        addPersonaReportToTracking(env, inputData.reportName, {
+                            uploadAudience: inputData.UploadAudience
+                        });
                     }
 
                     if (Array.isArray(inputData.UploadAudience) && inputData.UploadAudience.length > 0) {
@@ -169,6 +173,9 @@ async function postUploadExploreReportFlow(page, inputData, isForMultilayer = fa
 
                     if (inputData.Persona?.toUpperCase() === "YES") {
                         await createPersonaFromReportOrThrow(page, inputData.reportName);
+                        addPersonaReportToTracking(env, inputData.reportName, {
+                            uploadAudience: inputData.UploadAudience
+                        });
                     }
 
                     if (Array.isArray(inputData.UploadAudience) && inputData.UploadAudience.length > 0) {
@@ -298,6 +305,9 @@ async function postUploadExploreReportFlow(page, inputData, isForMultilayer = fa
                             else {
                                 if (PLVReportInputs.Persona?.toUpperCase() === "YES") {
                                     await createPersonaFromReportOrThrow(page, PLVReportInputs.reportName);
+                                    addPersonaReportToTracking(env, PLVReportInputs.reportName, {
+                                        uploadAudience: PLVReportInputs.UploadAudience
+                                    });
                                 }
                             }
 
@@ -355,6 +365,9 @@ async function postUploadExploreReportFlow(page, inputData, isForMultilayer = fa
                             else {
                                 if (DLVReportInputs.Persona?.toUpperCase() === "YES") {
                                     await createPersonaFromReportOrThrow(page, DLVReportInputs.reportName);
+                                    addPersonaReportToTracking(env, DLVReportInputs.reportName, {
+                                        uploadAudience: DLVReportInputs.UploadAudience
+                                    });
                                 }
                             }
                         } catch (err) {
