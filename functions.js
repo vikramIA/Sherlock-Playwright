@@ -1974,7 +1974,21 @@ async function selectPersonaReportType(page, reportTypeRaw) {
 
     try {
         const selectButton = page.locator(reportXPath);
-        await selectButton.click(); // Playwright waits for it to be visible & enabled
+
+        // The dialog only lists the workflow types the user's role allows — verified on QA
+        // (Oct 2026): with a non-admin role "Custom Place Codes" was simply missing, and the
+        // click below timed out with an unreadable XPath error. Say that plainly instead.
+        const offered = await selectButton.waitFor({ state: 'visible', timeout: 15000 }).then(() => true).catch(() => false);
+        if (!offered) {
+            const available = await page.locator("xpath=//div[@role='button' and text()='Select']/preceding-sibling::div")
+                .allTextContents().catch(() => []);
+            throw new Error(
+                `Persona workflow type '${reportTypeRaw}' is not offered to this user ` +
+                `(available: ${available.map(t => t.trim()).join(', ') || 'none'}) — check the test user's role/permissions.`
+            );
+        }
+
+        await selectButton.click();
         console.log(`✅ Selected Persona report type: '${reportTypeRaw}'`);
         logSession(`✅ Selected Persona report type: '${reportTypeRaw}'`);
 
