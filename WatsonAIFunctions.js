@@ -46,7 +46,7 @@ const WATSONAI_PROMPT_PLACEHOLDER = "Ask a question or make a command";
 // they're only treated as failures when their count grows past a baseline
 // taken before the query was sent.
 const WATSONAI_QUERY_ERROR_PATTERN =
-    /Failed to fetch Sherlock search results|I hit a connection problem/;
+    /Failed to fetch Sherlock search results|I hit a connection problem|Error occurred while processing your request/;
 
 // Every WatsonAI reply (text-only answer, form prompt, "report is ready",
 // post-report summary) ends with its own "Copy response" button, so this
@@ -80,13 +80,115 @@ async function getLatestWatsonAIReplyText(page, maxLength = 300) {
 
 // Snapshot of the chat state taken right BEFORE a query is sent, so the
 // waits below can tell this query's output apart from earlier messages
-// that are still sitting in the chat.
-async function getWatsonAIChatBaseline(page) {
+// that are still sitting in the chat. `query` lets them anchor on the
+// query's own chat bubble instead (see countAfterWatsonAIQuery).
+async function getWatsonAIChatBaseline(page, query = null) {
     return {
+        query,
         copyCount: await watsonAICopyResponseButtons(page).count(),
         formCount: await watsonAIReportNameFields(page).count(),
         errorCount: await watsonAIQueryErrors(page).count()
     };
+}
+
+// The chat bubble of the query that was just sent.
+function watsonAIQueryBubble(page, query) {
+    return page.getByText(query, { exact: true }).last();
+}
+
+// How many elements of `locator` sit AFTER this query's bubble in the chat,
+// i.e. belong to this query's reply. Returns null when the bubble can't be
+// found (callers then fall back to the count baseline).
+//
+// Count baselines alone are not enough: WatsonAI removes an earlier reply's
+// form when a new query is sent (seen on prod: the QLI form disappeared while
+// the DLV query was running), so the new DLV/PLV form brought the count back
+// to the same number and was never noticed — reported as "did not respond
+// with a report form within 180s" although the form was on screen.
+async function countAfterWatsonAIQuery(page, query, locator) {
+    if (!query) return null;
+
+    try {
+        const bubble = await watsonAIQueryBubble(page, query).elementHandle({ timeout: 2000 });
+
+        return await locator.evaluateAll(
+            (elements, anchor) => elements.filter(
+                element => anchor.compareDocumentPosition(element) & Node.DOCUMENT_POSITION_FOLLOWING
+            ).length,
+            bubble
+        );
+    } catch {
+        return null;
+    }
+}
+
+// What the chat shows below this query's bubble (WatsonAI's reply so far,
+// form text, inline errors), flattened for logging.
+async function getWatsonAITextAfterQuery(page, query, maxLength = 400) {
+    try {
+        const bodyText = await page.locator("body").innerText({ timeout: 5000 });
+        const index = query ? bodyText.lastIndexOf(query) : -1;
+        const after = index >= 0 ? bodyText.slice(index + query.length) : bodyText.slice(-maxLength);
+
+        return after
+            .replace(WATSONAI_PROMPT_PLACEHOLDER, "")
+            .replace(/\s+/g, " ")
+            .trim()
+            .slice(0, maxLength);
+    } catch {
+        return "";
+    }
+}
+
+// Required fields (label ending in "*") of this query's form that are empty,
+// plus any validation message shown inside it — the reason Submit produced
+// no report (seen on prod: Locations(s) left empty, Submit did nothing).
+async function describeWatsonAIFormProblems(page, query) {
+    try {
+        const bubble = query
+            ? await watsonAIQueryBubble(page, query).elementHandle({ timeout: 2000 }).catch(() => null)
+            : null;
+
+        return await page.evaluate(anchor => {
+            const isAfterAnchor = element =>
+                !anchor || (anchor.compareDocumentPosition(element) & Node.DOCUMENT_POSITION_FOLLOWING);
+            const isVisible = element => !!(element.offsetWidth || element.offsetHeight || element.getClientRects().length);
+            const clean = text => (text || "").replace(/\s+/g, " ").trim();
+
+            const emptyRequired = [];
+
+            for (const label of document.querySelectorAll("label")) {
+                const labelText = clean(label.innerText);
+                if (!labelText.endsWith("*") || !isAfterAnchor(label) || !isVisible(label)) continue;
+
+                // Walk up until the container holds more than the label itself.
+                let container = label.parentElement;
+                while (container && clean(container.innerText) === labelText) {
+                    container = container.parentElement;
+                }
+                if (!container) continue;
+
+                const inputValues = [...container.querySelectorAll("input, textarea")]
+                    .map(input => clean(input.value))
+                    .filter(Boolean);
+                const shownText = clean(clean(container.innerText).replace(labelText, ""));
+                const looksEmpty = !shownText || /^(type\.\.\.|select\b.*|search\b.*)$/i.test(shownText);
+
+                if (inputValues.length === 0 && looksEmpty) {
+                    emptyRequired.push(labelText.replace(/\s*\*$/, ""));
+                }
+            }
+
+            const validationMessages = [...document.querySelectorAll("body *")]
+                .filter(element => !element.children.length && isAfterAnchor(element) && isVisible(element))
+                .map(element => clean(element.textContent))
+                .filter(text => /is required|required field|please (enter|select|provide|choose)/i.test(text));
+
+            return { emptyRequired, validationMessages: [...new Set(validationMessages)] };
+        }, bubble);
+    } catch {
+        return { emptyRequired: [], validationMessages: [] };
+    }
 }
 
 // The prompt can be visible while still not accepting input (e.g. a report
@@ -97,6 +199,10 @@ async function waitForWatsonAIChatReady(page, timeout = 30000) {
 
     await expect(promptField).toBeEditable({ timeout });
 }
+
+// WatsonAI's "thinking" indicator under the latest query.
+const WATSONAI_LOADER_SELECTOR =
+    "div.flex.h-8.min-w-\\[40px\\].items-center.justify-center.rounded-lg.bg-surface-container-overlay-level-2.px-3.py-2";
 
 // Close icon of a report opened in Focus Mode.
 const WATSONAI_REPORT_CLOSE_ICON = "svg.cursor-pointer.fill-button-destructive-base";
@@ -379,7 +485,18 @@ async function enterWatsonAIQuery(page, query) {
             .catch(() => false);
 
         if (hasSendButton) {
-            await sendButton.click();
+            // A busy renderer (a heavy report still painting) can stall
+            // click() for its whole timeout (seen on QA). Fall back to Enter
+            // — but only if the query is still in the prompt, so a click
+            // that did land is never submitted twice.
+            await sendButton.click({ timeout: 10000 }).catch(async clickError => {
+                const stillPending = (await promptField.inputValue().catch(() => "")).trim() === query.trim();
+                if (!stillPending) return;
+
+                console.log(`ℹ️ Send button click did not go through (${clickError.message.split("\n")[0]}) — submitting with Enter.`);
+                logSession(`ℹ️ Send button click did not go through (${clickError.message.split("\n")[0]}) — submitting with Enter.`);
+                await promptField.press("Enter", { timeout: 15000 });
+            });
         } else {
             console.log("ℹ️ Send button not found next to the prompt — submitting with Enter.");
             logSession("ℹ️ Send button not found next to the prompt — submitting with Enter.");
@@ -539,13 +656,20 @@ async function waitForWatsonAIReportForm(page, baseline, timeout = 180000) {
     const deadline = Date.now() + timeout;
     let replyWithoutFormSince = null;
 
+    // New elements for THIS query: anchored on the query bubble when it can
+    // be found, otherwise the plain count-above-baseline check.
+    const newCount = async (locator, baselineCount) => {
+        const afterQuery = await countAfterWatsonAIQuery(page, baseline.query, locator);
+        return afterQuery ?? (await locator.count()) - baselineCount;
+    };
+
     while (Date.now() < deadline) {
 
-        if (await watsonAIReportNameFields(page).count() > baseline.formCount) {
+        if (await newCount(watsonAIReportNameFields(page), baseline.formCount) > 0) {
             return;
         }
 
-        if (await watsonAIQueryErrors(page).count() > baseline.errorCount) {
+        if (await newCount(watsonAIQueryErrors(page), baseline.errorCount) > 0) {
 
             const errorText = (
                 await watsonAIQueryErrors(page).last().innerText().catch(() => "")
@@ -554,7 +678,7 @@ async function waitForWatsonAIReportForm(page, baseline, timeout = 180000) {
             throw new Error(`WatsonAI failed to process the query: '${errorText}'`);
         }
 
-        if (await watsonAICopyResponseButtons(page).count() > baseline.copyCount) {
+        if (await newCount(watsonAICopyResponseButtons(page), baseline.copyCount) > 0) {
 
             replyWithoutFormSince ??= Date.now();
 
@@ -571,8 +695,14 @@ async function waitForWatsonAIReportForm(page, baseline, timeout = 180000) {
         await page.waitForTimeout(1000);
     }
 
+    // Say what WAS on screen instead of only "no form".
+    const shownText = await getWatsonAITextAfterQuery(page, baseline.query);
+    const stillThinking = await page.locator(WATSONAI_LOADER_SELECTOR).last().isVisible().catch(() => false);
+
     throw new Error(
-        `WatsonAI did not respond with a report form within ${Math.round(timeout / 1000)}s.`
+        `WatsonAI did not respond with a report form within ${Math.round(timeout / 1000)}s. ` +
+        (stillThinking ? "WatsonAI was still showing its loading indicator. " : "") +
+        (shownText ? `Chat after the query showed: '${shownText}'` : "Nothing was shown after the query.")
     );
 }
 
@@ -667,7 +797,9 @@ async function verifyWatsonAIReportFields(page, expectedData) {
 
             console.log(message);
             logSession(message);
-            fieldWarnings.push("Location");
+            fieldWarnings.push(
+                `Location (WatsonAI left it empty, expected '${expectedData.location}')`
+            );
         }
 
         // Code after this will continue executing
@@ -945,7 +1077,7 @@ async function clickWatsonAISubmit(page) {
 // 6. VERIFY REPORT CREATION SUCCESS
 // =========================================================
 
-async function verifyWatsonAISuccess(page, expectedMessage, expectedReportType, { previousOpenReportCount = 0, copyCountBeforeSubmit = 0 } = {}) {
+async function verifyWatsonAISuccess(page, expectedMessage, expectedReportType, { previousOpenReportCount = 0, copyCountBeforeSubmit = 0, query = null } = {}) {
 
     const reportTypeMap = {
         "place level visits": 9,
@@ -1077,9 +1209,34 @@ async function verifyWatsonAISuccess(page, expectedMessage, expectedReportType, 
 
         } catch {
 
+            // Why Submit produced nothing: empty required fields /
+            // validation messages in the form, or what WatsonAI replied.
+            const { emptyRequired, validationMessages } =
+                await describeWatsonAIFormProblems(page, query);
+
+            const details = [];
+
+            if (emptyRequired.length > 0) {
+                details.push(`required field(s) left empty in the form: ${emptyRequired.join(", ")}`);
+            }
+
+            if (validationMessages.length > 0) {
+                details.push(`form validation: '${validationMessages.join("; ")}'`);
+            }
+
+            if (details.length === 0) {
+                const replies = (await getWatsonAIReplyTexts(page, copyCountBeforeSubmit).catch(() => []))
+                    .filter(Boolean);
+                details.push(
+                    replies.length > 0
+                        ? `WatsonAI replied after Submit: '${replies.join(" | ").slice(0, 300)}'`
+                        : "WatsonAI showed no reply and no validation error after Submit"
+                );
+            }
+
             throw new Error(
                 "WatsonAI report creation failed: no new report was generated " +
-                "after clicking Submit (Open Report button count did not increase)."
+                `after clicking Submit — ${details.join("; ")}.`
             );
         }
 
@@ -1158,7 +1315,31 @@ async function verifyWatsonAISuccess(page, expectedMessage, expectedReportType, 
         // CLICK OPEN REPORT
         // =========================================================
 
-        await openReportButton.click();
+        // Marks the start of the "report open" timing window —
+        // ends once the loading overlay clears below (report visible).
+        // Taken before the click so a slow-returning click still counts.
+        const openReportClickTime = Date.now();
+
+        // Same busy-renderer hang as Focus Mode below: seen on QA, the click
+        // landed and the report opened (video), but click() sat in
+        // "performing click action" for 30s and failed the report. The
+        // report's sparkJobs response is proof the click worked.
+        await openReportButton.click({ timeout: 30000 }).catch(async clickError => {
+
+            const reportLoading = await Promise.race([
+                reportTypeResponsePromise.then(() => true, () => false),
+                page.waitForTimeout(30000).then(() => false)
+            ]);
+
+            if (!reportLoading) throw clickError;
+
+            console.log(
+                "ℹ️ 'Open Report' click did not return in time, but the report is loading."
+            );
+            logSession(
+                "ℹ️ 'Open Report' click did not return in time, but the report is loading."
+            );
+        });
 
         console.log(
             "✅ 'Open Report' button clicked."
@@ -1167,10 +1348,6 @@ async function verifyWatsonAISuccess(page, expectedMessage, expectedReportType, 
         logSession(
             "✅ 'Open Report' button clicked."
         );
-
-        // Marks the start of the "report open" timing window —
-        // ends once the loading overlay clears below (report visible).
-        const openReportClickTime = Date.now();
 
 
         // =========================================================
@@ -1381,27 +1558,51 @@ async function verifyWatsonAISuccess(page, expectedMessage, expectedReportType, 
 
         await focusModeButton.scrollIntoViewIfNeeded().catch(() => { });
 
-        // The report-title label above this button can overlap it at narrower
-        // window widths and intercept the click for the full default timeout
-        // (seen under Xvfb's smaller default screen). Fall back to a force
-        // click rather than depending on window size to keep them apart.
+        const focusModeCloseIcon = page.locator(WATSONAI_REPORT_CLOSE_ICON).last();
+
+        // Two ways this click "fails" without Focus Mode actually failing:
+        //   - the report-title label overlaps the button at narrower window
+        //     widths and intercepts it (seen under Xvfb's smaller screen);
+        //   - the click lands and Focus Mode opens, but the heavy map
+        //     (QLI: 17k areas, software GL on the VM) keeps the renderer
+        //     busy so click() never returns. The expand button is gone by
+        //     then, so the old unconditional force-retry waited 30s for a
+        //     button that no longer existed and failed a working report
+        //     (QA, Oct 2026 — the video showed Focus Mode open).
+        // So the close icon decides: only retry if Focus Mode isn't open.
         try {
             await focusModeButton.click({ timeout: 15000 });
         } catch (err) {
-            console.log(
-                "⚠️ Focus Mode click was intercepted (likely by the report title label) — retrying with a force click."
-            );
-            logSession(
-                "⚠️ Focus Mode click was intercepted (likely by the report title label) — retrying with a force click."
-            );
-            await focusModeButton.click({ force: true });
+
+            const alreadyOpen = await focusModeCloseIcon
+                .waitFor({ state: "visible", timeout: 10000 })
+                .then(() => true)
+                .catch(() => false);
+
+            if (alreadyOpen) {
+                console.log(
+                    "ℹ️ Focus Mode click did not return in time, but Focus Mode is open (report still rendering)."
+                );
+                logSession(
+                    "ℹ️ Focus Mode click did not return in time, but Focus Mode is open (report still rendering)."
+                );
+            } else {
+                console.log(
+                    "⚠️ Focus Mode click did not take effect (likely intercepted by the report title label) — retrying with a force click."
+                );
+                logSession(
+                    "⚠️ Focus Mode click did not take effect (likely intercepted by the report title label) — retrying with a force click."
+                );
+                await focusModeButton.click({ force: true, timeout: 15000 });
+            }
         }
 
         // Focus Mode is confirmed by its close icon — without this, a click
         // that didn't take effect only surfaces much later as a failed close.
-        await page.locator(WATSONAI_REPORT_CLOSE_ICON).last().waitFor({
+        // Generous: a heavy map can take a while to paint it.
+        await focusModeCloseIcon.waitFor({
             state: "visible",
-            timeout: 30000
+            timeout: 60000
         });
 
         console.log(
