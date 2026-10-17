@@ -3,7 +3,7 @@ const {
     enterWatsonAIQuery,
     watchWatsonAISearchRequest,
     waitForWatsonAIResponse,
-    WATSONAI_SUMMARY_TIMEOUT_MS,
+    WATSONAI_REPORT_DATA_WAIT_MS,
     getWatsonAIChatBaseline,
     waitForWatsonAIReportForm,
     waitForWatsonAIChatReady,
@@ -11,6 +11,7 @@ const {
     verifyWatsonAIReportFields,
     clickWatsonAISubmit,
     verifyWatsonAISuccess,
+    checkWatsonAIReportSummaryLate,
     watsonAIKeplerValidation
 } = require("./WatsonAIFunctions.js");
 
@@ -169,12 +170,10 @@ async function watsonAIFlow(page, reports) {
             // At this point Open Report was clicked
             reportOpened = true;
 
-            // Every WatsonAI-generated report should get a summary.
-            if (!reportValidation.summaryReceived) {
-                reportWarnings.push(
-                    `summary_missing: no WatsonAI summary within ${Math.round(WATSONAI_SUMMARY_TIMEOUT_MS / 1000)}s`
-                );
-            }
+            // Every WatsonAI-generated report should get a summary. If it
+            // hasn't come yet, it is checked once more before the report is
+            // closed (a slow one often lands while Kepler/Bento are checked).
+            let summaryReceived = reportValidation.summaryReceived;
 
 
             // =================================================
@@ -250,19 +249,18 @@ async function watsonAIFlow(page, reports) {
 
 
             console.log(
-                `📊 WatsonAI Kepler validation result: ${keplerResult}`
+                `📊 WatsonAI Kepler validation result: ${keplerResult.status}`
             );
 
             logSession(
-                `📊 WatsonAI Kepler validation result: ${keplerResult}`
+                `📊 WatsonAI Kepler validation result: ${keplerResult.status}`
             );
 
 
-            if (keplerResult !== "success") {
+            if (keplerResult.status !== "success") {
 
                 throw new Error(
-                    `Kepler validation failed. ` +
-                    `Status: ${keplerResult}`
+                    `Kepler validation failed (${keplerResult.status}): ${keplerResult.text}`
                 );
             }
 
@@ -284,12 +282,24 @@ async function watsonAIFlow(page, reports) {
                 await verifyDefaultBentoCharts(
                     page,
                     inputData.reportType,
-                    actualReportName
+                    actualReportName,
+                    { maxWaitMs: WATSONAI_REPORT_DATA_WAIT_MS }
                 );
             } catch (bentoError) {
                 // Large report on the summary page with data: loaded, just no Bento.
                 if (!(bentoError instanceof SummaryPageReportError)) throw bentoError;
                 reportWarnings.push(`summary_page_with_data: Total ${bentoError.totalRaw}`);
+            }
+
+
+            if (!summaryReceived) {
+                summaryReceived = await checkWatsonAIReportSummaryLate(page, submitBaseline.repliesBeforeSubmit);
+            }
+
+            if (!summaryReceived) {
+                reportWarnings.push(
+                    "summary_missing: no WatsonAI summary in the chat by the end of validation"
+                );
             }
 
 

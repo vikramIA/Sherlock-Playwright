@@ -100,30 +100,67 @@ async function waitForCSAgentElementOrDisconnect(page, targetLocator, timeout) {
     }
 }
 
-// Same idea, for the count-based waits used by the Phase 3 pipeline, which
-// don't fit the plain waitFor() shape above. "At least" rather than an exact
-// count: a live run saw the multilayer count jump past i+1 between polls,
-// which an exact toHaveCount() can miss and then time out on.
-async function expectCSAgentCountOrDisconnect(page, targetLocator, count, timeout) {
+
+// How many chat items match `pattern` — the smallest elements whose text
+// matches, never counting text inside the toast area. With `distinct`, the
+// same text counts once.
+//
+// Verified live on QA (Oct 17 2026): a plain getByText(/^Multilayer /).count()
+// also counted the "Multilayer Report Saved Successfully!" toast and each
+// report name more than once, so the count went 4 -> 3 -> 4 and "report N
+// generated" passed before report N existed.
+async function countCSAgentChatItems(page, pattern, { distinct = false } = {}) {
+    return page.evaluate(({ source, flags, distinct }) => {
+        const regex = new RegExp(source, flags);
+        const matches = element => regex.test((element.textContent || "").trim());
+
+        const texts = [...document.querySelectorAll("body *")]
+            .filter(element => !["SCRIPT", "STYLE", "NOSCRIPT"].includes(element.tagName))
+            .filter(element => !element.closest("[role='region'][aria-label^='Notifications']"))
+            .filter(matches)
+            .filter(element => ![...element.children].some(matches))
+            .map(element => element.textContent.trim());
+
+        return distinct ? new Set(texts).size : texts.length;
+    }, { source: pattern.source, flags: pattern.flags, distinct });
+}
+
+// Waits until at least `expected` chat items match. Unlike a plain count
+// poll it also notices when the agent has MOVED ON (`movedOn()` true) with
+// fewer items — e.g. one cohort's report skipped — and returns then instead
+// of waiting out the full timeout and failing a run that otherwise finished.
+// Returns { count, complete }. Throws on a disconnect/error banner, or when
+// nothing moves on within `timeout`.
+async function waitForCSAgentChatItems(page, { pattern, expected, timeout, label, distinct = false, movedOn = async () => false }) {
 
     const disconnectLocator = page.getByText(CS_AGENT_DISCONNECT_PATTERN).last();
+    const deadline = Date.now() + timeout;
+    let count = 0;
 
-    const result = await raceCSAgentSignal(
-        () => expect.poll(() => targetLocator.count(), { timeout }).toBeGreaterThanOrEqual(count),
-        disconnectLocator,
-        timeout
-    );
+    while (true) {
 
-    if (result.type === "disconnect") {
+        count = await countCSAgentChatItems(page, pattern, { distinct });
 
-        const message = (await disconnectLocator.innerText()).trim();
+        if (count >= expected) return { count, complete: true };
 
-        throw csAgentStoppedError(message);
-    }
+        if (await disconnectLocator.isVisible().catch(() => false)) {
+            throw csAgentStoppedError((await disconnectLocator.innerText()).trim());
+        }
 
-    if (result.type === "neither") {
+        if (await movedOn()) {
+            // Let a late item finish rendering before concluding it's missing.
+            await page.waitForTimeout(5000);
+            count = await countCSAgentChatItems(page, pattern, { distinct });
+            return { count, complete: count >= expected };
+        }
 
-        throw result.error;
+        if (Date.now() > deadline) {
+            throw new Error(
+                `${label}: only ${count} of ${expected} appeared within ${Math.round(timeout / 60000)} min, and the agent did not move on`
+            );
+        }
+
+        await page.waitForTimeout(2000);
     }
 }
 
@@ -588,19 +625,50 @@ async function waitForCSAgentPhaseComplete(page, phaseNumber, fileExtension) {
 
 const ONLYOFFICE_FRAME_SELECTOR = 'iframe[name="frameEditor"]';
 
+// The viewer loads much slower on the VM (software rendering) than locally;
+// prod Phase 1 (Oct 12 2026) failed after 60s with the Close button "not
+// found" — the viewer was still loading.
+const ONLYOFFICE_LOAD_TIMEOUT_MS = 3 * 60 * 1000;
+
 async function waitForOnlyOfficeLoaded(page, timeout) {
 
     const editorFrame = page.frameLocator(ONLYOFFICE_FRAME_SELECTOR);
 
-    await expect(
-        editorFrame.getByRole("button", { name: "Close", exact: true })
-    ).toBeEnabled({ timeout });
+    try {
 
-    await expect(
-        editorFrame.getByText(/^Loading (document|spreadsheet)/i).filter({ visible: true })
-    ).toHaveCount(0, { timeout });
+        await expect(
+            editorFrame.getByRole("button", { name: "Close", exact: true })
+        ).toBeEnabled({ timeout });
+
+        await expect(
+            editorFrame.getByText(/^Loading (document|spreadsheet)/i).filter({ visible: true })
+        ).toHaveCount(0, { timeout });
+
+    } catch {
+        throw new Error(
+            `OnlyOffice viewer did not finish loading within ${Math.round(timeout / 1000)}s — ${await describeOnlyOfficeState(page)}`
+        );
+    }
 
     return editorFrame;
+}
+
+// What the viewer showed when it failed to load, for the failure reason.
+async function describeOnlyOfficeState(page) {
+
+    if (await page.locator(ONLYOFFICE_FRAME_SELECTOR).count() === 0) {
+        return "the editor iframe never opened";
+    }
+
+    const frameText = await page.frameLocator(ONLYOFFICE_FRAME_SELECTOR)
+        .locator("body")
+        .innerText({ timeout: 5000 })
+        .then(text => text.replace(/\s+/g, " ").trim().slice(0, 150))
+        .catch(() => "");
+
+    return frameText
+        ? `editor showed: '${frameText}'`
+        : "editor iframe opened but stayed blank";
 }
 
 // Closes the viewer and confirms the iframe is gone. The file was only
@@ -662,7 +730,7 @@ async function closeOnlyOfficeViewer(page, label) {
 // used here to confirm the file is real and not blank/corrupt.)
 // =========================================================
 
-async function validateCSAgentDocxOutput(page, timeout = 60000) {
+async function validateCSAgentDocxOutput(page, timeout = ONLYOFFICE_LOAD_TIMEOUT_MS) {
     try {
 
         const openFileButton = page.getByRole("button", {
@@ -734,7 +802,7 @@ async function validateCSAgentDocxOutput(page, timeout = 60000) {
 // CURRENT/last "Open ....xlsx" button in the transcript via .last().
 // =========================================================
 
-async function validateCSAgentXlsxOutput(page, timeout = 60000) {
+async function validateCSAgentXlsxOutput(page, timeout = ONLYOFFICE_LOAD_TIMEOUT_MS) {
     try {
 
         const openFileButton = page.getByRole("button", {
@@ -839,9 +907,16 @@ async function waitForCSAgentPhase2Pipeline(page) {
         console.log(`⏳ Phase 2: waiting for ${currentStep}...`);
         logSession(`⏳ Phase 2: waiting for ${currentStep}...`);
 
-        const strategyText = page.getByText("Generated strategy").last();
+        // ~1.5 min on QA/prod runs (Oct 2026), but slower days hit the old
+        // 8 min limit ("locator.waitFor: Timeout 480000ms exceeded").
+        // The strategy-changes prompt that follows also proves this step
+        // finished, so either one ends the wait. A disconnect/error banner
+        // still fails it right away.
+        const strategyText = page.getByText("Generated strategy")
+            .or(page.getByText("Would you like to make changes to the strategy above?"))
+            .last();
 
-        await waitForCSAgentElementOrDisconnect(page, strategyText, 8 * 60 * 1000);
+        await waitForCSAgentElementOrDisconnect(page, strategyText, 15 * 60 * 1000);
 
         console.log(`✅ Phase 2 cohort strategy generated.`);
         logSession(`✅ Phase 2 cohort strategy generated.`);
@@ -934,6 +1009,23 @@ async function waitForCSAgentPhase3Pipeline(page) {
         logSession(`📊 Phase 3 will generate reports for ${cohortCount} cohort(s).`);
 
 
+        // Problems that didn't stop the agent (it moved on and finished)
+        // but must not pass as a clean success either.
+        const warnings = [];
+
+        const reviewPromptPattern = /^Please review and modify the following query parameters\.?$/;
+        const deactivated = () => page.getByText("CS agent deactivated").last().isVisible().catch(() => false);
+        const reviewFormCount = () => countCSAgentChatItems(page, reviewPromptPattern);
+
+        const recordShortfall = (what, result) => {
+            if (result.complete) return;
+            const warning = `phase3_${what}_short: ${result.count}/${cohortCount}`;
+            warnings.push(warning);
+            console.log(`⚠️ Phase 3: the agent moved on with only ${result.count} of ${cohortCount} ${what} report(s).`);
+            logSession(`⚠️ Phase 3: the agent moved on with only ${result.count} of ${cohortCount} ${what} report(s).`);
+        };
+
+
         // =====================================================
         // VISITATION REPORTS
         // =====================================================
@@ -942,12 +1034,22 @@ async function waitForCSAgentPhase3Pipeline(page) {
         console.log(`⏳ Phase 3: waiting for ${currentStep}...`);
         logSession(`⏳ Phase 3: waiting for ${currentStep}...`);
 
-        const visitationReports = page.getByText(/^Visitation report for /);
+        const visitation = await waitForCSAgentChatItems(page, {
+            pattern: /^Visitation report for /,
+            expected: cohortCount,
+            distinct: true,
+            timeout: 10 * 60 * 1000,
+            label: "Visitation reports",
+            movedOn: async () =>
+                (await countCSAgentChatItems(page, /^Places report for /)) > 0 ||
+                (await reviewFormCount()) > 0 ||
+                (await deactivated())
+        });
 
-        await expectCSAgentCountOrDisconnect(page, visitationReports, cohortCount, 10 * 60 * 1000);
+        recordShortfall("visitation", visitation);
 
-        console.log(`✅ All ${cohortCount} visitation report(s) generated.`);
-        logSession(`✅ All ${cohortCount} visitation report(s) generated.`);
+        console.log(`✅ ${visitation.count} of ${cohortCount} visitation report(s) generated.`);
+        logSession(`✅ ${visitation.count} of ${cohortCount} visitation report(s) generated.`);
 
 
         // =====================================================
@@ -958,18 +1060,38 @@ async function waitForCSAgentPhase3Pipeline(page) {
         console.log(`⏳ Phase 3: waiting for ${currentStep}...`);
         logSession(`⏳ Phase 3: waiting for ${currentStep}...`);
 
-        const poiReports = page.getByText(/^Places report for /);
+        const places = await waitForCSAgentChatItems(page, {
+            pattern: /^Places report for /,
+            expected: cohortCount,
+            distinct: true,
+            timeout: 10 * 60 * 1000,
+            label: "POI reports",
+            movedOn: async () => (await reviewFormCount()) > 0 || (await deactivated())
+        });
 
-        await expectCSAgentCountOrDisconnect(page, poiReports, cohortCount, 10 * 60 * 1000);
+        recordShortfall("poi", places);
 
-        console.log(`✅ All ${cohortCount} POI report(s) generated.`);
-        logSession(`✅ All ${cohortCount} POI report(s) generated.`);
+        console.log(`✅ ${places.count} of ${cohortCount} POI report(s) generated.`);
+        logSession(`✅ ${places.count} of ${cohortCount} POI report(s) generated.`);
 
 
         // =====================================================
         // MULTILAYER REPORTS
         // (one "review query parameters" form per cohort)
+        //
+        // Verified live: every submitted form stays in the chat with its
+        // Submit button disabled. So the form for cohort i is "the
+        // (i+1)-th review prompt" — the old .last() matched the previous,
+        // already-submitted form at once and then waited only 3 min for
+        // the next form's Submit to turn enabled, failing as
+        // "toBeEnabled() failed" whenever the next form was slow.
         // =====================================================
+
+        // Report names ("Multilayer <cohort>"), not the "Multilayer Report
+        // Saved Successfully!" toast.
+        const multilayerNamePattern = /^Multilayer (?!Report Saved)/;
+        let formsShown = 0;
+        let multilayerCount = 0;
 
         for (let i = 0; i < cohortCount; i++) {
 
@@ -977,28 +1099,33 @@ async function waitForCSAgentPhase3Pipeline(page) {
             console.log(`⏳ Phase 3: waiting for ${currentStep}...`);
             logSession(`⏳ Phase 3: waiting for ${currentStep}...`);
 
-            const reviewPrompt = page.getByText(
-                "Please review and modify the following query parameters."
-            ).last();
+            const form = await waitForCSAgentChatItems(page, {
+                pattern: reviewPromptPattern,
+                expected: i + 1,
+                timeout: 10 * 60 * 1000,
+                label: `Multilayer review form for cohort ${i + 1}`,
+                movedOn: deactivated
+            });
 
-            await waitForCSAgentElementOrDisconnect(page, reviewPrompt, 5 * 60 * 1000);
+            if (!form.complete) break;
+
+            formsShown = i + 1;
 
             const submitButton = page.getByRole("button", {
                 name: "Submit",
                 exact: true
             }).last();
 
-            await waitForCSAgentElementOrDisconnect(page, submitButton, 15000);
+            // Submit renders disabled until the form finishes populating
+            // (observed live to take well past 60s for some cohorts).
+            try {
+                await expect(submitButton).toBeEnabled({ timeout: 3 * 60 * 1000 });
+            } catch {
+                throw new Error(
+                    `Multilayer review form for cohort ${i + 1} appeared, but its Submit button stayed disabled for 3 min`
+                );
+            }
 
-            // Submit renders visible but disabled until the form finishes
-            // populating (usually near-instant, but observed live to
-            // occasionally stay disabled well past 60s for a specific
-            // cohort — confirmed cohort/company-dependent backend
-            // slowness, not a fixed position: cohort 5 failed here for
-            // one company in the same run cohort 5 succeeded instantly
-            // for another) — wait for enabled explicitly instead of
-            // relying on click()'s default 30s actionability wait.
-            await expect(submitButton).toBeEnabled({ timeout: 3 * 60 * 1000 });
             await submitButton.click();
 
             console.log(`✅ Submitted multilayer report parameters for cohort ${i + 1}/${cohortCount}.`);
@@ -1008,15 +1135,30 @@ async function waitForCSAgentPhase3Pipeline(page) {
             console.log(`⏳ Phase 3: waiting for ${currentStep}...`);
             logSession(`⏳ Phase 3: waiting for ${currentStep}...`);
 
-            const multilayerReports = page.getByText(/^Multilayer /);
+            const multilayer = await waitForCSAgentChatItems(page, {
+                pattern: multilayerNamePattern,
+                expected: i + 1,
+                distinct: true,
+                timeout: 10 * 60 * 1000,
+                label: `Multilayer report for cohort ${i + 1}`,
+                movedOn: async () => (await reviewFormCount()) > i + 1 || (await deactivated())
+            });
 
-            await expectCSAgentCountOrDisconnect(page, multilayerReports, i + 1, 10 * 60 * 1000);
+            multilayerCount = multilayer.count;
         }
 
-        console.log(`✅ All ${cohortCount} multilayer report(s) generated.`);
-        logSession(`✅ All ${cohortCount} multilayer report(s) generated.`);
+        if (formsShown < cohortCount) {
+            warnings.push(`phase3_multilayer_forms_short: ${formsShown}/${cohortCount}`);
+            console.log(`⚠️ Phase 3: the agent finished after only ${formsShown} of ${cohortCount} multilayer review form(s).`);
+            logSession(`⚠️ Phase 3: the agent finished after only ${formsShown} of ${cohortCount} multilayer review form(s).`);
+        }
 
-        return cohortCount;
+        recordShortfall("multilayer", { count: multilayerCount, complete: multilayerCount >= cohortCount });
+
+        console.log(`✅ ${multilayerCount} of ${cohortCount} multilayer report(s) generated.`);
+        logSession(`✅ ${multilayerCount} of ${cohortCount} multilayer report(s) generated.`);
+
+        return warnings;
 
     } catch (error) {
 
