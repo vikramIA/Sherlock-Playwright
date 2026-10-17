@@ -7,6 +7,8 @@ const {
     getWatsonAIChatBaseline,
     waitForWatsonAIReportForm,
     waitForWatsonAIChatReady,
+    recoverWatsonAIChat,
+    isWatsonAINoResponseError,
     closeWatsonAIReport,
     verifyWatsonAIReportFields,
     clickWatsonAISubmit,
@@ -65,361 +67,407 @@ async function watsonAIFlow(page, reports) {
 
     for (const inputData of reports) {
 
-        // Placeholder until WatsonAI generates the real name. Must be unique
-        // per input — the run summary counts reports by this name, so a
-        // shared "Unknown" merged every early failure into one.
-        let actualReportName = `WatsonAI ${inputData.reportType} (name not generated)`;
-        let reportOpened = false;
-        // Set once Submit is clicked — from then on a report may be open.
-        let submitClicked = false;
-        // Problems that don't fail the report (it was still created and
-        // verified) but must not be reported as a clean success either —
-        // they turn the final outcome into "warning".
-        const reportWarnings = [];
-        beginFlow("watson_ai");
+        // A report gets a second attempt only when WatsonAI never answered
+        // (see isWatsonAINoResponseError) — everything else ends after one.
+        for (let attempt = 1; attempt <= 2; attempt++) {
 
-        try {
+            // Placeholder until WatsonAI generates the real name. Must be unique
+            // per input — the run summary counts reports by this name, so a
+            // shared "Unknown" merged every early failure into one.
+            let actualReportName = `WatsonAI ${inputData.reportType} (name not generated)`;
+            let reportOpened = false;
+            // Set once Submit is clicked — from then on a report may be open.
+            let submitClicked = false;
+            // Problems that don't fail the report (it was still created and
+            // verified) but must not be reported as a clean success either —
+            // they turn the final outcome into "warning".
+            const reportWarnings = [];
+            beginFlow("watson_ai");
 
-            const type = inputData.reportType
-                .trim()
-                .toLowerCase();
+            try {
 
-
-            console.log(
-                `\n🤖 Starting WatsonAI report: ${inputData.reportType}`
-            );
-
-            logSession(
-                `\n🤖 Starting WatsonAI report: ${inputData.reportType}`
-            );
+                const type = inputData.reportType
+                    .trim()
+                    .toLowerCase();
 
 
-            // =================================================
-            // ENTER QUERY
-            // =================================================
+                console.log(
+                    `\n🤖 Starting WatsonAI report: ${inputData.reportType}`
+                );
 
-            // Baseline taken BEFORE this query is submitted — replies,
-            // forms and error blocks from earlier queries in this session
-            // stay in the chat DOM forever, so the wait below needs this
-            // to tell "THIS query got a reply/error" apart from "an old
-            // one is still sitting there".
-            const chatBaseline = await getWatsonAIChatBaseline(page, inputData.query);
-
-            const searchResponse = watchWatsonAISearchRequest(page);
-
-            await enterWatsonAIQuery(
-                page,
-                inputData.query
-            );
+                logSession(
+                    `\n🤖 Starting WatsonAI report: ${inputData.reportType}`
+                );
 
 
-            // =================================================
-            // WAIT FOR WATSONAI RESPONSE
-            // Fails fast with WatsonAI's own reply when it answers
-            // with an error or a text-only reply instead of a report
-            // form (e.g. the QLI query currently gets no form),
-            // instead of timing out on the Report Name field.
-            // =================================================
+                // A previous report (or a dropped connection) can leave the prompt
+                // disabled — recover it here instead of failing at typing the query.
+                const chatUsable = await waitForWatsonAIChatReady(page, 30000).then(() => true, () => false);
 
-            await waitForWatsonAIResponse(page, searchResponse);
-
-            await waitForWatsonAIReportForm(page, chatBaseline);
+                if (!chatUsable) {
+                    await recoverWatsonAIChat(page);
+                }
 
 
-            // =================================================
-            // VERIFY GENERATED REPORT FIELDS
-            // =================================================
+                // =================================================
+                // ENTER QUERY
+                // =================================================
 
-            const fieldCheck =
-                await verifyWatsonAIReportFields(
+                // Baseline taken BEFORE this query is submitted — replies,
+                // forms and error blocks from earlier queries in this session
+                // stay in the chat DOM forever, so the wait below needs this
+                // to tell "THIS query got a reply/error" apart from "an old
+                // one is still sitting there".
+                const chatBaseline = await getWatsonAIChatBaseline(page, inputData.query);
+
+                const searchResponse = watchWatsonAISearchRequest(page);
+
+                await enterWatsonAIQuery(
                     page,
-                    inputData.verification
+                    inputData.query
                 );
 
-            actualReportName = fieldCheck.reportName;
 
-            if (fieldCheck.fieldWarnings.length > 0) {
-                reportWarnings.push(
-                    `field_mismatch: ${fieldCheck.fieldWarnings.join(", ")}`
-                );
-            }
+                // =================================================
+                // WAIT FOR WATSONAI RESPONSE
+                // Fails fast with WatsonAI's own reply when it answers
+                // with an error or a text-only reply instead of a report
+                // form (e.g. the QLI query currently gets no form),
+                // instead of timing out on the Report Name field.
+                // =================================================
 
+                await waitForWatsonAIResponse(page, searchResponse);
 
-            // =================================================
-            // SUBMIT REPORT
-            // =================================================
-
-            const submitBaseline =
-                await clickWatsonAISubmit(page);
-
-            submitClicked = true;
+                await waitForWatsonAIReportForm(page, chatBaseline);
 
 
-            // =================================================
-            // VERIFY REPORT CREATION + OPEN REPORT
-            // =================================================
+                // =================================================
+                // VERIFY GENERATED REPORT FIELDS
+                // =================================================
 
-            const reportValidation =
-                await verifyWatsonAISuccess(
-                    page,
-                    inputData.expectedMessage,
-                    inputData.reportType,
-                    { ...submitBaseline, query: inputData.query }
-                );
+                const fieldCheck =
+                    await verifyWatsonAIReportFields(
+                        page,
+                        inputData.verification
+                    );
 
-            // At this point Open Report was clicked
-            reportOpened = true;
+                actualReportName = fieldCheck.reportName;
 
-            // Every WatsonAI-generated report should get a summary. If it
-            // hasn't come yet, it is checked once more before the report is
-            // closed (a slow one often lands while Kepler/Bento are checked).
-            let summaryReceived = reportValidation.summaryReceived;
+                if (fieldCheck.fieldWarnings.length > 0) {
+                    reportWarnings.push(
+                        `field_mismatch: ${fieldCheck.fieldWarnings.join(", ")}`
+                    );
+                }
 
 
-            // =================================================
-            // REPORT TYPE VALIDATION
-            // =================================================
+                // =================================================
+                // SUBMIT REPORT
+                // =================================================
 
-            if (!reportValidation.matched) {
+                const submitBaseline =
+                    await clickWatsonAISubmit(page);
 
-                console.error(
-                    `❌ ${inputData.reportType} report type validation failed.`
+                submitClicked = true;
+
+
+                // =================================================
+                // VERIFY REPORT CREATION + OPEN REPORT
+                // =================================================
+
+                const reportValidation =
+                    await verifyWatsonAISuccess(
+                        page,
+                        inputData.expectedMessage,
+                        inputData.reportType,
+                        { ...submitBaseline, query: inputData.query }
+                    );
+
+                // At this point Open Report was clicked
+                reportOpened = true;
+
+                // Every WatsonAI-generated report should get a summary. If it
+                // hasn't come yet, it is checked once more before the report is
+                // closed (a slow one often lands while Kepler/Bento are checked).
+                let summaryReceived = reportValidation.summaryReceived;
+
+
+                // =================================================
+                // REPORT TYPE VALIDATION
+                // =================================================
+
+                if (!reportValidation.matched) {
+
+                    console.error(
+                        `❌ ${inputData.reportType} report type validation failed.`
+                    );
+
+                    logSession(
+                        `❌ ${inputData.reportType} report type validation failed.`,
+                        false,
+                        { flow: "watson_ai", report: actualReportName, report_type: inputData.reportType, outcome: "failure", reason: "report_type_mismatch" }
+                    );
+
+                    console.error(
+                        `Expected reportType: ${reportValidation.expectedType}`
+                    );
+
+                    logSession(
+                        `Expected reportType: ${reportValidation.expectedType}`
+                    );
+
+                    console.error(
+                        `Actual reportType: ${reportValidation.actualType}`
+                    );
+
+                    logSession(
+                        `Actual reportType: ${reportValidation.actualType}`
+                    );
+
+
+                    // =============================================
+                    // CLOSE INCORRECT REPORT + RETURN TO CHAT
+                    // =============================================
+
+                    await closeWatsonAIReport(page, actualReportName);
+
+
+                    console.log(
+                        `⚠️ Skipping Kepler/Bento validation because report type is incorrect.`
+                    );
+
+                    logSession(
+                        `⚠️ Skipping Kepler/Bento validation because report type is incorrect.`
+                    );
+
+                    console.log(
+                        `➡️ Continuing with next WatsonAI report...`
+                    );
+
+                    logSession(
+                        `➡️ Continuing with next WatsonAI report...`
+                    );
+
+                    break;
+                }
+
+
+                // =================================================
+                // KEPLER VALIDATION
+                // =================================================
+
+                const keplerResult =
+                    await watsonAIKeplerValidation(
+                        page,
+                        actualReportName,
+                        reportValidation.reportOpenSeconds
+                    );
+
+
+                console.log(
+                    `📊 WatsonAI Kepler validation result: ${keplerResult.status}`
                 );
 
                 logSession(
-                    `❌ ${inputData.reportType} report type validation failed.`,
-                    false,
-                    { flow: "watson_ai", report: actualReportName, report_type: inputData.reportType, outcome: "failure", reason: "report_type_mismatch" }
+                    `📊 WatsonAI Kepler validation result: ${keplerResult.status}`
                 );
 
-                console.error(
-                    `Expected reportType: ${reportValidation.expectedType}`
+
+                if (keplerResult.status !== "success") {
+
+                    throw new Error(
+                        `Kepler validation failed (${keplerResult.status}): ${keplerResult.text}`
+                    );
+                }
+
+
+                console.log(
+                    `✅ WatsonAI Kepler validation passed for '${actualReportName}'.`
                 );
 
                 logSession(
-                    `Expected reportType: ${reportValidation.expectedType}`
-                );
-
-                console.error(
-                    `Actual reportType: ${reportValidation.actualType}`
-                );
-
-                logSession(
-                    `Actual reportType: ${reportValidation.actualType}`
+                    `✅ WatsonAI Kepler validation passed for '${actualReportName}'.`
                 );
 
 
-                // =============================================
-                // CLOSE INCORRECT REPORT + RETURN TO CHAT
-                // =============================================
+                // =================================================
+                // BENTO VALIDATION
+                // =================================================
+
+                try {
+                    await verifyDefaultBentoCharts(
+                        page,
+                        inputData.reportType,
+                        actualReportName,
+                        { maxWaitMs: WATSONAI_REPORT_DATA_WAIT_MS }
+                    );
+                } catch (bentoError) {
+                    // Large report on the summary page with data: loaded, just no Bento.
+                    if (!(bentoError instanceof SummaryPageReportError)) throw bentoError;
+                    reportWarnings.push(`summary_page_with_data: Total ${bentoError.totalRaw}`);
+                }
+
+
+                if (!summaryReceived) {
+                    summaryReceived = await checkWatsonAIReportSummaryLate(page, submitBaseline.repliesBeforeSubmit);
+                }
+
+                if (!summaryReceived) {
+                    reportWarnings.push(
+                        "summary_missing: no WatsonAI summary in the chat by the end of validation"
+                    );
+                }
+
+
+                // =================================================
+                // CLOSE REPORT AFTER SUCCESS + RETURN TO CHAT
+                // =================================================
 
                 await closeWatsonAIReport(page, actualReportName);
 
 
-                console.log(
-                    `⚠️ Skipping Kepler/Bento validation because report type is incorrect.`
-                );
+                // =================================================
+                // REPORT COMPLETED
+                // =================================================
 
-                logSession(
-                    `⚠️ Skipping Kepler/Bento validation because report type is incorrect.`
-                );
+                if (reportWarnings.length > 0) {
 
-                console.log(
-                    `➡️ Continuing with next WatsonAI report...`
-                );
+                    const warningReason = reportWarnings.join("; ");
 
-                logSession(
-                    `➡️ Continuing with next WatsonAI report...`
-                );
+                    console.log(
+                        `⚠️ WatsonAI ${inputData.reportType} completed with warnings: ${warningReason}`
+                    );
 
-                continue;
-            }
+                    logSession(
+                        `⚠️ WatsonAI ${inputData.reportType} completed with warnings.`,
+                        false,
+                        { flow: "watson_ai", report: actualReportName, report_type: inputData.reportType, outcome: "warning", reason: warningReason }
+                    );
 
+                } else {
 
-            // =================================================
-            // KEPLER VALIDATION
-            // =================================================
+                    console.log(
+                        `🎉 WatsonAI ${inputData.reportType} completed successfully.`
+                    );
 
-            const keplerResult =
-                await watsonAIKeplerValidation(
-                    page,
-                    actualReportName,
-                    reportValidation.reportOpenSeconds
-                );
+                    logSession(
+                        `🎉 WatsonAI ${inputData.reportType} completed successfully.`,
+                        false,
+                        { flow: "watson_ai", report: actualReportName, report_type: inputData.reportType, outcome: "success" }
+                    );
+                }
 
-
-            console.log(
-                `📊 WatsonAI Kepler validation result: ${keplerResult.status}`
-            );
-
-            logSession(
-                `📊 WatsonAI Kepler validation result: ${keplerResult.status}`
-            );
+                break;
 
 
-            if (keplerResult.status !== "success") {
+            } catch (error) {
 
-                throw new Error(
-                    `Kepler validation failed (${keplerResult.status}): ${keplerResult.text}`
-                );
-            }
+                // WatsonAI never answered (no reply / no report / chat stuck):
+                // get a fresh chat and give the report one more try instead of
+                // failing it — and every report after it — on a dropped connection.
+                if (attempt === 1 && isWatsonAINoResponseError(error)) {
 
+                    console.log(`⚠️ WatsonAI did not respond for ${inputData.reportType} (${explainError(error)}). Recovering the chat and retrying once...`);
+                    logSession(`⚠️ WatsonAI did not respond for ${inputData.reportType} (${explainError(error)}). Recovering the chat and retrying once...`);
 
-            console.log(
-                `✅ WatsonAI Kepler validation passed for '${actualReportName}'.`
-            );
+                    if (reportOpened || submitClicked) {
+                        await closeWatsonAIReport(page, actualReportName, { onlyIfOpen: true });
+                    }
 
-            logSession(
-                `✅ WatsonAI Kepler validation passed for '${actualReportName}'.`
-            );
-
-
-            // =================================================
-            // BENTO VALIDATION
-            // =================================================
-
-            try {
-                await verifyDefaultBentoCharts(
-                    page,
-                    inputData.reportType,
-                    actualReportName,
-                    { maxWaitMs: WATSONAI_REPORT_DATA_WAIT_MS }
-                );
-            } catch (bentoError) {
-                // Large report on the summary page with data: loaded, just no Bento.
-                if (!(bentoError instanceof SummaryPageReportError)) throw bentoError;
-                reportWarnings.push(`summary_page_with_data: Total ${bentoError.totalRaw}`);
-            }
-
-
-            if (!summaryReceived) {
-                summaryReceived = await checkWatsonAIReportSummaryLate(page, submitBaseline.repliesBeforeSubmit);
-            }
-
-            if (!summaryReceived) {
-                reportWarnings.push(
-                    "summary_missing: no WatsonAI summary in the chat by the end of validation"
-                );
-            }
-
-
-            // =================================================
-            // CLOSE REPORT AFTER SUCCESS + RETURN TO CHAT
-            // =================================================
-
-            await closeWatsonAIReport(page, actualReportName);
-
-
-            // =================================================
-            // REPORT COMPLETED
-            // =================================================
-
-            if (reportWarnings.length > 0) {
-
-                const warningReason = reportWarnings.join("; ");
-
-                console.log(
-                    `⚠️ WatsonAI ${inputData.reportType} completed with warnings: ${warningReason}`
-                );
-
-                logSession(
-                    `⚠️ WatsonAI ${inputData.reportType} completed with warnings.`,
-                    false,
-                    { flow: "watson_ai", report: actualReportName, report_type: inputData.reportType, outcome: "warning", reason: warningReason }
-                );
-
-            } else {
-
-                console.log(
-                    `🎉 WatsonAI ${inputData.reportType} completed successfully.`
-                );
-
-                logSession(
-                    `🎉 WatsonAI ${inputData.reportType} completed successfully.`,
-                    false,
-                    { flow: "watson_ai", report: actualReportName, report_type: inputData.reportType, outcome: "success" }
-                );
-            }
-
-
-        } catch (error) {
-
-            // =================================================
-            // REPORT FAILED
-            // IMPORTANT: DO NOT STOP THE LOOP
-            // =================================================
-
-            console.error(
-                `❌ WatsonAI ${inputData.reportType} failed.`
-            );
-
-            console.error(
-                `❌ Error: ${error.message}`
-            );
-
-            // Prefilled-field problems found before the failure are often
-            // its cause (e.g. empty Location -> Submit creates nothing).
-            const reason = reportWarnings.length > 0
-                ? `${explainError(error)} [earlier: ${reportWarnings.join("; ")}]`
-                : explainError(error);
-
-            const screenshot = await captureFailureScreenshot(page, `watson_${inputData.reportType}`);
-
-            logSession(
-                `❌ WatsonAI ${inputData.reportType} failed.`,
-                false,
-                { flow: "watson_ai", report: actualReportName, report_type: inputData.reportType, outcome: "failure", reason, screenshot }
-            );
-
-            logSession(
-                `❌ Error: ${error.message}`
-            );
-
-
-            // =================================================
-            // TRY TO CLOSE REPORT IF IT IS OPEN + RETURN TO CHAT
-            // =================================================
-
-            // Not only when reportOpened: a failure inside
-            // verifyWatsonAISuccess (e.g. at Focus Mode) happens after
-            // Open Report was clicked but before reportOpened is set. The
-            // prompt stays editable under a Focus Mode report, so the
-            // chat-ready check alone missed it — on QA the QLI report was
-            // left open and every click of the next two reports timed out.
-            if (reportOpened || submitClicked) {
-
-                await closeWatsonAIReport(page, actualReportName, { onlyIfOpen: true });
-
-            } else {
-
-                // The prompt stays disabled while a failed query's search
-                // request is still settling, so allow more than a moment.
-                await waitForWatsonAIChatReady(page, 60000)
-                    .then(() => {
-                        console.log(`✅ WatsonAI chat ready for next report.`);
-                        logSession(`✅ WatsonAI chat ready for next report.`);
-                    })
-                    .catch(chatError => {
-                        console.error(`⚠️ WatsonAI chat was not confirmed after failure: ${chatError.message}`);
-                        logSession(`⚠️ WatsonAI chat was not confirmed after failure: ${chatError.message}`);
+                    const recovered = await recoverWatsonAIChat(page).then(() => true, recoverError => {
+                        console.error(`❌ ${recoverError.message}`);
+                        logSession(`❌ ${recoverError.message}`);
+                        return false;
                     });
+
+                    if (recovered) continue;
+                }
+
+                // =================================================
+                // REPORT FAILED
+                // IMPORTANT: DO NOT STOP THE LOOP
+                // =================================================
+
+                console.error(
+                    `❌ WatsonAI ${inputData.reportType} failed.`
+                );
+
+                console.error(
+                    `❌ Error: ${error.message}`
+                );
+
+                // Prefilled-field problems found before the failure are often
+                // its cause (e.g. empty Location -> Submit creates nothing).
+                const retried = attempt > 1 ? " (after recovering the chat and retrying once)" : "";
+                const reason = reportWarnings.length > 0
+                    ? `${explainError(error)}${retried} [earlier: ${reportWarnings.join("; ")}]`
+                    : `${explainError(error)}${retried}`;
+
+                const screenshot = await captureFailureScreenshot(page, `watson_${inputData.reportType}`);
+
+                logSession(
+                    `❌ WatsonAI ${inputData.reportType} failed.`,
+                    false,
+                    { flow: "watson_ai", report: actualReportName, report_type: inputData.reportType, outcome: "failure", reason, screenshot }
+                );
+
+                logSession(
+                    `❌ Error: ${error.message}`
+                );
+
+
+                // =================================================
+                // TRY TO CLOSE REPORT IF IT IS OPEN + RETURN TO CHAT
+                // =================================================
+
+                // Not only when reportOpened: a failure inside
+                // verifyWatsonAISuccess (e.g. at Focus Mode) happens after
+                // Open Report was clicked but before reportOpened is set. The
+                // prompt stays editable under a Focus Mode report, so the
+                // chat-ready check alone missed it — on QA the QLI report was
+                // left open and every click of the next two reports timed out.
+                if (reportOpened || submitClicked) {
+
+                    await closeWatsonAIReport(page, actualReportName, { onlyIfOpen: true });
+
+                } else {
+
+                    // The prompt stays disabled while a failed query's search
+                    // request is still settling, so allow more than a moment.
+                    await waitForWatsonAIChatReady(page, 60000)
+                        .then(() => {
+                            console.log(`✅ WatsonAI chat ready for next report.`);
+                            logSession(`✅ WatsonAI chat ready for next report.`);
+                        })
+                        .catch(chatError => {
+                            console.error(`⚠️ WatsonAI chat was not confirmed after failure: ${chatError.message}`);
+                            logSession(`⚠️ WatsonAI chat was not confirmed after failure: ${chatError.message}`);
+                        });
+                }
+
+                // Never hand the next report a stuck chat.
+                if (!(await waitForWatsonAIChatReady(page, 5000).then(() => true, () => false))) {
+                    await recoverWatsonAIChat(page).catch(recoverError => {
+                        console.error(`❌ ${recoverError.message}`);
+                        logSession(`❌ ${recoverError.message}`);
+                    });
+                }
+
+
+                // =================================================
+                // VERY IMPORTANT
+                // MOVE TO NEXT REPORT
+                // =================================================
+
+                console.log(
+                    `➡️ Continuing with next WatsonAI report...`
+                );
+
+                logSession(
+                    `➡️ Continuing with next WatsonAI report...`
+                );
+
+                break;
             }
-
-
-            // =================================================
-            // VERY IMPORTANT
-            // MOVE TO NEXT REPORT
-            // =================================================
-
-            console.log(
-                `➡️ Continuing with next WatsonAI report...`
-            );
-
-            logSession(
-                `➡️ Continuing with next WatsonAI report...`
-            );
-
-            continue;
         }
     }
 

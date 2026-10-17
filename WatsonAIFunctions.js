@@ -200,6 +200,47 @@ async function waitForWatsonAIChatReady(page, timeout = 30000) {
     await expect(promptField).toBeEditable({ timeout });
 }
 
+// Brings back a WatsonAI chat whose prompt is stuck disabled — seen on a VM
+// whose connection dropped (prod, Oct 17 2026): DLV's Submit never got a
+// response, the prompt stayed disabled, and the next report (PLV) failed at
+// typing its query. Reloading /watsonai gives a fresh, empty chat (verified
+// live, see CSAgentFlow). Throws if the chat still isn't usable.
+async function recoverWatsonAIChat(page) {
+
+    console.log("🔄 WatsonAI chat is not usable — reloading WatsonAI for a fresh chat...");
+    logSession("🔄 WatsonAI chat is not usable — reloading WatsonAI for a fresh chat...");
+
+    await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 }).catch(() => { });
+
+    const stillInWatsonAI = await page
+        .getByPlaceholder(WATSONAI_PROMPT_PLACEHOLDER, { exact: true })
+        .waitFor({ state: "visible", timeout: 15000 })
+        .then(() => true, () => false);
+
+    if (!stillInWatsonAI) {
+        await openWatsonAI(page);
+    }
+
+    try {
+        await waitForWatsonAIChatReady(page, 60000);
+    } catch {
+        throw new Error("WatsonAI chat stayed disabled even after reloading WatsonAI.");
+    }
+
+    console.log("✅ WatsonAI chat recovered.");
+    logSession("✅ WatsonAI chat recovered.");
+}
+
+// Failures where WatsonAI simply never answered (no reply, no report, chat
+// left disabled) — worth one retry on a fresh chat. Real answers (a wrong
+// form, a validation error, a failed Kepler check) are not retried.
+const WATSONAI_NO_RESPONSE_PATTERN =
+    /no new report was generated|showed no reply|did not respond|connection problem|Failed to fetch Sherlock search results|chat stayed disabled|toBeEditable|locator\.fill/i;
+
+function isWatsonAINoResponseError(error) {
+    return WATSONAI_NO_RESPONSE_PATTERN.test(String(error?.message || error));
+}
+
 // WatsonAI's "thinking" indicator under the latest query.
 const WATSONAI_LOADER_SELECTOR =
     "div.flex.h-8.min-w-\\[40px\\].items-center.justify-center.rounded-lg.bg-surface-container-overlay-level-2.px-3.py-2";
@@ -1993,6 +2034,8 @@ module.exports = {
     getLatestWatsonAIReplyText,
     waitForWatsonAIReportForm,
     waitForWatsonAIChatReady,
+    recoverWatsonAIChat,
+    isWatsonAINoResponseError,
     closeWatsonAIReport,
     verifyWatsonAIReportFields,
     clickWatsonAISubmit,
