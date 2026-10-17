@@ -3446,11 +3446,14 @@ async function verifyDefaultBentoCharts(
     );
 
 
+    // Optional check (the text is often gone already), so under a deadline it
+    // gets 5s at most — on prod (Oct 17) it ate the whole 30s WatsonAI budget
+    // and left ~1s for the required card value below.
     if (
         await chartsLoadedText
             .waitFor({
                 state: "visible",
-                timeout: waitFor(30000)
+                timeout: deadline ? Math.min(5000, waitFor(30000)) : 30000
             })
             .then(() => true)
             .catch(() => false)
