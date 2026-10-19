@@ -104,7 +104,11 @@ function getBrowserCloseReason() {
 // First line of the error, plus the browser-close reason when the error is
 // only a symptom of the browser having gone away.
 function explainError(error) {
-    const firstLine = String(error?.message || error).split("\n")[0].trim();
+    // Playwright colours its messages with ANSI codes ("[2mexpect([22m...").
+    const firstLine = String(error?.message || error)
+        .replace(/\x1b\[[0-9;]*m/g, "")
+        .split("\n")[0]
+        .trim();
 
     if (/has been closed|Target closed|Browser closed|crashed/i.test(firstLine)) {
         return `${firstLine} — cause: ${browserCloseReason || "the browser/tab was closed outside the script"}`;

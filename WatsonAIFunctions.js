@@ -1682,9 +1682,18 @@ async function verifyWatsonAISuccess(page, expectedMessage, expectedReportType, 
             "⏳ Waiting for report overlays to disappear..."
         );
 
-        await expect(reportOverlays).toHaveCount(0, {
-            timeout: 120000
-        });
+        // Prod report-open times keep growing (57s, 66s, then PLV still loading
+        // at 120s on Oct 19, which failed a report that was just slow), so
+        // allow the same 5 min as the Focus Mode reload below.
+        try {
+            await expect(reportOverlays).toHaveCount(0, {
+                timeout: FOCUS_MODE_LOAD_TIMEOUT_MS
+            });
+        } catch {
+            throw new Error(
+                `Report was still loading ${Math.round(FOCUS_MODE_LOAD_TIMEOUT_MS / 60000)} min after Open Report (loading overlay never cleared).`
+            );
+        }
 
         console.log(
             "✅ All report overlays disappeared."
