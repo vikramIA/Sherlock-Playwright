@@ -534,7 +534,34 @@ async function loginAndNavigate(
 // }
 
 // Function to navigate to Explore and click 'Create Report'
+// A report that fails mid-form (e.g. its Location dropdown never loads) is
+// only logged by its flow's catch — the Create Report form stays open. The
+// next report's sidebar click is an in-app navigation that keeps that form on
+// screen, so its report-type tile never shows (QA Oct 19 session 3: PLV failed
+// at Location during a backend OOM restart, then DLV timed out at "Device
+// Level Visits"). Load /explore fresh when such a form is still up. Same idea
+// as the stale Multilayer modal check in goToExploreList.
+async function clearLeftoverReportForm(page, reportName) {
+    const leftoverForm = page.locator(
+        "xpath=//input[@placeholder='Report Name'] | //button[normalize-space()='Next Step']" +
+        " | //button[normalize-space()='Create Report' and not(@data-sidebar)]"
+    ).filter({ visible: true });
+    if (!(await leftoverForm.count().catch(() => 0))) return;
+
+    console.warn(`⚠️ A Create Report form from an earlier report is still open — reloading Explore before '${reportName}'.`);
+    logSession(`⚠️ A Create Report form from an earlier report is still open — reloading Explore before '${reportName}'.`, false, { report: reportName });
+    await page.keyboard.press("Escape").catch(() => { });
+    try {
+        await page.goto(new URL("/explore", page.url()).href, { waitUntil: "domcontentloaded", timeout: 60000 });
+    } catch (gotoErr) {
+        logSession(`⚠️ Navigation to /explore failed: ${gotoErr.message.split("\n")[0]}`);
+    }
+    await page.waitForTimeout(2000);
+}
+
 async function navigateAndCreateExploreReport(page, inputData, maxRetries = 5) {
+    await clearLeftoverReportForm(page, inputData.reportName);
+
     let attempt = 0;
 
     while (attempt < maxRetries) {
@@ -2002,6 +2029,8 @@ function assertAudienceUploadsSucceeded(reportName, failedUploads) {
 
 // Function to navigate to Explore and click 'Create Persona Workflow'
 async function navigateAndCreatePersonaFlow(page, inputData, maxRetries = 5) {
+    await clearLeftoverReportForm(page, inputData.reportName);
+
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
         console.log(`🔁 Attempt ${attempt} to navigate to Explore and click 'Create Persona Workflow' for ${inputData.reportName}`);
         logSession(`🔁 Attempt ${attempt} to navigate to Explore and click 'Create Persona Workflow' for ${inputData.reportName}`);
