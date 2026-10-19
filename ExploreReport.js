@@ -842,7 +842,7 @@ async function exploreFlow(page, inputData, isForMultilayer = false, multilayerR
                     await selectLocations(page, inputData.location, inputData.reportName);
                     await safeWait(page, 1000);
 
-                    clickCreateReportButton(page, inputData.reportName);
+                    await clickCreateReportButton(page, inputData.reportName);
 
                     await keplerDatasetsFetch(page, inputData.reportName);
                     await safeWait(page, 2000);

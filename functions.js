@@ -1438,14 +1438,87 @@ async function SelectQualityLifeScore(page, range, reportName) {
 }
 
 // Function to click the "Create Report" button
+// Create Report sends sparkJobs/createIfavisits right away (0.1-1.5s on QA,
+// every report type). That request, not the page, says whether the click
+// worked, and both ways it can fail mean no report was created, so one more
+// click can never make a duplicate:
+//   - a 5xx: QA Oct 19 (vef34), the only backend pod was being replaced and
+//     nginx answered 503; the page just sat on /repository/matchRate until
+//     keplerDatasetsFetch gave up 3 min later. Retried once ~30s later (the
+//     pod was back in ~20s).
+//   - no request at all while the form is still up: the app didn't act on the
+//     click. Logged with whatever the page shows, and clicked once more.
+// If the second click fails too, keplerDatasetsFetch fails the report straight
+// away with the real reason instead of waiting for a page that isn't coming.
+const REPORT_CREATE_ENDPOINT = "/sparkJobs/createIfavisits";
+const REPORT_CREATE_RESPONSE_WAIT_MS = 15 * 1000;
+const REPORT_CREATE_RETRY_DELAY_MS = 30 * 1000;
+const reportCreationFailures = new WeakMap();
+
+function waitForReportCreationResponse(page) {
+    return page.waitForResponse(
+        response => response.url().includes(REPORT_CREATE_ENDPOINT) && response.request().method() === "POST",
+        { timeout: REPORT_CREATE_RESPONSE_WAIT_MS }
+    ).catch(() => null);
+}
+
+// Error / validation text visible on the page, for a click that did nothing.
+async function describeVisibleProblems(page) {
+    const texts = await page.evaluate(() => {
+        const visible = el => !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
+        return [...document.querySelectorAll('body *')]
+            .filter(el => !el.children.length && visible(el))
+            .map(el => (el.textContent || '').trim())
+            .filter(text => text.length > 2 && text.length < 200 &&
+                /error|required|invalid|failed|unable|not allowed|try again|exceed|limit/i.test(text));
+    }).catch(() => []);
+    return [...new Set(texts)].slice(0, 3).join(' | ') || 'no error or validation message on screen';
+}
+
 async function clickCreateReportButton(page, reportName) {
+    reportCreationFailures.delete(page);
+
     try {
         const createReportButton = page.locator("//button[normalize-space()='Create Report']").first();
         await createReportButton.waitFor({ state: 'visible', timeout: 10000 });
-        await createReportButton.click();
-        const successMsg = `✅ 'Create Report' button clicked successfully for report '${reportName}'.`;
-        console.log(successMsg);
-        logSession(successMsg, false, { report: reportName });
+
+        for (let attempt = 1; attempt <= 2; attempt++) {
+            const creationResponse = waitForReportCreationResponse(page);
+
+            await createReportButton.click();
+            const successMsg = `✅ 'Create Report' button clicked successfully for report '${reportName}'.`;
+            console.log(successMsg);
+            logSession(successMsg, false, { report: reportName });
+
+            const response = await creationResponse;
+            if (response && response.status() < 500) return;
+
+            const formStillUp = await createReportButton.isVisible().catch(() => false);
+
+            // No request and the form is gone: the click went somewhere we
+            // don't track — carry on as before and let keplerDatasetsFetch judge.
+            if (!response && !formStillUp) return;
+
+            const problem = response
+                ? `the backend answered HTTP ${response.status()} to Create Report`
+                : `the app sent no report-creation request within ${REPORT_CREATE_RESPONSE_WAIT_MS / 1000}s of the click ` +
+                  `(page shows: ${await describeVisibleProblems(page)})`;
+            const meta = { report: reportName, ...(response ? { status_code: response.status() } : {}) };
+
+            if (attempt === 2 || !formStillUp) {
+                reportCreationFailures.set(page, { reportName, problem, attempts: attempt });
+                const failMsg = `❌ Report creation failed for '${reportName}': ${problem} (attempt ${attempt}).`;
+                console.error(failMsg);
+                logSession(failMsg, false, meta);
+                return;
+            }
+
+            const delayMs = response ? REPORT_CREATE_RETRY_DELAY_MS : 2000;
+            const retryMsg = `⚠️ Report creation for '${reportName}' did not go through: ${problem} — clicking Create Report again in ${delayMs / 1000}s...`;
+            console.log(retryMsg);
+            logSession(retryMsg, false, meta);
+            await page.waitForTimeout(delayMs);
+        }
     } catch (error) {
         const errorMsg = `❌ Failed to click 'Create Report' button for report '${reportName}': ${error.message}`;
         console.error(errorMsg);
@@ -1589,6 +1662,22 @@ async function keplerDatasetsFetch(page, reportName) {
     };
 
     const startTime = Date.now();
+
+    // Create Report itself failed on the backend (see clickCreateReportButton):
+    // no report page is coming, so don't wait for one.
+    const creationFailure = reportCreationFailures.get(page);
+    if (creationFailure && creationFailure.reportName === reportName) {
+        reportCreationFailures.delete(page);
+        return log({
+            reportName,
+            url: page.url(),
+            text: `Report creation failed: ${creationFailure.problem} ` +
+                `(${creationFailure.attempts} attempt${creationFailure.attempts > 1 ? "s" : ""}) — no report was created`,
+            status: "error",
+            timeMinutes: "0.00",
+            timeSeconds: 0
+        });
+    }
 
     try {
         // This class is on the loader AND on the Create Report form's sticky footer,
@@ -3566,6 +3655,9 @@ async function verifyDefaultBentoCharts(
 
 
 
+// How long the Aggregated Count summary page gets to show its Total.
+const AGGREGATED_COUNT_TOTAL_TIMEOUT_MS = 180 * 1000;
+
 async function verifyAggregatedCount(page, reportName) {
 
     // Navigate to Explore. Same options as the other Explore navigations: the
@@ -3603,6 +3695,16 @@ async function verifyAggregatedCount(page, reportName) {
 
     await menuButton.click();
 
+    // The Total comes from getAggregatedVisitationData, whose first call after
+    // an idle spell sits on a ~60s Trino query (QA Oct 19: 59.65s server-side,
+    // answered 104 ms after the old 60s wait gave up). Watch it from the click
+    // on so a failure can say whether the backend answered at all.
+    const aggregatedResponse = page.waitForResponse(
+        response => response.url().includes("/delta/getAggregatedVisitationData") &&
+            response.request().method() === "POST",
+        { timeout: AGGREGATED_COUNT_TOTAL_TIMEOUT_MS }
+    ).catch(() => null);
+
     // Click Aggregated Count
     await page.getByText("Aggregated Count", {
         exact: true
@@ -3629,12 +3731,23 @@ async function verifyAggregatedCount(page, reportName) {
     try {
 
         await expect(totalValueLocator.first()).toBeVisible({
-            timeout: 60000
+            timeout: AGGREGATED_COUNT_TOTAL_TIMEOUT_MS
         });
 
     } catch (err) {
 
         const currentUrl = page.url();
+        const waitSeconds = Math.round(AGGREGATED_COUNT_TOTAL_TIMEOUT_MS / 1000);
+
+        // Normally settled by now (same timeout as the Total wait); don't hang
+        // on it if the Total wait failed early for another reason.
+        const response = await Promise.race([
+            aggregatedResponse,
+            new Promise(resolve => setTimeout(() => resolve(null), 1000))
+        ]);
+        const backendState = response
+            ? `getAggregatedVisitationData answered HTTP ${response.status()}`
+            : `getAggregatedVisitationData had not answered yet`;
 
         console.error(
             `❌ Aggregated Count Total value did not render for '${reportName}'.`
@@ -3671,7 +3784,7 @@ async function verifyAggregatedCount(page, reportName) {
 
             throw new Error(
                 `Aggregated Count failed: the Aggregated Count summary page loaded (not the map), ` +
-                `but the Total value did not render within 60s (${currentUrl}).`
+                `but the Total value did not render within ${waitSeconds}s; ${backendState} (${currentUrl}).`
             );
         }
 
