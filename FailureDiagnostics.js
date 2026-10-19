@@ -43,28 +43,52 @@ async function captureFailureScreenshot(page, label) {
 // has no Browser object), so the context's close event is watched instead.
 function watchBrowserHealth(browser, context, page) {
     // Only the first event is the cause — a crash or a closed tab is
-    // followed by the browser disconnecting too.
-    const record = reason => {
-        if (expectedShutdown || browserCloseReason) return;
-        browserCloseReason = reason;
-        console.error(`❌ ${reason}`);
-        logSession(`❌ Browser health: ${reason}`);
-    };
+    // followed by the browser disconnecting too (recordBrowserProblem keeps
+    // the first one).
+    watchPageHealth(page);
 
-    page.on("crash", () => record(
-        "the browser tab crashed (renderer process died — usually out of memory on a long run)"
-    ));
-
-    page.on("close", () => record(
-        "the browser tab was closed while the run was still in progress (not by a test step — closed manually or by the OS/scheduler)"
-    ));
-
-    const browserExited = () => record(
+    const browserExited = () => recordBrowserProblem(
         "the browser process exited while the run was still in progress (closed manually, killed, or crashed)"
     );
 
     if (browser) browser.on("disconnected", browserExited);
     else context.on("close", browserExited);
+}
+
+// Tabs the script closed on purpose (see closePageQuietly) — their "close"
+// event is not a failure.
+const pagesClosedByScript = new WeakSet();
+
+function recordBrowserProblem(reason) {
+    if (expectedShutdown || browserCloseReason) return;
+    browserCloseReason = reason;
+    console.error(`❌ ${reason}`);
+    logSession(`❌ Browser health: ${reason}`);
+}
+
+// Crash / unexpected-close watch for one tab. Call it for every tab the run
+// works in (the first one, and each fresh tab opened later).
+function watchPageHealth(page) {
+    page.on("crash", () => recordBrowserProblem(
+        "the browser tab crashed (renderer process died — usually out of memory on a long run)"
+    ));
+
+    page.on("close", () => {
+        if (pagesClosedByScript.has(page)) return;
+        recordBrowserProblem(
+            "the browser tab was closed while the run was still in progress (not by a test step — closed manually or by the OS/scheduler)"
+        );
+    });
+}
+
+// Closes a tab the script is done with, without it counting as a browser
+// problem. Bounded, since a frozen tab may never answer a normal close.
+async function closePageQuietly(page, timeoutMs = 15000) {
+    pagesClosedByScript.add(page);
+    await Promise.race([
+        page.close({ runBeforeUnload: false }).catch(() => { }),
+        new Promise(resolve => setTimeout(resolve, timeoutMs)),
+    ]);
 }
 
 // Call right before the script closes the browser itself, so that close is
@@ -93,6 +117,8 @@ module.exports = {
     setArtifactsDir,
     captureFailureScreenshot,
     watchBrowserHealth,
+    watchPageHealth,
+    closePageQuietly,
     markExpectedShutdown,
     getBrowserCloseReason,
     explainError,

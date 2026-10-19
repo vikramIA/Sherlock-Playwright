@@ -10,7 +10,7 @@ const { loginAndNavigate, safeWait } = require("./functions");
 const envConfig = require("./Environments.json");
 const { initLogger, getSessionHeader, getLastSessionNumber, logSession, getRunSummary, getRunDetails } = require("./Logger");
 const NetworkLogger = require("./networkLogger.js");
-const { setArtifactsDir, watchBrowserHealth, markExpectedShutdown, getBrowserCloseReason } = require("./FailureDiagnostics.js");
+const { setArtifactsDir, watchBrowserHealth, watchPageHealth, closePageQuietly, markExpectedShutdown, getBrowserCloseReason } = require("./FailureDiagnostics.js");
 const RecordingManager = require("./Recording.js");
 const { sendSlackStatus } = require("./SlackNotifier");
 const { initPersonaTracking, loadTracking } = require("./PersonaStatusFunctions.js");
@@ -216,6 +216,41 @@ async function main() {
     setArtifactsDir(sessionDir);
     watchBrowserHealth(browser, context, page);
 
+    // Moves the run to a brand-new tab (same browser, so still logged in) and
+    // closes the old one. After ~20 heavy map reports in one tab, the company VM's
+    // tab froze (Oct 19: Focus Mode clicks and typing into the WatsonAI chat timed
+    // out, "WebGL context lost"); a new tab starts with a fresh renderer. If the
+    // new tab can't be set up, the run carries on in the old one.
+    const switchToFreshPage = async (beforeWhat) => {
+      const oldPage = page;
+      let newPage;
+
+      try {
+        newPage = await context.newPage();
+        new NetworkLogger(newPage, sessionDir);
+        watchPageHealth(newPage);
+
+        await newPage.goto(baseUrl, { waitUntil: "domcontentloaded", timeout: 60000 });
+        await safeWait(newPage, 5000);
+      } catch (err) {
+        console.error(`⚠️ Could not open a fresh tab ${beforeWhat} — continuing in the current tab: ${err.message}`);
+        logSession(`⚠️ Could not open a fresh tab ${beforeWhat} — continuing in the current tab: ${err.message.split("\n")[0]}`);
+        if (newPage) await closePageQuietly(newPage);
+        return;
+      }
+
+      page = newPage;
+      recording.page = newPage;
+
+      // Each tab records its own video; keep the old one's path in the log.
+      const oldVideo = oldPage.video();
+      const oldVideoPath = oldVideo ? await oldVideo.path().catch(() => null) : null;
+      await closePageQuietly(oldPage);
+
+      console.log(`🆕 Switched to a fresh browser tab ${beforeWhat}.${oldVideoPath ? ` Earlier video: ${oldVideoPath}` : ""}`);
+      logSession(`🆕 Switched to a fresh browser tab ${beforeWhat}.${oldVideoPath ? ` Earlier video: ${oldVideoPath}` : ""}`);
+    };
+
 
     try {
       await loginAndNavigate(
@@ -245,7 +280,7 @@ async function main() {
         logSession(`❌ Daily Persona status check failed: ${err.message}`);
       }
 
-      // The check can leave the page on a Persona report or in Settings - start today's flows from home
+    //   // The check can leave the page on a Persona report or in Settings - start today's flows from home
       await page.goto(baseUrl, { waitUntil: "networkidle", timeout: 60000 }).catch(() => { });
       await safeWait(page, 5000);
     }
@@ -278,7 +313,8 @@ async function main() {
       await MultilayerBatchFlow(page, input.Multilayer, multilayerReportsMap, env);
     }
     // watsonAI Flow
-    await watsonAIReportFlow(
+    if (input.WatsonAI?.length > 0) await switchToFreshPage("before WatsonAI");
+     await watsonAIReportFlow(
       page,
       input.WatsonAI || []
     );
@@ -286,6 +322,7 @@ async function main() {
 
     // CS Agent Flow
     if (input.CSAgent?.length > 0) {
+      await switchToFreshPage("before CS Agent");
       await csAgentFlow(page, input.CSAgent);
       await safeWait(page, 10000);
     }

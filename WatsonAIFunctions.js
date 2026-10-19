@@ -235,7 +235,7 @@ async function recoverWatsonAIChat(page) {
 // left disabled) — worth one retry on a fresh chat. Real answers (a wrong
 // form, a validation error, a failed Kepler check) are not retried.
 const WATSONAI_NO_RESPONSE_PATTERN =
-    /no new report was generated|showed no reply|did not respond|connection problem|Failed to fetch Sherlock search results|chat stayed disabled|toBeEditable|locator\.fill/i;
+    /no new report was generated|showed no reply|did not respond|connection problem|Failed to fetch Sherlock search results|chat stayed disabled|toBeEditable|locator\.(fill|press)/i;
 
 function isWatsonAINoResponseError(error) {
     return WATSONAI_NO_RESPONSE_PATTERN.test(String(error?.message || error));
@@ -1698,7 +1698,14 @@ async function verifyWatsonAISuccess(page, expectedMessage, expectedReportType, 
                 logSession(
                     "⚠️ Focus Mode click did not take effect (likely intercepted by the report title label) — retrying with a force click."
                 );
-                await focusModeButton.click({ force: true, timeout: 15000 });
+                // A frozen tab ignores even the force click (company VM, Oct 19).
+                // Worded so WatsonAIFlow treats it as "not responding" and
+                // recovers the chat + retries the report once.
+                await focusModeButton.click({ force: true, timeout: 15000 }).catch(clickError => {
+                    throw new Error(
+                        `Focus Mode did not open: the page did not respond to the click (${clickError.message.split("\n")[0]})`
+                    );
+                });
             }
         }
 

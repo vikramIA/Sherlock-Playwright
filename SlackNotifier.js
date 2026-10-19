@@ -143,7 +143,12 @@ function describePersonaStatus(result) {
   if (status === "not_found") return "Not found in Explore";
   if (status !== "complete") return result.reason?.startsWith("status_check_error") ? "Status check error" : `Still ${result.status}`;
 
-  const parts = [result.validation === "passed" ? "Complete · validated" : `Complete · validation ${result.validation}`];
+  const validationLabels = {
+    passed: "Complete · validated",
+    passed_with_warnings: "Complete · validated with warnings",
+    error_opening_report: "Complete · could not open report to validate",
+  };
+  const parts = [validationLabels[result.validation] || `Complete · validation ${result.validation}`];
   if (result.audienceExport === "failed") parts.push("audience export failed");
   if (result.audienceUploadStatus?.length > 0) parts.push(summarizeUploadsByPlatform(result.audienceUploadStatus));
   return parts.join(" · ");
