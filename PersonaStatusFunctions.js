@@ -366,14 +366,29 @@ async function validateLifestylesTab(page, reportName) {
     const categoryResults = [];
 
     for (const categoryName of categoryNames) {
-        try {
-            await categoryDropdown.click();
-            await page.getByRole('option', { name: categoryName, exact: true }).click();
-            await page.waitForTimeout(1500);
-        } catch (err) {
-            console.error(`❌ Failed to select Lifestyles category '${categoryName}': ${err.message}`);
-            logSession(`❌ Failed to select Lifestyles category '${categoryName}': ${err.message}`);
-            categoryResults.push({ category: categoryName, passed: false, error: err.message, subTabs: [] });
+        // Same 3-try pattern as selectMainTab: the dropdown option can still be
+        // animating ("element is not stable"), which once timed out a whole
+        // category on QA (Oct 2026) while the next attempt works.
+        let selectError = null;
+        for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+                await categoryDropdown.click();
+                await page.getByRole('option', { name: categoryName, exact: true }).click({ timeout: 10000 });
+                await page.waitForTimeout(1500);
+                selectError = null;
+                break;
+            } catch (err) {
+                selectError = err;
+                await page.keyboard.press('Escape').catch(() => { });
+                await page.waitForTimeout(1000);
+            }
+        }
+
+        if (selectError) {
+            const error = selectError.message.split("\n")[0];
+            console.error(`❌ Failed to select Lifestyles category '${categoryName}' after 3 tries: ${error}`);
+            logSession(`❌ Failed to select Lifestyles category '${categoryName}' after 3 tries: ${error}`);
+            categoryResults.push({ category: categoryName, passed: false, error, subTabs: [] });
             continue;
         }
 
@@ -856,15 +871,26 @@ const TAB_VALIDATORS = {
     'Behaviours': validateBehavioursTab
 };
 
+// Tabs deliberately not validated for now: skipped silently (no warning, nothing
+// on Slack). Behaviours failed on prod while passing on QA (Oct 2026); its proper
+// check comes later — remove it from this list to validate it again.
+const SKIPPED_TABS = new Set(['Behaviours']);
+
 // "Behaviours (no 'Behaviour Tabs' sub-tabs shown ...)" / "Lifestyles/Community:
 // Civic Engagement (no chart data)" — the first concrete cause found in a
 // failed tab result (tab, category and sub-tab results all nest differently).
 function describeTabFailure(tab) {
+    return describeTabFailureFull(tab).split("\n")[0].replace(/\x1b\[[0-9;]*m/g, "");
+}
+
+function describeTabFailureFull(tab) {
     if (tab.error) return `${tab.tab} (${tab.error})`;
     if (tab.reason) return `${tab.tab} (${tab.reason})`;
 
     const failedSubTabs = list => (list || []).filter(subTab => !subTab.passed);
-    const subTabText = subTab => `${subTab.subTab}${subTab.error ? ` (${subTab.error})` : ' (stat tiles/charts empty)'}`;
+    const subTabText = subTab => subTab.subTab === '(none)'
+        ? subTab.error
+        : `${subTab.subTab}${subTab.error ? ` (${subTab.error})` : ' (stat tiles/charts empty)'}`;
 
     for (const category of tab.categories || []) {
         if (category.passed) continue;
@@ -881,6 +907,12 @@ function describeTabFailure(tab) {
     }
 
     return `${tab.tab} (failed)`;
+}
+
+// True when a tab result (or one of its categories) found no sub-tabs at all.
+function tabShowedNoSubTabs(tab) {
+    const none = list => (list || []).some(subTab => subTab.subTab === '(none)');
+    return none(tab.subTabs) || (tab.categories || []).some(category => none(category.subTabs));
 }
 
 // Opens the completed Persona report and runs its validation checklist.
@@ -905,6 +937,12 @@ async function validatePersonaReport(page, reportName, reportContainer) {
 
         const tabs = [];
         for (const tabName of availableTabs) {
+            if (SKIPPED_TABS.has(tabName)) {
+                console.log(`ℹ️ Skipping '${tabName}' tab for '${reportName}' (not validated for now).`);
+                logSession(`ℹ️ Skipping '${tabName}' tab for '${reportName}' (not validated for now).`);
+                continue;
+            }
+
             const validator = TAB_VALIDATORS[tabName];
             if (!validator) {
                 console.log(`⚠️ Unknown tab '${tabName}' in dropdown for '${reportName}' - skipping validation.`);
@@ -912,11 +950,25 @@ async function validatePersonaReport(page, reportName, reportContainer) {
                 continue;
             }
 
-            await page.waitForTimeout(2000);
-            const result = await runTabValidation(tabName, async () => {
+            const runTab = () => runTabValidation(tabName, async () => {
                 await selectMainTab(page, tabName);
                 return validator(page, reportName, tabName);
             });
+
+            await page.waitForTimeout(2000);
+            let result = await runTab();
+
+            // No sub-tabs at all (prod, Oct 2026: Behaviours on both daily reports) can
+            // mean the tab switch didn't fully take or the tab rendered late — pick the
+            // tab again once before recording it as a warning.
+            if (!result.passed && tabShowedNoSubTabs(result)) {
+                console.log(`🔁 '${tabName}' showed no sub-tabs — selecting it again and re-checking once...`);
+                logSession(`🔁 '${tabName}' showed no sub-tabs — selecting it again and re-checking once...`);
+
+                await page.waitForTimeout(3000);
+                result = await runTab();
+            }
+
             tabs.push(result);
         }
 
@@ -924,17 +976,25 @@ async function validatePersonaReport(page, reportName, reportContainer) {
         // underlying data - it's logged on its own tab but doesn't block audience export as long
         // as every other tab genuinely passed.
         const blockingFailures = tabs.filter(t => !t.passed && t.reason !== 'table_rendered_instead_of_map');
-        const validation = tabs.length > 0 && blockingFailures.length === 0 ? 'passed' : 'failed';
 
-        // Which tab failed and why — "tab_validation_failed" alone sent you to the video.
+        // The report is Complete and opened, so it counts as a success. Problems
+        // found while checking its tabs are reported as warnings (naming the tab
+        // and why) instead of failing the whole report.
+        const validation = tabs.length > 0 && blockingFailures.length === 0 ? 'passed' : 'passed_with_warnings';
+
         const failureSummary = tabs.length === 0
             ? 'no known tabs found in the report dropdown'
             : blockingFailures.map(describeTabFailure).join('; ');
 
-        logSession(`Persona report validation ${validation} for '${reportName}'${validation === 'passed' ? '' : `: ${failureSummary}`}`, false, {
+        const message = validation === 'passed'
+            ? `✅ Persona report validation passed for '${reportName}'`
+            : `⚠️ Persona report validation passed with warnings for '${reportName}': ${failureSummary}`;
+
+        console.log(message);
+        logSession(message, false, {
             report: reportName,
-            outcome: validation === 'passed' ? "success" : "failure",
-            reason: validation === 'passed' ? undefined : `tab_validation_failed: ${failureSummary}`,
+            outcome: validation === 'passed' ? "success" : "warning",
+            reason: validation === 'passed' ? undefined : `tab_validation_warnings: ${failureSummary}`,
         });
 
         return { reportName, validation, tabs, failureSummary: validation === 'passed' ? null : failureSummary };

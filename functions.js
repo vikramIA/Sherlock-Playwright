@@ -3568,8 +3568,11 @@ async function verifyDefaultBentoCharts(
 
 async function verifyAggregatedCount(page, reportName) {
 
-    // Navigate to Explore
-    await page.goto(`${new URL(page.url()).origin}/explore`);
+    // Navigate to Explore. Same options as the other Explore navigations: the
+    // default (full "load", 30s) timed out on the company VM leaving a heavy
+    // report (prod Oct 19: DLV with 146k rows had already passed Kepler and
+    // Bento, and was then failed by this navigation).
+    await page.goto(`${new URL(page.url()).origin}/explore`, { waitUntil: "domcontentloaded", timeout: 60000 });
 
     await page.waitForURL("**/explore", {
         timeout: 30000

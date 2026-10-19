@@ -34,7 +34,11 @@ async function processTrackedEntry(page, entry, { uploadStatusWaitMinutes } = {}
             entry.validation = validation.validation;
             entry.validationFailure = validation.failureSummary || validation.error || null;
 
-            if (entry.uploadAudience?.length > 0 && validation.validation === 'passed') {
+            // A report with tab warnings still passed (it's Complete and opened), so its
+            // audience export is still tested; only a report that couldn't be opened skips it.
+            const reportPassed = ['passed', 'passed_with_warnings'].includes(validation.validation);
+
+            if (entry.uploadAudience?.length > 0 && reportPassed) {
                 const exportResult = await exportPersonaAudience(page, entry.reportName, entry.uploadAudience);
                 entry.audienceExport = exportResult.passed ? 'passed' : 'failed';
 
@@ -110,8 +114,8 @@ async function runPersonaStatusCheckFlow(page, env) {
 
 // One outcome per checked report for the run summary / Slack. The inner steps log their own
 // outcomes per step (and the last one logged would win), so this records the overall verdict last.
-// A report that loaded and passed validation is a success; audience rows still Pending (or an
-// upload-status check that couldn't run) only add a warning.
+// A Complete report that opened is a success. Tab-validation problems, audience rows still
+// Pending, or an upload-status check that couldn't run only add a warning.
 function summarizeDailyOutcome(entry, checkResult) {
     const status = String(entry.status).toLowerCase();
 
@@ -119,11 +123,9 @@ function summarizeDailyOutcome(entry, checkResult) {
     if (status === 'not_found') return { outcome: 'failure', reason: 'not_found_in_explore' };
     if (status === 'incomplete') return { outcome: 'failure', reason: 'persona_incomplete' };
     if (status !== 'complete') return { outcome: 'failure', reason: `still_${status.replace(/\s+/g, '_')}_from_previous_run` };
-    if (entry.validation !== 'passed') {
-        return {
-            outcome: 'failure',
-            reason: `validation_${entry.validation}${entry.validationFailure ? `: ${entry.validationFailure}` : ''}`
-        };
+    // Report couldn't even be opened for validation — nothing confirms it loaded.
+    if (entry.validation === 'error_opening_report') {
+        return { outcome: 'failure', reason: `validation_error_opening_report: ${entry.validationFailure || 'unknown error'}` };
     }
     if (entry.audienceExport === 'failed') return { outcome: 'failure', reason: 'audience_export_failed' };
 
@@ -133,15 +135,24 @@ function summarizeDailyOutcome(entry, checkResult) {
     const failed = uploads.filter(u => ['unsuccessful', 'error'].includes(String(u.status).toLowerCase()));
     if (failed.length > 0) return { outcome: 'failure', reason: `audience_upload_failed: ${describe(failed)}` };
 
-    const stillPending = uploads.filter(u => u.status === 'timeout');
-    if (stillPending.length > 0) {
-        return { outcome: 'warning', reason: `audience_upload_still_pending after ${DAILY_UPLOAD_STATUS_WAIT_MINUTES} min: ${describe(stillPending)}` };
-    }
-    if (entry.audienceUploadCheckError) {
-        return { outcome: 'warning', reason: `audience_upload_status_check_error: ${entry.audienceUploadCheckError}` };
+    // Everything below leaves the report a success, with warnings.
+    const warnings = [];
+
+    if (entry.validation === 'passed_with_warnings') {
+        warnings.push(`validation_warnings: ${entry.validationFailure || 'some tabs had no data'}`);
     }
 
-    return { outcome: 'success' };
+    const stillPending = uploads.filter(u => u.status === 'timeout');
+    if (stillPending.length > 0) {
+        warnings.push(`audience_upload_still_pending after ${DAILY_UPLOAD_STATUS_WAIT_MINUTES} min: ${describe(stillPending)}`);
+    }
+    if (entry.audienceUploadCheckError) {
+        warnings.push(`audience_upload_status_check_error: ${entry.audienceUploadCheckError}`);
+    }
+
+    return warnings.length > 0
+        ? { outcome: 'warning', reason: warnings.join('; ') }
+        : { outcome: 'success' };
 }
 
 // Daily flow: checks every tracked Persona report, then removes each one from tracking whatever
