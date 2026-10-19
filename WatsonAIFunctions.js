@@ -1,7 +1,6 @@
 const { logSession } = require("./Logger");
 const { expect } = require("@playwright/test");
 const { detectErrorToast } = require("./ToastCheck");
-const { getKeplerDatasets } = require("./functions");
 
 
 // =========================================================
@@ -201,6 +200,47 @@ async function waitForWatsonAIChatReady(page, timeout = 30000) {
     await expect(promptField).toBeEditable({ timeout });
 }
 
+// Brings back a WatsonAI chat whose prompt is stuck disabled — seen on a VM
+// whose connection dropped (prod, Oct 17 2026): DLV's Submit never got a
+// response, the prompt stayed disabled, and the next report (PLV) failed at
+// typing its query. Reloading /watsonai gives a fresh, empty chat (verified
+// live, see CSAgentFlow). Throws if the chat still isn't usable.
+async function recoverWatsonAIChat(page) {
+
+    console.log("🔄 WatsonAI chat is not usable — reloading WatsonAI for a fresh chat...");
+    logSession("🔄 WatsonAI chat is not usable — reloading WatsonAI for a fresh chat...");
+
+    await page.reload({ waitUntil: "domcontentloaded", timeout: 60000 }).catch(() => { });
+
+    const stillInWatsonAI = await page
+        .getByPlaceholder(WATSONAI_PROMPT_PLACEHOLDER, { exact: true })
+        .waitFor({ state: "visible", timeout: 15000 })
+        .then(() => true, () => false);
+
+    if (!stillInWatsonAI) {
+        await openWatsonAI(page);
+    }
+
+    try {
+        await waitForWatsonAIChatReady(page, 60000);
+    } catch {
+        throw new Error("WatsonAI chat stayed disabled even after reloading WatsonAI.");
+    }
+
+    console.log("✅ WatsonAI chat recovered.");
+    logSession("✅ WatsonAI chat recovered.");
+}
+
+// Failures where WatsonAI simply never answered (no reply, no report, chat
+// left disabled) — worth one retry on a fresh chat. Real answers (a wrong
+// form, a validation error, a failed Kepler check) are not retried.
+const WATSONAI_NO_RESPONSE_PATTERN =
+    /no new report was generated|showed no reply|did not respond|connection problem|Failed to fetch Sherlock search results|chat stayed disabled|toBeEditable|locator\.fill/i;
+
+function isWatsonAINoResponseError(error) {
+    return WATSONAI_NO_RESPONSE_PATTERN.test(String(error?.message || error));
+}
+
 // WatsonAI's "thinking" indicator under the latest query.
 const WATSONAI_LOADER_SELECTOR =
     "div.flex.h-8.min-w-\\[40px\\].items-center.justify-center.rounded-lg.bg-surface-container-overlay-level-2.px-3.py-2";
@@ -212,34 +252,70 @@ const WATSONAI_REPORT_CLOSE_ICON = "svg.cursor-pointer.fill-button-destructive-b
 // summary makes the report outcome=warning in WatsonAIFlow rather than
 // hiding it inside success.
 //
-// Since the Oct 2026 dev update the summary no longer waits for Open Report.
 // Right after Submit, WatsonAI posts 'Your report "X" is ready.' and either:
 //   - inlines the summary into that same reply (seen for QLI), or
 //   - adds "I'm loading its data now — the summary will appear here as soon
-//     as it lands." and posts the summary as a separate reply later (seen
-//     ~30-70s after Submit for DLV/PLV), whether or not the report is opened.
-// So the summary is looked for in every reply since Submit, not as a new
-// reply after Open Report (which never arrives now and timed out as a false
-// "summary_missing" warning).
+//     as it lands." and posts the summary as a separate reply later.
+// Verified live on QA (Oct 17 2026, DLV): the separate summary reply did not
+// come in 60s while the report stayed closed, and arrived ~20s after Open
+// Report was clicked. Its position is not fixed either — it can land before
+// or after the "is ready" reply — so every reply posted since Submit is
+// searched, wherever it sits.
 const WATSONAI_SUMMARY_TIMEOUT_MS = 120 * 1000;
+
+// How long the map may take to load again after Focus Mode opens.
+const FOCUS_MODE_LOAD_TIMEOUT_MS = 5 * 60 * 1000;
+
+// Once that loading overlay has cleared, how long the Kepler data and the
+// Bento cards get to show up before the report is failed.
+const WATSONAI_REPORT_DATA_WAIT_MS = 30 * 1000;
 
 const WATSONAI_REPORT_READY_PATTERN = /Your report\s+["“][^"”]*["”]\s+is ready\.?/i;
 const WATSONAI_SUMMARY_PENDING_PATTERN = /I['’]m loading its data now[^.]*\./i;
+// The reply that carries the prefilled report form (and its intro text).
+const WATSONAI_FORM_REPLY_PATTERN = /Please review the prefilled form|Report Name:/i;
+const WATSONAI_MIN_SUMMARY_LENGTH = 80;
 
-// Texts of the WatsonAI replies from index `fromIndex` on (same
-// "message block that owns the Copy response button" as
+const WATSONAI_BEFORE_SUBMIT_ATTR = "data-qa-before-submit";
+
+// Every WatsonAI reply as { text, beforeSubmit } in chat order. A reply is
+// "the message block that owns the Copy response button" (same as
 // getLatestWatsonAIReplyText).
-async function getWatsonAIReplyTexts(page, fromIndex) {
-    return watsonAICopyResponseButtons(page).evaluateAll((buttons, from) =>
-        buttons.slice(from).map(button => {
+async function getWatsonAIReplies(page) {
+    return watsonAICopyResponseButtons(page).evaluateAll((buttons, attr) =>
+        buttons.map(button => {
             let block = button.parentElement;
             while (block && !(block.tagName === "DIV" && block.querySelector("p"))) {
                 block = block.parentElement;
             }
-            return block ? block.innerText.replace(/\s+/g, " ").trim() : "";
+            return {
+                text: block ? block.innerText.replace(/\s+/g, " ").trim() : "",
+                beforeSubmit: button.hasAttribute(attr)
+            };
         }),
-        fromIndex
+        WATSONAI_BEFORE_SUBMIT_ATTR
     );
+}
+
+// Marks the replies on screen right before Submit and returns their texts.
+// Both are used: the mark survives index shifts, the text survives React
+// replacing a button element.
+async function markWatsonAIRepliesBeforeSubmit(page) {
+    await watsonAICopyResponseButtons(page)
+        .evaluateAll((buttons, attr) => buttons.forEach(button => button.setAttribute(attr, "")), WATSONAI_BEFORE_SUBMIT_ATTR)
+        .catch(() => { });
+
+    return (await getWatsonAIReplies(page).catch(() => [])).map(reply => reply.text);
+}
+
+// Replies posted after Submit (never the form reply or anything older).
+async function getWatsonAIRepliesSinceSubmit(page, repliesBeforeSubmit = []) {
+    const before = new Set(repliesBeforeSubmit);
+
+    return (await getWatsonAIReplies(page).catch(() => []))
+        .filter(reply => reply.text && !reply.beforeSubmit && !before.has(reply.text))
+        .filter(reply => !WATSONAI_FORM_REPLY_PATTERN.test(reply.text))
+        .map(reply => reply.text);
 }
 
 // The reply text once the "is ready" / "loading its data" boilerplate is
@@ -251,39 +327,44 @@ function stripWatsonAIReadyBoilerplate(text) {
         .trim();
 }
 
-async function waitForWatsonAIReportSummary(page, copyCountBeforeSubmit, timeout = WATSONAI_SUMMARY_TIMEOUT_MS) {
+// One look at the chat: the summary text, or null. Also returns what was
+// posted since Submit, so a missing summary can be logged with evidence.
+async function findWatsonAIReportSummary(page, repliesBeforeSubmit) {
+    const replies = await getWatsonAIRepliesSinceSubmit(page, repliesBeforeSubmit);
+
+    const summary = replies
+        .map(stripWatsonAIReadyBoilerplate)
+        .find(text => text.length >= WATSONAI_MIN_SUMMARY_LENGTH) || null;
+
+    return { summary, replies };
+}
+
+function logWatsonAISummaryReceived(summary, note = "") {
+    const summaryText = summary.slice(0, 200);
+    console.log(`✅ WatsonAI report summary received${note}: '${summaryText}'`);
+    logSession(`✅ WatsonAI report summary received${note}: '${summaryText}'`);
+}
+
+async function waitForWatsonAIReportSummary(page, repliesBeforeSubmit, timeout = WATSONAI_SUMMARY_TIMEOUT_MS) {
 
     console.log("⏳ Waiting for WatsonAI report summary...");
     logSession("⏳ Waiting for WatsonAI report summary...");
 
-    const MIN_SUMMARY_LENGTH = 80;
     const deadline = Date.now() + timeout;
+    let replies = [];
 
     while (Date.now() < deadline) {
 
-        const replies = await getWatsonAIReplyTexts(page, copyCountBeforeSubmit).catch(() => []);
+        const found = await findWatsonAIReportSummary(page, repliesBeforeSubmit);
+        replies = found.replies;
 
-        // Only look from the "is ready" reply on, so the (long) form reply
-        // can never pass as the summary even if its Copy button rendered
-        // after the baseline was taken. Falls back to every reply since
-        // Submit if that wording ever changes.
-        const readyIndex = replies.findIndex(text => WATSONAI_REPORT_READY_PATTERN.test(text));
-
-        const summary = replies
-            .slice(Math.max(readyIndex, 0))
-            .map(stripWatsonAIReadyBoilerplate)
-            .find(text => text.length >= MIN_SUMMARY_LENGTH);
-
-        if (summary) {
+        if (found.summary) {
 
             // The summary streams in; give the rest of it a moment to
             // finish scrolling the chat before Focus Mode is clicked.
             await page.waitForTimeout(3000);
 
-            const summaryText = summary.slice(0, 200);
-
-            console.log(`✅ WatsonAI report summary received: '${summaryText}'`);
-            logSession(`✅ WatsonAI report summary received: '${summaryText}'`);
+            logWatsonAISummaryReceived(found.summary);
 
             return true;
         }
@@ -291,8 +372,30 @@ async function waitForWatsonAIReportSummary(page, copyCountBeforeSubmit, timeout
         await page.waitForTimeout(2000);
     }
 
-    console.log(`⚠️ WatsonAI report summary did not appear within ${Math.round(timeout / 1000)}s. Continuing — report will be marked as a warning.`);
-    logSession(`⚠️ WatsonAI report summary did not appear within ${Math.round(timeout / 1000)}s. Continuing — report will be marked as a warning.`);
+    // What the chat actually showed, so the warning can be checked from the
+    // log instead of the video.
+    const seen = replies.length > 0
+        ? replies.map(text => `'${text.slice(0, 160)}'`).join(" | ")
+        : "no new WatsonAI reply";
+
+    console.log(`⚠️ WatsonAI report summary not seen within ${Math.round(timeout / 1000)}s (will check again after validation). Replies since Submit: ${seen}`);
+    logSession(`⚠️ WatsonAI report summary not seen within ${Math.round(timeout / 1000)}s (will check again after validation). Replies since Submit: ${seen}`);
+
+    return false;
+}
+
+// Last look before the report is closed — a slow summary often lands while
+// Kepler/Bento are being validated. Returns true when it is there now.
+async function checkWatsonAIReportSummaryLate(page, repliesBeforeSubmit) {
+    const { summary } = await findWatsonAIReportSummary(page, repliesBeforeSubmit);
+
+    if (summary) {
+        logWatsonAISummaryReceived(summary, " (arrived late, during validation)");
+        return true;
+    }
+
+    console.log("⚠️ WatsonAI report summary still missing after Kepler/Bento validation.");
+    logSession("⚠️ WatsonAI report summary still missing after Kepler/Bento validation.");
 
     return false;
 }
@@ -1042,10 +1145,12 @@ async function clickWatsonAISubmit(page) {
             exact: true
         }).count();
 
-        // Baseline for the report summary, which now starts arriving
-        // right after Submit (see waitForWatsonAIReportSummary).
-        const copyCountBeforeSubmit =
-            await watsonAICopyResponseButtons(page).count();
+        // Baseline for the report summary (see waitForWatsonAIReportSummary).
+        // Index alone is not a safe baseline: replies above can be removed
+        // or re-rendered after Submit, shifting every index. Mark the
+        // replies that exist now (and keep their text as a fallback) so
+        // only replies posted after Submit are searched for the summary.
+        const repliesBeforeSubmit = await markWatsonAIRepliesBeforeSubmit(page);
 
         await submitButton.click();
 
@@ -1057,7 +1162,7 @@ async function clickWatsonAISubmit(page) {
             "✅ WatsonAI Submit button clicked."
         );
 
-        return { previousOpenReportCount, copyCountBeforeSubmit };
+        return { previousOpenReportCount, repliesBeforeSubmit };
 
     } catch (error) {
 
@@ -1078,7 +1183,7 @@ async function clickWatsonAISubmit(page) {
 // 6. VERIFY REPORT CREATION SUCCESS
 // =========================================================
 
-async function verifyWatsonAISuccess(page, expectedMessage, expectedReportType, { previousOpenReportCount = 0, copyCountBeforeSubmit = 0, query = null } = {}) {
+async function verifyWatsonAISuccess(page, expectedMessage, expectedReportType, { previousOpenReportCount = 0, repliesBeforeSubmit = [], query = null } = {}) {
 
     const reportTypeMap = {
         "place level visits": 9,
@@ -1226,8 +1331,7 @@ async function verifyWatsonAISuccess(page, expectedMessage, expectedReportType, 
             }
 
             if (details.length === 0) {
-                const replies = (await getWatsonAIReplyTexts(page, copyCountBeforeSubmit).catch(() => []))
-                    .filter(Boolean);
+                const replies = await getWatsonAIRepliesSinceSubmit(page, repliesBeforeSubmit);
                 details.push(
                     replies.length > 0
                         ? `WatsonAI replied after Submit: '${replies.join(" | ").slice(0, 300)}'`
@@ -1550,7 +1654,7 @@ async function verifyWatsonAISuccess(page, expectedMessage, expectedReportType, 
         // the summary first. A missing summary doesn't stop the
         // Kepler/Bento checks — WatsonAIFlow turns it into outcome=warning.
         reportTypeValidation.summaryReceived =
-            await waitForWatsonAIReportSummary(page, copyCountBeforeSubmit);
+            await waitForWatsonAIReportSummary(page, repliesBeforeSubmit);
 
 
         // =========================================================
@@ -1614,6 +1718,30 @@ async function verifyWatsonAISuccess(page, expectedMessage, expectedReportType, 
             "✅ Focus Mode button clicked."
         );
 
+        // Focus Mode reloads the map behind the same loading overlay
+        // (verified live on QA, Oct 2026: overlay count went 0 -> 1 -> 0
+        // after the click). Validating Kepler before it clears read a
+        // half-built map, so wait for it to finish loading again.
+        const focusLoadStart = Date.now();
+
+        try {
+            await expect(reportOverlays).toHaveCount(0, {
+                timeout: FOCUS_MODE_LOAD_TIMEOUT_MS
+            });
+        } catch {
+            throw new Error(
+                `Report was still loading ${Math.round(FOCUS_MODE_LOAD_TIMEOUT_MS / 60000)} min after Focus Mode opened (loading overlay never cleared).`
+            );
+        }
+
+        console.log(
+            `✅ Focus Mode report loaded (${((Date.now() - focusLoadStart) / 1000).toFixed(1)}s).`
+        );
+
+        logSession(
+            `✅ Focus Mode report loaded (${((Date.now() - focusLoadStart) / 1000).toFixed(1)}s).`
+        );
+
         // =========================================================
         // FLOW ENDS HERE FOR NOW
         // =========================================================
@@ -1643,485 +1771,253 @@ async function verifyWatsonAISuccess(page, expectedMessage, expectedReportType, 
     }
 }
 
+// Kepler's loaded datasets for THIS report. Like getKeplerDatasets() in
+// functions.js (reads kepler's own state through the map canvas's React
+// fiber), but looks at every map canvas on the page: the chat keeps earlier
+// reports around, so the first canvas is not necessarily this report's.
+// Prefers the map whose dataset label is the report name, else the last one.
+async function getWatsonAIKeplerDatasets(page, reportName) {
+    return page.evaluate((name) => {
+        const maps = [...document.querySelectorAll("#default-deckgl-overlay")].map(canvas => {
+            const fiberKey = Object.keys(canvas).find(key => key.startsWith("__reactFiber"));
+            if (!fiberKey) return null;
+
+            for (let fiber = canvas[fiberKey], depth = 0; fiber && depth < 80; fiber = fiber.return, depth++) {
+                const visState = fiber.memoizedProps?.visState;
+                if (visState?.datasets) {
+                    return Object.values(visState.datasets).map(dataset => ({
+                        label: dataset.label,
+                        rows: dataset.dataContainer?.numRows?.() ?? 0,
+                    }));
+                }
+            }
+            return null;
+        }).filter(Boolean);
+
+        const own = maps.find(datasets => datasets.some(dataset => dataset.label === name));
+        return { found: maps.length > 0, datasets: own || maps[maps.length - 1] || [] };
+    }, reportName).catch(() => ({ found: false, datasets: [] }));
+}
+
+// Returns { status, text } — status is "success" | "no_data" | "error" |
+// "timeout", text says why (it goes into the failure reason on Slack).
 async function watsonAIKeplerValidation(page, reportName, reportOpenSeconds) {
 
     const log = (result) => {
 
         console.log("\n🧾 WatsonAI Report Result");
-
-        console.log(
-            `📘 Report Name : ${result.reportName}`
-        );
-
-        console.log(
-            `🔗 URL : ${result.url}`
-        );
-
-        console.log(
-            `📌 status : ${result.status}`
-        );
-
-        console.log(
-            `📝 Validation : ${result.text}`
-        );
-
-        console.log(
-            `⏱️ Report Open Time (Open Report click → report visible): ${result.reportOpenSeconds} seconds`
-        );
-
+        console.log(`📘 Report Name : ${result.reportName}`);
+        console.log(`🔗 URL : ${result.url}`);
+        console.log(`📌 status : ${result.status}`);
+        console.log(`📝 Validation : ${result.text}`);
+        console.log(`⏱️ Report Open Time (Open Report click → report visible): ${result.reportOpenSeconds} seconds`);
 
         logSession("\n🧾 WatsonAI Report Result");
+        logSession(`📘 Report Name : ${result.reportName}`);
+        logSession(`🔗 URL : ${result.url}`);
+        logSession(`📌 status : ${result.status}`);
+        logSession(`📝 Validation : ${result.text}`);
+        logSession(`⏱️ Report Open Time (Open Report click → report visible): ${result.reportOpenSeconds} seconds`);
 
-        logSession(
-            `📘 Report Name : ${result.reportName}`
-        );
-
-        logSession(
-            `🔗 URL : ${result.url}`
-        );
-
-        logSession(
-            `📌 status : ${result.status}`
-        );
-
-        logSession(
-            `📝 Validation : ${result.text}`
-        );
-
-        logSession(
-            `⏱️ Report Open Time (Open Report click → report visible): ${result.reportOpenSeconds} seconds`
-        );
-
-
-        return result.status;
+        return { status: result.status, text: result.text };
     };
 
+    const keplerArrow = page.locator("button.side-bar__close");
 
-    try {
+    // IMPORTANT: this button TOGGLES the panel open/closed (confirmed live)
+    // — only click it if the panel isn't already open.
+    const isDatasetPanelOpen = async () =>
+        (await page.locator(".source-data-catalog").count()) > 0;
 
-        // =====================================================
-        // LOCATORS
-        // =====================================================
+    // "Datasets(1)" for a report with data, plain "Datasets" (no parens)
+    // when the catalog is empty (confirmed live). Same pattern as
+    // keplerDatasetsFetch() in functions.js.
+    const datasetsLabel = page.locator(
+        "//button[.//text()[normalize-space()='Add Data']]/preceding-sibling::span"
+    );
 
-        const keplerArrow =
-            page.locator("button.side-bar__close");
+    // This runs right after the Focus Mode loading overlay has cleared, so
+    // the data should already be there. Give it at most this long to show up
+    // in Kepler; a probe that throws while the map re-renders (element
+    // detached mid-read) is just retried within the same window.
+    const POLL_INTERVAL = 1000;
 
+    const startPoll = Date.now();
+    let lastError = "";
+    let lastState = "";
+    let mapRenderedEmpty = false;
 
+    while (true) {
 
-        // =====================================================
-        // CONTINUOUS MONITORING
-        // =====================================================
+        const currentURL = page.url();
 
-        const MAX_WAIT_MS = 30 * 60 * 1000;
-
-        const POLL_INTERVAL = 1000;
-
-        const startPoll = Date.now();
-
-        const NO_DATA_GRACE_MS = 2 * 60 * 1000;
-
-        let firstEmptyDatasetsAt = null;
-
-
-        while (true) {
-
-            const currentURL = page.url();
-
+        try {
 
             // =================================================
-            // 1️⃣ CHECK FOR ERROR / NO DATA TOAST
+            // 1️⃣ DATA LOADED IN KEPLER'S STATE → SUCCESS
+            // The ground truth for "the report has real data", and
+            // works whether or not the Kepler sidebar is shown.
             // =================================================
 
-            // detectErrorToast reads with allTextContents() (no waiting),
-            // since "No Data"/"Failed" toasts auto-dismiss after a few seconds.
-            const toast = await detectErrorToast(page);
+            const keplerData = await getWatsonAIKeplerDatasets(page, reportName);
+
+            const totalRows = keplerData.datasets.reduce((sum, dataset) => sum + dataset.rows, 0);
+
+            const datasetsText =
+                `Datasets (${keplerData.datasets.length}): ` +
+                keplerData.datasets.map(dataset => `${dataset.label} = ${dataset.rows} rows`).join(", ");
+
+            if (keplerData.datasets.length > 0 && totalRows > 0) {
+
+                console.log(`✅ Datasets confirmed from Kepler state: '${datasetsText}'.`);
+                logSession(`✅ Datasets confirmed from Kepler state: '${datasetsText}'.`);
+
+                return log({
+                    reportName,
+                    url: currentURL,
+                    text: `WatsonAI generated report opened successfully with real data (${datasetsText}).`,
+                    status: "success",
+                    reportOpenSeconds
+                });
+            }
+
+            // =================================================
+            // 2️⃣ ERROR / NO DATA TOAST
+            // Only real toasts count. The WatsonAI chat shares this page,
+            // and the page-wide text check matched chat lines such as an
+            // earlier "Failed to fetch ..." reply or a summary saying
+            // "no data", which ended validation with "error" in seconds.
+            // =================================================
+
+            const toast = await detectErrorToast(page, { toastsOnly: true });
 
             if (toast) {
-
                 return log({
-
                     reportName,
-
                     url: currentURL,
-
                     text: toast.text,
-
                     status: toast.status,
-
                     reportOpenSeconds
                 });
             }
 
-
             // =================================================
-            // 2️⃣ VERIFY WATSONAI REPORT URL
+            // 3️⃣ WATSONAI REPORTS STAY ON /watsonai
             // =================================================
-
-            /*
-             * WatsonAI reports remain on /watsonai.
-             *
-             * Therefore we DO NOT expect:
-             *
-             * /explore/{id}
-             *
-             * or
-             *
-             * /explore
-             */
 
             if (!currentURL.includes("/watsonai")) {
-
                 return log({
-
                     reportName,
-
                     url: currentURL,
-
-                    text:
-                        "Unexpected URL while validating WatsonAI generated report.",
-
+                    text: "Unexpected URL while validating WatsonAI generated report.",
                     status: "error",
-
                     reportOpenSeconds
                 });
             }
 
-
             // =================================================
-            // 3️⃣ CHECK KEPLER SIDEBAR ELEMENT
+            // 4️⃣ KEPLER SIDEBAR "Datasets(N)" (when the sidebar exists)
             // =================================================
 
-            const keplerArrowCount =
-                await keplerArrow.count();
+            let datasetsLabelText = "";
 
+            if (await keplerArrow.count() > 0) {
 
-            console.log(
-                `🔍 Checking WatsonAI report Kepler elements...`
-            );
-
-            console.log(
-                `Kepler Arrow count: ${keplerArrowCount}`
-            );
-
-
-            logSession(
-                `🔍 Checking WatsonAI report Kepler elements...`
-            );
-
-            logSession(
-                `Kepler Arrow count: ${keplerArrowCount}`
-            );
-
-
-            if (keplerArrowCount > 0) {
-
-                try {
-
-                    await keplerArrow.last().waitFor({
-                        state: "visible",
-                        timeout: 5000
-                    });
-
-
-                    console.log(
-                        "✅ Kepler sidebar element exists in WatsonAI report."
-                    );
-
-                    logSession(
-                        "✅ Kepler sidebar element exists in WatsonAI report."
-                    );
-
-
-                    // =============================================
-                    // VERIFY REAL DATASET ROWS ARE LOADED
-                    // (a rendered Kepler sidebar alone does not mean
-                    // the report actually has data — confirmed live
-                    // that ".source-data-rows" reflects the real
-                    // row count, e.g. "51 rows", while a report with
-                    // no data leaves the dataset catalog empty)
-                    // =============================================
-
-                    // IMPORTANT: this button TOGGLES the panel open/
-                    // closed (confirmed live) — it does not just open
-                    // it. Only click if the panel isn't already open,
-                    // otherwise we'd close a perfectly good report's
-                    // panel and wrongly read it as having no data.
-                    const isDatasetPanelOpen = async () =>
-                        (await page.locator(".source-data-catalog").count()) > 0;
-
-                    // Same interception this file already works around
-                    // for the Focus Mode button just above (see "Focus
-                    // Mode click was intercepted (likely by the report
-                    // title label)") — confirmed live via DOM inspection
-                    // that the BentoBox charts tooltip / report-title
-                    // label can sit on top of this button's hit area, so
-                    // a plain click() (bounded 30s default timeout) can
-                    // fail actionability and get silently swallowed by
-                    // .catch(() => {}), leaving the panel closed and a
-                    // report with real data wrongly flagged no_data.
-                    // Retry with a bounded timeout, then fall back to a
-                    // force click that bypasses the actionability check
-                    // entirely — confirmed live that a plain DOM
-                    // .click() (which force: true approximates) opens
-                    // the panel correctly even while occluded.
-                    for (
-                        let attempt = 0;
-                        attempt < 3 && !(await isDatasetPanelOpen());
-                        attempt++
-                    ) {
-
-                        await keplerArrow.last()
-                            .click({ timeout: 5000 })
-                            .catch(() =>
-                                keplerArrow.last()
-                                    .click({ timeout: 5000, force: true })
-                                    .catch(() => { })
-                            );
-
-                        await page.waitForTimeout(500);
-                    }
-
-                    // Read the "Datasets(N)" counter next to the "Add
-                    // Data" button instead of parsing row-count text.
-                    // Confirmed live: this span reads "Datasets(1)" for
-                    // a report with a normal tabular dataset, and plain
-                    // "Datasets" (no parens at all) when the catalog is
-                    // genuinely empty. This also sidesteps the earlier
-                    // row-text approach entirely breaking on choropleth
-                    // report types (QLI) whose row entry reads "Vector
-                    // tile" instead of a number — same selector pattern
-                    // already proven for Explore reports in
-                    // keplerDatasetsFetch() in functions.js.
-                    const datasetsLabel = page.locator(
-                        "//button[.//text()[normalize-space()='Add Data']]/preceding-sibling::span"
-                    );
-
-                    let datasetsLabelText = "";
-
-                    if (await isDatasetPanelOpen()) {
-
-                        const pollDeadline =
-                            Date.now() + 20000;
-
-                        while (Date.now() < pollDeadline) {
-
-                            if (await datasetsLabel.count() > 0) {
-
-                                datasetsLabelText =
-                                    (await datasetsLabel.last().innerText())
-                                        .trim();
-
-                                if (/\(\d+\)/.test(datasetsLabelText)) {
-
-                                    break;
-                                }
-                            }
-
-                            await page.waitForTimeout(1000);
-                        }
-                    }
-
-                    const datasetCountMatch =
-                        datasetsLabelText.match(/\((\d+)\)/);
-
-                    const datasetCount =
-                        datasetCountMatch
-                            ? parseInt(datasetCountMatch[1], 10)
-                            : 0;
-
-                    if (datasetCount > 0) {
-
-                        console.log(
-                            `✅ Datasets confirmed: '${datasetsLabelText}'.`
-                        );
-
-                        logSession(
-                            `✅ Datasets confirmed: '${datasetsLabelText}'.`
-                        );
-
-                        return log({
-
-                            reportName,
-
-                            url: currentURL,
-
-                            text:
-                                `WatsonAI generated report opened successfully with real data (${datasetsLabelText}).`,
-
-                            status: "success",
-
-                            reportOpenSeconds
-                        });
-                    }
-
-                    // The dataset panel/counter can still be empty right
-                    // after Focus Mode opens (seen for QLI on dev: empty
-                    // label on one run, 'Datasets(1)' on another), so only
-                    // call it no_data once it has stayed empty for a while.
-                    firstEmptyDatasetsAt ??= Date.now();
-
-                    if (Date.now() - firstEmptyDatasetsAt < NO_DATA_GRACE_MS) {
-
-                        console.log(
-                            `⏳ No datasets detected yet (datasetsLabelText: '${datasetsLabelText}', panel open: ${await isDatasetPanelOpen()}). Retrying...`
-                        );
-
-                        logSession(
-                            `⏳ No datasets detected yet (datasetsLabelText: '${datasetsLabelText}', panel open: ${await isDatasetPanelOpen()}). Retrying...`
-                        );
-
-                        await page.waitForTimeout(5000);
-
-                        continue;
-                    }
-
-                    console.log(
-                        `⚠️ Kepler sidebar rendered, but no datasets detected (datasetsLabelText: '${datasetsLabelText}').`
-                    );
-
-                    logSession(
-                        `⚠️ Kepler sidebar rendered, but no datasets detected (datasetsLabelText: '${datasetsLabelText}').`
-                    );
-
-                    return log({
-
-                        reportName,
-
-                        url: currentURL,
-
-                        text:
-                            `Kepler sidebar rendered, but no datasets were detected — report likely has no data (datasetsLabelText: '${datasetsLabelText}').`,
-
-                        status: "no_data",
-
-                        reportOpenSeconds
-                    });
-
-
-                } catch (err) {
-
-                    console.log(
-                        "⏳ Kepler sidebar element exists but is not visible yet. Continuing to wait..."
-                    );
-
-                    logSession(
-                        "⏳ Kepler sidebar element exists but is not visible yet. Continuing to wait..."
-                    );
+                // The BentoBox tooltip / report title can sit on top of
+                // this button (confirmed live), so fall back to a force click.
+                for (let attempt = 0; attempt < 3 && !(await isDatasetPanelOpen()); attempt++) {
+                    await keplerArrow.last()
+                        .click({ timeout: 3000 })
+                        .catch(() => keplerArrow.last().click({ timeout: 3000, force: true }).catch(() => { }));
+                    await page.waitForTimeout(500);
                 }
-            }
 
-            // =================================================
-            // 3️⃣b NO KEPLER SIDEBAR — READ KEPLER'S STATE
-            // =================================================
-            // QA (Oct 2026) removed the Kepler side panel from
-            // Explore report pages; WatsonAI's Focus Mode still had
-            // it then. If it's gone here too, read the loaded
-            // datasets from kepler's own state instead of polling
-            // for a sidebar that never comes (see getKeplerDatasets()
-            // in functions.js — verified live on WatsonAI Focus Mode:
-            // one map, rows match the report).
+                if (await isDatasetPanelOpen() && await datasetsLabel.count() > 0) {
+                    datasetsLabelText = (await datasetsLabel.last().innerText({ timeout: 3000 })).trim();
+                }
 
-            else {
+                const datasetCountMatch = datasetsLabelText.match(/\((\d+)\)/);
 
-                const keplerData =
-                    await getKeplerDatasets(page);
+                if (datasetCountMatch && parseInt(datasetCountMatch[1], 10) > 0) {
 
-                const totalRows =
-                    keplerData.datasets.reduce((sum, dataset) => sum + dataset.rows, 0);
-
-                const datasetsText =
-                    `Datasets (${keplerData.datasets.length}): ` +
-                    keplerData.datasets.map(dataset => `${dataset.label} = ${dataset.rows} rows`).join(", ");
-
-                if (keplerData.datasets.length > 0 && totalRows > 0) {
-
-                    console.log(`✅ Datasets confirmed from Kepler state: '${datasetsText}'.`);
-                    logSession(`✅ Datasets confirmed from Kepler state: '${datasetsText}'.`);
+                    console.log(`✅ Datasets confirmed: '${datasetsLabelText}'.`);
+                    logSession(`✅ Datasets confirmed: '${datasetsLabelText}'.`);
 
                     return log({
                         reportName,
                         url: currentURL,
-                        text: `WatsonAI generated report opened successfully with real data (${datasetsText}).`,
+                        text: `WatsonAI generated report opened successfully with real data (${datasetsLabelText}).`,
                         status: "success",
                         reportOpenSeconds
                     });
                 }
-
-                if (keplerData.datasets.length > 0) {
-
-                    firstEmptyDatasetsAt ??= Date.now();
-
-                    if (Date.now() - firstEmptyDatasetsAt >= NO_DATA_GRACE_MS) {
-
-                        return log({
-                            reportName,
-                            url: currentURL,
-                            text: `Kepler map loaded, but its datasets have no rows — report likely has no data (${datasetsText}).`,
-                            status: "no_data",
-                            reportOpenSeconds
-                        });
-                    }
-                }
             }
 
+            lastError = "";
 
             // =================================================
-            // 4️⃣ TIMEOUT FALLBACK
+            // 5️⃣ NOTHING LOADED YET — KEEP WAITING (up to the limit)
             // =================================================
 
-            if (
-                Date.now() - startPoll >
-                MAX_WAIT_MS
-            ) {
+            mapRenderedEmpty =
+                keplerData.datasets.length > 0 || /^Datasets\b/.test(datasetsLabelText);
 
+            const state = `map found: ${keplerData.found}, ${datasetsText}, sidebar label: '${datasetsLabelText}'`;
+
+            if (state !== lastState) {
+                lastState = state;
+                console.log(`⏳ Waiting for Kepler data (${state})...`);
+                logSession(`⏳ Waiting for Kepler data (${state})...`);
+            }
+
+        } catch (err) {
+
+            lastError = err.message.split("\n")[0];
+
+            console.log(`⏳ Kepler check hit a transient error, retrying: ${lastError}`);
+            logSession(`⏳ Kepler check hit a transient error, retrying: ${lastError}`);
+
+            if (page.isClosed()) {
                 return log({
-
                     reportName,
+                    url: "(page closed)",
+                    text: `Page closed during the Kepler check: ${lastError}`,
+                    status: "error",
+                    reportOpenSeconds
+                });
+            }
+        }
 
+        // =================================================
+        // 6️⃣ NO DATA WITHIN THE LIMIT → FAIL
+        // =================================================
+
+        if (Date.now() - startPoll >= WATSONAI_REPORT_DATA_WAIT_MS) {
+
+            const waited = `${Math.round((Date.now() - startPoll) / 1000)}s`;
+
+            if (lastError) {
+                return log({
+                    reportName,
                     url: page.url(),
-
-                    text:
-                        "Timeout: WatsonAI report opened, but Kepler sidebar element was not detected.",
-
-                    status: "timeout",
-
+                    text: `Kepler check kept failing for ${waited} after the report loaded: ${lastError}`,
+                    status: "error",
                     reportOpenSeconds
                 });
             }
 
-
-            // =================================================
-            // 5️⃣ POLL AGAIN
-            // =================================================
-
-            await page.waitForTimeout(
-                POLL_INTERVAL
-            );
+            return log({
+                reportName,
+                url: page.url(),
+                text: mapRenderedEmpty
+                    ? `Kepler map rendered but showed no data rows ${waited} after the report loaded (${lastState}).`
+                    : `Kepler data did not render ${waited} after the report loaded (${lastState || "no map state read"}).`,
+                status: mapRenderedEmpty ? "no_data" : "timeout",
+                reportOpenSeconds
+            });
         }
 
-
-    } catch (err) {
-
-        const errorMsg =
-            err.message
-                .split("\n")
-                .slice(0, 5)
-                .join("\n");
-
-
-        return log({
-
-            reportName,
-
-            url: page.url(),
-
-            text:
-                `Unexpected error:\n${errorMsg}`,
-
-            status: "error",
-
-            reportOpenSeconds
-        });
+        await page.waitForTimeout(POLL_INTERVAL);
     }
 }
 
@@ -2132,14 +2028,18 @@ module.exports = {
     watchWatsonAISearchRequest,
     waitForWatsonAIResponse,
     WATSONAI_SUMMARY_TIMEOUT_MS,
+    WATSONAI_REPORT_DATA_WAIT_MS,
     checkWatsonAIQueryError,
     getWatsonAIChatBaseline,
     getLatestWatsonAIReplyText,
     waitForWatsonAIReportForm,
     waitForWatsonAIChatReady,
+    recoverWatsonAIChat,
+    isWatsonAINoResponseError,
     closeWatsonAIReport,
     verifyWatsonAIReportFields,
     clickWatsonAISubmit,
     verifyWatsonAISuccess,
+    checkWatsonAIReportSummaryLate,
     watsonAIKeplerValidation
 };

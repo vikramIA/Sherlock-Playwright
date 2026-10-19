@@ -264,9 +264,40 @@ async function validateSubTabContent(page) {
 // the log, and any error is now logged instead of being hidden behind stats={}.
 async function validateSubTabsOfTablist(page, tablistName, logPrefix) {
     const tabs = page.getByRole('tablist', { name: tablistName }).getByRole('tab');
+
+    // The sub-tab list can render a moment after the main tab is picked.
+    await tabs.first().waitFor({ state: 'visible', timeout: 15000 }).catch(() => { });
+
     const tabCount = await tabs.count();
     const nameCounts = {};
     const results = [];
+
+    // No sub-tabs used to fail the tab with no log line at all (prod, Oct 17
+    // 2026: both Persona reports failed on Behaviours with nothing logged).
+    // Say what the page showed instead.
+    if (tabCount === 0) {
+        const shown = await page.evaluate(() => {
+            const visible = el => !!(el.offsetWidth || el.offsetHeight || el.getClientRects().length);
+            const tablists = [...document.querySelectorAll('[role="tablist"]')]
+                .filter(visible)
+                .map(el => el.getAttribute('aria-label') || '(unnamed)');
+            const notices = [...document.querySelectorAll('body *')]
+                .filter(el => !el.children.length && visible(el))
+                .map(el => (el.textContent || '').trim())
+                .filter(text => /no data|not available|no results|processing|something went wrong|error/i.test(text))
+                .slice(0, 3);
+            return { tablists, notices };
+        }).catch(() => ({ tablists: [], notices: [] }));
+
+        const error = `no '${tablistName}' sub-tabs shown after 15s` +
+            ` (tab lists on page: ${shown.tablists.join(', ') || 'none'}` +
+            (shown.notices.length ? `; page says: '${shown.notices.join(' | ')}'` : '') + ')';
+
+        console.log(`❌ [${logPrefix}] ${error}`);
+        logSession(`❌ [${logPrefix}] ${error}`);
+
+        return [{ subTab: '(none)', statTiles: {}, charts: [], passed: false, error }];
+    }
 
     for (let i = 0; i < tabCount; i++) {
         const tab = tabs.nth(i);
@@ -825,6 +856,33 @@ const TAB_VALIDATORS = {
     'Behaviours': validateBehavioursTab
 };
 
+// "Behaviours (no 'Behaviour Tabs' sub-tabs shown ...)" / "Lifestyles/Community:
+// Civic Engagement (no chart data)" — the first concrete cause found in a
+// failed tab result (tab, category and sub-tab results all nest differently).
+function describeTabFailure(tab) {
+    if (tab.error) return `${tab.tab} (${tab.error})`;
+    if (tab.reason) return `${tab.tab} (${tab.reason})`;
+
+    const failedSubTabs = list => (list || []).filter(subTab => !subTab.passed);
+    const subTabText = subTab => `${subTab.subTab}${subTab.error ? ` (${subTab.error})` : ' (stat tiles/charts empty)'}`;
+
+    for (const category of tab.categories || []) {
+        if (category.passed) continue;
+        if (category.error) return `${tab.tab}/${category.category} (${category.error})`;
+        const failed = failedSubTabs(category.subTabs);
+        if (failed.length) return `${tab.tab}/${category.category}: ${failed.map(subTabText).join(', ')}`;
+    }
+
+    const failed = failedSubTabs(tab.subTabs);
+    if (failed.length) return `${tab.tab}: ${failed.map(subTabText).join(', ')}`;
+
+    for (const view of tab.views || []) {
+        if (!view.passed) return `${tab.tab}/${view.view} (${view.reason || view.error || 'no datasets'})`;
+    }
+
+    return `${tab.tab} (failed)`;
+}
+
 // Opens the completed Persona report and runs its validation checklist.
 async function validatePersonaReport(page, reportName, reportContainer) {
     try {
@@ -868,13 +926,18 @@ async function validatePersonaReport(page, reportName, reportContainer) {
         const blockingFailures = tabs.filter(t => !t.passed && t.reason !== 'table_rendered_instead_of_map');
         const validation = tabs.length > 0 && blockingFailures.length === 0 ? 'passed' : 'failed';
 
-        logSession(`Persona report validation ${validation} for '${reportName}'`, false, {
+        // Which tab failed and why — "tab_validation_failed" alone sent you to the video.
+        const failureSummary = tabs.length === 0
+            ? 'no known tabs found in the report dropdown'
+            : blockingFailures.map(describeTabFailure).join('; ');
+
+        logSession(`Persona report validation ${validation} for '${reportName}'${validation === 'passed' ? '' : `: ${failureSummary}`}`, false, {
             report: reportName,
             outcome: validation === 'passed' ? "success" : "failure",
-            reason: validation === 'passed' ? undefined : "tab_validation_failed",
+            reason: validation === 'passed' ? undefined : `tab_validation_failed: ${failureSummary}`,
         });
 
-        return { reportName, validation, tabs };
+        return { reportName, validation, tabs, failureSummary: validation === 'passed' ? null : failureSummary };
     } catch (err) {
         console.error(`❌ Failed to validate completed Persona report '${reportName}': ${err.message}`);
         logSession(`❌ Failed to validate completed Persona report '${reportName}': ${err.message}`, false, { report: reportName, outcome: "failure", reason: err.message });

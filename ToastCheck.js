@@ -22,16 +22,28 @@ const ERROR_TOAST_XPATH = `//${LEAF}[contains(${LOWER}, 'no data') or contains($
 
 const WEBGL_LOST_TEXT = "Browser WebGL context lost — map could not render (VM browser issue, not a report failure)";
 
+// The app's toast container (Radix toast viewport, verified live on QA
+// WatsonAI, Oct 2026: <div role="region" aria-label="Notifications (F8)">).
+const TOAST_REGION_XPATH = "//*[@role='region'][starts-with(@aria-label,'Notifications')]";
+
 // Returns null when the page shows no error, otherwise
 // { status: "no_data" | "error", text, webglLost }.
 // Uses allTextContents() (no waiting) because these toasts auto-dismiss.
-async function detectErrorToast(page) {
+//
+// `toastsOnly: true` reads only the toast container instead of all page
+// text. Use it on pages that also show free text (the WatsonAI chat), where
+// a chat line containing "failed" / "no data" would read as an error toast.
+async function detectErrorToast(page, { toastsOnly = false } = {}) {
     const webglTexts = await page.locator(`xpath=${WEBGL_ERROR_XPATH}`).allTextContents();
     if (webglTexts.length > 0) {
         return { status: "error", text: WEBGL_LOST_TEXT, webglLost: true };
     }
 
-    const texts = await page.locator(`xpath=${ERROR_TOAST_XPATH}`).allTextContents();
+    const toastXPath = toastsOnly
+        ? TOAST_REGION_XPATH + ERROR_TOAST_XPATH
+        : ERROR_TOAST_XPATH;
+
+    const texts = await page.locator(`xpath=${toastXPath}`).allTextContents();
     const toastText = texts.map(t => t.split("\n")[0].trim()).find(Boolean);
     if (!toastText) return null;
 

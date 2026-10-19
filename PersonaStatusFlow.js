@@ -32,6 +32,7 @@ async function processTrackedEntry(page, entry, { uploadStatusWaitMinutes } = {}
         if (result.status.toLowerCase() === 'complete') {
             const validation = await validatePersonaReport(page, entry.reportName, result.reportContainer);
             entry.validation = validation.validation;
+            entry.validationFailure = validation.failureSummary || validation.error || null;
 
             if (entry.uploadAudience?.length > 0 && validation.validation === 'passed') {
                 const exportResult = await exportPersonaAudience(page, entry.reportName, entry.uploadAudience);
@@ -118,7 +119,12 @@ function summarizeDailyOutcome(entry, checkResult) {
     if (status === 'not_found') return { outcome: 'failure', reason: 'not_found_in_explore' };
     if (status === 'incomplete') return { outcome: 'failure', reason: 'persona_incomplete' };
     if (status !== 'complete') return { outcome: 'failure', reason: `still_${status.replace(/\s+/g, '_')}_from_previous_run` };
-    if (entry.validation !== 'passed') return { outcome: 'failure', reason: `validation_${entry.validation}` };
+    if (entry.validation !== 'passed') {
+        return {
+            outcome: 'failure',
+            reason: `validation_${entry.validation}${entry.validationFailure ? `: ${entry.validationFailure}` : ''}`
+        };
+    }
     if (entry.audienceExport === 'failed') return { outcome: 'failure', reason: 'audience_export_failed' };
 
     const uploads = (entry.audienceUploadStatus || []).filter(Boolean);

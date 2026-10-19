@@ -70,7 +70,7 @@ function buildSplunkUrl(env) {
 const MAX_LISTED_REPORTS = 10;
 // Reasons can carry a whole WatsonAI reply or a Playwright call log; keep the
 // first line and trim it so each report stays on one readable line.
-const MAX_REASON_LENGTH = 120;
+const MAX_REASON_LENGTH = 300;
 
 // Slack mrkdwn treats &, < and > as control characters.
 function escapeSlack(text) {
@@ -84,21 +84,39 @@ function shortenReason(reason) {
     : oneLine;
 }
 
-function formatReportList(title, items) {
-  if (!items || items.length === 0) return null;
+// Slack rejects the WHOLE message if one section's text is over 3000
+// characters, so a list stops adding lines before that (with headroom for
+// the "…and N more" line) instead of risking no message at all.
+const MAX_SECTION_LENGTH = 2800;
 
-  const shown = items.slice(0, MAX_LISTED_REPORTS).map(({ report, reason }) => {
-    const name = `\`${escapeSlack(report)}\``;
-    return reason ? `• ${name}\n      _${escapeSlack(shortenReason(reason))}_` : `• ${name}`;
-  });
+function buildListSection(header, lines, total) {
+  const shown = [];
+  let length = header.length;
 
-  const remaining = items.length - shown.length;
+  for (const line of lines.slice(0, MAX_LISTED_REPORTS)) {
+    if (length + line.length + 1 > MAX_SECTION_LENGTH) break;
+    shown.push(line);
+    length += line.length + 1;
+  }
+
+  const remaining = total - shown.length;
   if (remaining > 0) shown.push(`_…and ${remaining} more (see Splunk)_`);
 
   return {
     type: "section",
-    text: { type: "mrkdwn", text: `*${title} (${items.length})*\n${shown.join("\n")}` },
+    text: { type: "mrkdwn", text: `${header}\n${shown.join("\n")}` },
   };
+}
+
+function formatReportList(title, items) {
+  if (!items || items.length === 0) return null;
+
+  const lines = items.map(({ report, reason }) => {
+    const name = `\`${escapeSlack(report)}\``;
+    return reason ? `• ${name}\n      _${escapeSlack(shortenReason(reason))}_` : `• ${name}`;
+  });
+
+  return buildListSection(`*${title} (${items.length})*`, lines, items.length);
 }
 
 const OUTCOME_ICONS = { success: "✅", warning: "⚠️", failure: "❌", skipped: "⏭️" };
@@ -138,19 +156,13 @@ function describePersonaStatus(result) {
 function formatPersonaStatusList(results) {
   if (!results || results.length === 0) return null;
 
-  const shown = results.slice(0, MAX_LISTED_REPORTS).map(result => {
+  const lines = results.map(result => {
     const icon = OUTCOME_ICONS[result.outcome] || "•";
     const line = `• ${icon} \`${escapeSlack(result.reportName)}\` — ${escapeSlack(describePersonaStatus(result))}`;
     return result.reason ? `${line}\n      _${escapeSlack(shortenReason(result.reason))}_` : line;
   });
 
-  const remaining = results.length - shown.length;
-  if (remaining > 0) shown.push(`_…and ${remaining} more (see Splunk)_`);
-
-  return {
-    type: "section",
-    text: { type: "mrkdwn", text: `*🧬 Persona reports from previous run (${results.length})*\n${shown.join("\n")}` },
-  };
+  return buildListSection(`*🧬 Persona reports from previous run (${results.length})*`, lines, results.length);
 }
 
 async function sendSlackStatus(summary) {

@@ -3261,11 +3261,18 @@ function logExploreFlowError(label, err, meta) {
     logSession(`❌ Error in ${label}: ${err.message}`, false, { ...meta, outcome: "failure", reason: err.message });
 }
 
+// `maxWaitMs` (optional) caps the whole check to one deadline — WatsonAI
+// passes 30s: its report has already finished loading by now, so content that
+// isn't there within that window is a failure, not something to wait out.
 async function verifyDefaultBentoCharts(
     page,
     reportType,
-    reportName
+    reportName,
+    { maxWaitMs = null } = {}
 ) {
+
+    const deadline = maxWaitMs ? Date.now() + maxWaitMs : null;
+    const waitFor = defaultMs => deadline ? Math.max(1000, deadline - Date.now()) : defaultMs;
 
     const defaultCharts = {
 
@@ -3352,7 +3359,7 @@ async function verifyDefaultBentoCharts(
 
         await heading.waitFor({
             state: "visible",
-            timeout: 120000
+            timeout: waitFor(120000)
         });
 
     } catch (err) {
@@ -3439,11 +3446,14 @@ async function verifyDefaultBentoCharts(
     );
 
 
+    // Optional check (the text is often gone already), so under a deadline it
+    // gets 5s at most — on prod (Oct 17) it ate the whole 30s WatsonAI budget
+    // and left ~1s for the required card value below.
     if (
         await chartsLoadedText
             .waitFor({
                 state: "visible",
-                timeout: 30000
+                timeout: deadline ? Math.min(5000, waitFor(30000)) : 30000
             })
             .then(() => true)
             .catch(() => false)
@@ -3509,7 +3519,7 @@ async function verifyDefaultBentoCharts(
 
     await value.waitFor({
         state: "visible",
-        timeout: 60000
+        timeout: waitFor(60000)
     });
 
 

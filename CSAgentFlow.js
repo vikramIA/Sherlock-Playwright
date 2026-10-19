@@ -15,9 +15,55 @@ const {
     waitForCSAgentDeactivated
 } = require("./CSAgentFunctions.js");
 
-const { openWatsonAI } = require("./WatsonAIFunctions.js");
+const { openWatsonAI, getLatestWatsonAIReplyText } = require("./WatsonAIFunctions.js");
 const { logSession, beginFlow } = require("./Logger");
 const { captureFailureScreenshot, explainError } = require("./FailureDiagnostics.js");
+
+
+// The step the current test case is on. A bare Playwright error ("locator.
+// waitFor: Timeout 480000ms exceeded", "expect(locator).toBeEnabled()
+// failed") said nothing about WHERE the CS Agent run stopped, so every
+// failure had to be checked in the video. The failure reason now names it.
+let currentStep = "starting";
+
+async function step(name, action) {
+    currentStep = name;
+    return action();
+}
+
+// Failure reason for Slack: the step, a readable cause, and what the chat
+// showed last (tells "agent errored/stalled" apart from "script missed it").
+function describeCSAgentFailure(stepName, error, lastReply) {
+
+    // Playwright colours its messages with ANSI codes.
+    const stripAnsi = text => String(text).replace(/\x1b\[[0-9;]*m/g, "");
+    const message = stripAnsi(error?.message || error);
+    let cause = stripAnsi(explainError(error));
+
+    // Our own errors are already readable — keep those as they are.
+    if (/^(locator\.|expect\(|page\.|frame\.|TimeoutError)/.test(cause)) {
+        const timeoutMs = Number((message.match(/Timeout:? (\d+)ms/) || [])[1]);
+        const waitedFor = timeoutMs
+            ? (timeoutMs >= 60000 ? `${Math.round(timeoutMs / 60000)} min` : `${Math.round(timeoutMs / 1000)}s`)
+            : null;
+
+        if (/toBeGreaterThanOrEqual/.test(message)) {
+            const expected = (message.match(/Expected:\s*>=\s*(\d+)/) || [])[1];
+            const received = (message.match(/Received:\s*(\d+)/) || [])[1];
+            cause = `only ${received ?? "?"} of ${expected ?? "?"} expected items appeared${waitedFor ? ` within ${waitedFor}` : ""}`;
+        } else if (/element\(s\) not found/.test(message)) {
+            cause = `expected element never appeared${waitedFor ? ` within ${waitedFor}` : ""}`;
+        } else if (/toBeEnabled/.test(message)) {
+            cause = `button stayed disabled${waitedFor ? ` for ${waitedFor}` : ""}`;
+        } else if (waitedFor) {
+            cause = `timed out after ${waitedFor}`;
+        }
+    }
+
+    const chat = lastReply ? ` | last chat reply: '${lastReply.slice(0, 120)}'` : "";
+
+    return `${stepName}: ${cause}${chat}`;
+}
 
 
 // =========================================================
@@ -35,29 +81,29 @@ async function runFreshCSAgentCase(page, testCase) {
     // `optional: true` skips the selection step instead of failing on that
     // first-run case, and still selects Phase1 normally whenever the
     // selector does appear.
-    await selectCSAgentPhase(page, "Phase1", { optional: true });
+    await step("Phase 1: phase selection", () => selectCSAgentPhase(page, "Phase1", { optional: true }));
 
-    await sendCSAgentChatAnswer(page, testCase.companyName);
-    await sendCSAgentChatAnswer(page, testCase.problemStatement);
+    await step("Phase 1: company name", () => sendCSAgentChatAnswer(page, testCase.companyName));
+    await step("Phase 1: problem statement", () => sendCSAgentChatAnswer(page, testCase.problemStatement));
 
-    await waitForCSAgentOnboarding(page, testCase.companyName);
-    await runCSAgentQuestionnaire(page, testCase.questionnaire || []);
-    await handleCSAgentReviewCheckpoints(page);
+    await step("Phase 1: onboarding data generation", () => waitForCSAgentOnboarding(page, testCase.companyName));
+    await step("Phase 1: questionnaire", () => runCSAgentQuestionnaire(page, testCase.questionnaire || []));
+    await step("Phase 1: review checkpoints", () => handleCSAgentReviewCheckpoints(page));
 
-    await waitForCSAgentPhaseComplete(page, 1, "docx");
-    await validateCSAgentDocxOutput(page);
-    await answerCSAgentContinuePrompt(page, 2, !!testCase.continueToPhase2);
+    await step("Phase 1: 'Phase 1 complete!' + docx", () => waitForCSAgentPhaseComplete(page, 1, "docx"));
+    await step("Phase 1: docx viewer", () => validateCSAgentDocxOutput(page));
+    await step("Phase 1: continue-to-phase-2 prompt", () => answerCSAgentContinuePrompt(page, 2, !!testCase.continueToPhase2));
 
-    if (!testCase.continueToPhase2) return;
+    if (!testCase.continueToPhase2) return [];
 
-    await waitForCSAgentPhase2Pipeline(page);
-    await waitForCSAgentPhaseComplete(page, 2, "xlsx");
-    await validateCSAgentXlsxOutput(page);
-    await answerCSAgentContinuePrompt(page, 3, !!testCase.continueToPhase3);
+    await step("Phase 2: cohort pipeline", () => waitForCSAgentPhase2Pipeline(page));
+    await step("Phase 2: 'Phase 2 complete!' + xlsx", () => waitForCSAgentPhaseComplete(page, 2, "xlsx"));
+    await step("Phase 2: xlsx viewer", () => validateCSAgentXlsxOutput(page));
+    await step("Phase 2: continue-to-phase-3 prompt", () => answerCSAgentContinuePrompt(page, 3, !!testCase.continueToPhase3));
 
-    if (!testCase.continueToPhase3) return;
+    if (!testCase.continueToPhase3) return [];
 
-    await waitForCSAgentPhase3Pipeline(page);
+    return step("Phase 3: report creation", () => waitForCSAgentPhase3Pipeline(page));
 }
 
 
@@ -69,23 +115,23 @@ async function runFreshCSAgentCase(page, testCase) {
 
 async function runResumeCSAgentCase(page, testCase) {
 
-    await selectCSAgentPhase(page, testCase.phase);
-    await selectCSAgentSavedRun(page, testCase.savedRun);
+    await step(`${testCase.phase}: phase selection`, () => selectCSAgentPhase(page, testCase.phase));
+    await step(`${testCase.phase}: saved run selection`, () => selectCSAgentSavedRun(page, testCase.savedRun));
 
     if (testCase.phase === "Phase2") {
 
-        await waitForCSAgentPhase2Pipeline(page);
-        await waitForCSAgentPhaseComplete(page, 2, "xlsx");
-        await validateCSAgentXlsxOutput(page);
-        await answerCSAgentContinuePrompt(page, 3, !!testCase.continueToNextPhase);
+        await step("Phase 2: cohort pipeline", () => waitForCSAgentPhase2Pipeline(page));
+        await step("Phase 2: 'Phase 2 complete!' + xlsx", () => waitForCSAgentPhaseComplete(page, 2, "xlsx"));
+        await step("Phase 2: xlsx viewer", () => validateCSAgentXlsxOutput(page));
+        await step("Phase 2: continue-to-phase-3 prompt", () => answerCSAgentContinuePrompt(page, 3, !!testCase.continueToNextPhase));
 
-        if (!testCase.continueToNextPhase) return;
+        if (!testCase.continueToNextPhase) return [];
 
-        await waitForCSAgentPhase3Pipeline(page);
+        return step("Phase 3: report creation", () => waitForCSAgentPhase3Pipeline(page));
 
     } else if (testCase.phase === "Phase3") {
 
-        await waitForCSAgentPhase3Pipeline(page);
+        return step("Phase 3: report creation", () => waitForCSAgentPhase3Pipeline(page));
 
     } else {
 
@@ -106,6 +152,7 @@ async function csAgentFlow(page, testCases = []) {
 
         const caseId = testCase.companyName || testCase.savedRun || testCase.mode;
         beginFlow("cs_agent");
+        currentStep = "reset + activation";
 
         try {
 
@@ -150,20 +197,30 @@ async function csAgentFlow(page, testCases = []) {
                 await openWatsonAI(page);
             }
 
-            await activateCSAgent(page);
+            await step("activation ('start cs agent')", () => activateCSAgent(page));
+
+            // Problems that didn't stop the run (e.g. fewer Phase 3 reports
+            // than cohorts) — they make the outcome "warning", not success.
+            let warnings = [];
 
             if (testCase.mode === "fresh") {
-                await runFreshCSAgentCase(page, testCase);
+                warnings = (await runFreshCSAgentCase(page, testCase)) || [];
             } else if (testCase.mode === "resume") {
-                await runResumeCSAgentCase(page, testCase);
+                warnings = (await runResumeCSAgentCase(page, testCase)) || [];
             } else {
                 throw new Error(`Unknown CS Agent test case mode: '${testCase.mode}'`);
             }
 
             await waitForCSAgentDeactivated(page);
 
-            console.log(`🎉 CS Agent test case '${testCase.mode}' completed successfully.`);
-            logSession(`🎉 CS Agent test case '${testCase.mode}' completed successfully.`, false, { flow: "cs_agent", report: caseId, mode: testCase.mode, outcome: "success" });
+            if (warnings.length > 0) {
+                const warningReason = warnings.join("; ");
+                console.log(`⚠️ CS Agent test case '${testCase.mode}' completed with warnings: ${warningReason}`);
+                logSession(`⚠️ CS Agent test case '${testCase.mode}' completed with warnings.`, false, { flow: "cs_agent", report: caseId, mode: testCase.mode, outcome: "warning", reason: warningReason });
+            } else {
+                console.log(`🎉 CS Agent test case '${testCase.mode}' completed successfully.`);
+                logSession(`🎉 CS Agent test case '${testCase.mode}' completed successfully.`, false, { flow: "cs_agent", report: caseId, mode: testCase.mode, outcome: "success" });
+            }
 
         } catch (error) {
 
@@ -176,7 +233,13 @@ async function csAgentFlow(page, testCases = []) {
 
             const screenshot = await captureFailureScreenshot(page, `cs_agent_${caseId}`);
 
-            logSession(`❌ CS Agent test case '${testCase.mode}' failed.`, false, { flow: "cs_agent", report: caseId, mode: testCase.mode, outcome: "failure", reason: explainError(error), screenshot });
+            const lastReply = page.isClosed()
+                ? ""
+                : await getLatestWatsonAIReplyText(page, 200).catch(() => "");
+
+            const reason = describeCSAgentFailure(currentStep, error, lastReply);
+
+            logSession(`❌ CS Agent test case '${testCase.mode}' failed.`, false, { flow: "cs_agent", report: caseId, mode: testCase.mode, outcome: "failure", reason, screenshot });
             logSession(`❌ Error: ${error.message}`);
 
             console.log(`➡️ Continuing with next CS Agent test case...`);
