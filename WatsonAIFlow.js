@@ -308,7 +308,7 @@ async function watsonAIFlow(page, reports) {
 
 
                 if (!summaryReceived) {
-                    summaryReceived = await checkWatsonAIReportSummaryLate(page, submitBaseline.repliesBeforeSubmit);
+                    summaryReceived = await checkWatsonAIReportSummaryLate(page, { ...submitBaseline, query: inputData.query });
                 }
 
                 if (!summaryReceived) {

@@ -327,25 +327,87 @@ function stripWatsonAIReadyBoilerplate(text) {
         .trim();
 }
 
-// One look at the chat: the summary text, or null. Also returns what was
-// posted since Submit, so a missing summary can be logged with evidence.
-async function findWatsonAIReportSummary(page, repliesBeforeSubmit) {
-    const replies = await getWatsonAIRepliesSinceSubmit(page, repliesBeforeSubmit);
+// ---------------------------------------------------------------------------
+// The summary is found two independent ways, and either one counts:
+//   1. as a new WatsonAI reply (its own "Copy response" button) — how QA
+//      posts it, after the report opens;
+//   2. as new sentence-length text anywhere after the query in the chat —
+//      how prod posts it (Oct 2026): the summary came BEFORE the report, and
+//      no new Copy-response reply appeared ("no new WatsonAI reply"), so (1)
+//      alone waited 120s and warned although the summary was on screen.
+// (2) compares the page text with a snapshot taken right before Submit, so
+// it doesn't depend on where or how the summary is rendered.
+// ---------------------------------------------------------------------------
 
-    const summary = replies
+// A line long enough, with enough words, to be prose — not a button, chip,
+// card title, form field or map label.
+const WATSONAI_SUMMARY_MIN_WORDS = 12;
+
+// Page text lines (whitespace-collapsed). With `query`, only what follows
+// that query's chat bubble.
+async function getWatsonAIPageLines(page, query = null) {
+    const text = await page.locator("body").innerText({ timeout: 5000 }).catch(() => "");
+    const index = query ? text.lastIndexOf(query) : -1;
+
+    return (index >= 0 ? text.slice(index + query.length) : text)
+        .split("\n")
+        .map(line => line.replace(/\s+/g, " ").trim())
+        .filter(Boolean);
+}
+
+// Snapshot taken right before Submit (see clickWatsonAISubmit).
+async function getWatsonAILinesBeforeSubmit(page) {
+    return getWatsonAIPageLines(page);
+}
+
+// New prose after the query since Submit, boilerplate removed.
+async function findWatsonAISummaryInText(page, { linesBeforeSubmit = [], query = null }) {
+    const before = new Set(linesBeforeSubmit);
+
+    return (await getWatsonAIPageLines(page, query))
+        .filter(line => !before.has(line))
         .map(stripWatsonAIReadyBoilerplate)
-        .find(text => text.length >= WATSONAI_MIN_SUMMARY_LENGTH) || null;
-
-    return { summary, replies };
+        .filter(line => !WATSONAI_QUERY_ERROR_PATTERN.test(line) && !WATSONAI_FORM_REPLY_PATTERN.test(line))
+        .filter(line => line.length >= WATSONAI_MIN_SUMMARY_LENGTH && line.split(" ").length >= WATSONAI_SUMMARY_MIN_WORDS);
 }
 
-function logWatsonAISummaryReceived(summary, note = "") {
-    const summaryText = summary.slice(0, 200);
-    console.log(`✅ WatsonAI report summary received${note}: '${summaryText}'`);
-    logSession(`✅ WatsonAI report summary received${note}: '${summaryText}'`);
+// One look at the page: the summary text (or null), how it was found, and
+// what was posted since Submit (evidence for a missing-summary warning).
+async function findWatsonAIReportSummary(page, summaryBaseline = {}) {
+    const replies = await getWatsonAIRepliesSinceSubmit(page, summaryBaseline.repliesBeforeSubmit || []);
+
+    const fromReplies = replies
+        .map(stripWatsonAIReadyBoilerplate)
+        .find(text => text.length >= WATSONAI_MIN_SUMMARY_LENGTH);
+
+    if (fromReplies) return { summary: fromReplies, replies, source: "chat reply" };
+
+    const fromText = await findWatsonAISummaryInText(page, summaryBaseline).catch(() => []);
+
+    if (fromText.length > 0) return { summary: fromText.join(" "), replies, source: "chat text" };
+
+    return { summary: null, replies, source: null };
 }
 
-async function waitForWatsonAIReportSummary(page, repliesBeforeSubmit, timeout = WATSONAI_SUMMARY_TIMEOUT_MS) {
+function logWatsonAISummaryReceived(found, when) {
+    const message = `✅ WatsonAI report summary received ${when} (found as ${found.source}): '${found.summary.slice(0, 200)}'`;
+    console.log(message);
+    logSession(message);
+}
+
+// Checked right before Open Report is clicked: on prod the summary is
+// already there by then. Returns true when found (no waiting).
+async function checkWatsonAIReportSummaryBeforeOpen(page, summaryBaseline) {
+    const found = await findWatsonAIReportSummary(page, summaryBaseline);
+    if (!found.summary) return false;
+
+    logWatsonAISummaryReceived(found, "before the report was opened");
+    return true;
+}
+
+// Waits for a summary that comes after the report opens (QA). Returns
+// immediately if it's already on screen.
+async function waitForWatsonAIReportSummary(page, summaryBaseline, timeout = WATSONAI_SUMMARY_TIMEOUT_MS) {
 
     console.log("⏳ Waiting for WatsonAI report summary...");
     logSession("⏳ Waiting for WatsonAI report summary...");
@@ -355,7 +417,7 @@ async function waitForWatsonAIReportSummary(page, repliesBeforeSubmit, timeout =
 
     while (Date.now() < deadline) {
 
-        const found = await findWatsonAIReportSummary(page, repliesBeforeSubmit);
+        const found = await findWatsonAIReportSummary(page, summaryBaseline);
         replies = found.replies;
 
         if (found.summary) {
@@ -364,7 +426,7 @@ async function waitForWatsonAIReportSummary(page, repliesBeforeSubmit, timeout =
             // finish scrolling the chat before Focus Mode is clicked.
             await page.waitForTimeout(3000);
 
-            logWatsonAISummaryReceived(found.summary);
+            logWatsonAISummaryReceived(found, "after the report opened");
 
             return true;
         }
@@ -386,11 +448,11 @@ async function waitForWatsonAIReportSummary(page, repliesBeforeSubmit, timeout =
 
 // Last look before the report is closed — a slow summary often lands while
 // Kepler/Bento are being validated. Returns true when it is there now.
-async function checkWatsonAIReportSummaryLate(page, repliesBeforeSubmit) {
-    const { summary } = await findWatsonAIReportSummary(page, repliesBeforeSubmit);
+async function checkWatsonAIReportSummaryLate(page, summaryBaseline) {
+    const found = await findWatsonAIReportSummary(page, summaryBaseline);
 
-    if (summary) {
-        logWatsonAISummaryReceived(summary, " (arrived late, during validation)");
+    if (found.summary) {
+        logWatsonAISummaryReceived(found, "late, during validation");
         return true;
     }
 
@@ -1151,6 +1213,7 @@ async function clickWatsonAISubmit(page) {
         // replies that exist now (and keep their text as a fallback) so
         // only replies posted after Submit are searched for the summary.
         const repliesBeforeSubmit = await markWatsonAIRepliesBeforeSubmit(page);
+        const linesBeforeSubmit = await getWatsonAILinesBeforeSubmit(page);
 
         await submitButton.click();
 
@@ -1162,7 +1225,7 @@ async function clickWatsonAISubmit(page) {
             "✅ WatsonAI Submit button clicked."
         );
 
-        return { previousOpenReportCount, repliesBeforeSubmit };
+        return { previousOpenReportCount, repliesBeforeSubmit, linesBeforeSubmit };
 
     } catch (error) {
 
@@ -1183,7 +1246,9 @@ async function clickWatsonAISubmit(page) {
 // 6. VERIFY REPORT CREATION SUCCESS
 // =========================================================
 
-async function verifyWatsonAISuccess(page, expectedMessage, expectedReportType, { previousOpenReportCount = 0, repliesBeforeSubmit = [], query = null } = {}) {
+async function verifyWatsonAISuccess(page, expectedMessage, expectedReportType, { previousOpenReportCount = 0, repliesBeforeSubmit = [], linesBeforeSubmit = [], query = null } = {}) {
+
+    const summaryBaseline = { repliesBeforeSubmit, linesBeforeSubmit, query };
 
     const reportTypeMap = {
         "place level visits": 9,
@@ -1420,6 +1485,10 @@ async function verifyWatsonAISuccess(page, expectedMessage, expectedReportType, 
         // CLICK OPEN REPORT
         // =========================================================
 
+        // On prod the summary is posted before the report is opened — record
+        // that here so the wait after opening doesn't look for it again.
+        const summaryBeforeOpen = await checkWatsonAIReportSummaryBeforeOpen(page, summaryBaseline);
+
         // Marks the start of the "report open" timing window —
         // ends once the loading overlay clears below (report visible).
         // Taken before the click so a slow-returning click still counts.
@@ -1653,8 +1722,9 @@ async function verifyWatsonAISuccess(page, expectedMessage, expectedReportType, 
         // unclickable and the prompt unusable for the next query. Wait for
         // the summary first. A missing summary doesn't stop the
         // Kepler/Bento checks — WatsonAIFlow turns it into outcome=warning.
-        reportTypeValidation.summaryReceived =
-            await waitForWatsonAIReportSummary(page, repliesBeforeSubmit);
+        // Already found before Open Report (prod) — no waiting.
+        reportTypeValidation.summaryReceived = summaryBeforeOpen ||
+            await waitForWatsonAIReportSummary(page, summaryBaseline);
 
 
         // =========================================================
